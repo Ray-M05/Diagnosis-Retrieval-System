@@ -1,0 +1,27 @@
+user_agent: "sri-dx-acquisition/0.1"
+timeout_s: 20
+per_domain_delay_s: 1
+max_depth: 2
+max_docs: 2500
+
+whitelist_domains:
+  - who.int
+  - cdc.gov
+  - medlineplus.gov
+  - nice.org.uk
+  - nhs.uk
+  - msdmanuals.com
+
+seeds:
+  - seed_id: seed_001
+    seed_group: guidelines
+    url: https://www.nice.org.uk/guidance
+
+  - seed_id: seed_002
+    seed_group: conditions_az
+    url: https://medlineplus.gov/healthtopics.html
+
+out:
+  dir: data/processed
+  html_name: docs_html.jsonl
+  pdf_name: docs_pdf.jsonl
