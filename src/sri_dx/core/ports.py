@@ -1,31 +1,25 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List, Any
-from .schemas import Document, Query, Evidence
+from typing import Iterable
 
-class IndexStore(ABC):
-    @abstractmethod
-    def add_documents(self, documents: List[Document]) -> None:
-        pass
+from sri_dx.core.schemas import AcquiredDocument, IndexDocument
 
-    @abstractmethod
-    def search(self, query: str) -> List[Document]:
-        pass
 
-class VectorStore(ABC):
+class DocumentSourcePort(ABC):
+    """
+    Fuente de documentos (JSONL hoy, mañana podría ser DB, API, etc.).
+    """
     @abstractmethod
-    def upsert(self, ids: List[str], vectors: List[List[float]], metadata: List[dict]) -> None:
-        pass
+    def iter_documents(self) -> Iterable[AcquiredDocument]:
+        raise NotImplementedError
 
-    @abstractmethod
-    def query(self, vector: List[float], top_k: int = 5) -> List[dict]:
-        pass
 
-class Retriever(ABC):
+class IndexDocumentSinkPort(ABC):
+    """
+    Aún no lo usamos en Fase A, pero lo defines ya para Fase C:
+    - Elasticsearch, Whoosh, índice casero, etc.
+    """
     @abstractmethod
-    def retrieve(self, query: Query) -> List[Evidence]:
-        pass
-
-class Ranker(ABC):
-    @abstractmethod
-    def rank(self, query: Query, candidates: List[Evidence]) -> List[Evidence]:
-        pass
+    def upsert(self, doc: IndexDocument) -> None:
+        raise NotImplementedError
