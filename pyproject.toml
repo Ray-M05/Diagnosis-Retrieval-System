@@ -1,31 +1,65 @@
 [project]
 name = "sri-dx"
 version = "0.1.0"
-description = "Diagnosis Retrieval System - SRI Project"
+description = "SRI Project - Diagnosis Retrieval (no diagnóstico)"
 readme = "README.md"
 requires-python = ">=3.11"
+
+# Base mínima: cosas que casi seguro usamos siempre
 dependencies = [
-    "streamlit>=1.31.0",
-    "sentence-transformers>=2.2.2",
-    "hnswlib>=0.7.0",
-    "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
-    "pydantic>=2.6.0",
-    "python-dotenv>=1.0.1",
-    "requests>=2.31.0",
-    "beautifulsoup4>=4.12.3",
-    "pandas>=2.2.0",
+  "pydantic>=2.6,<3",
+  "python-dotenv>=1.0,<2",
+  "requests>=2.31,<3",
+  "beautifulsoup4>=4.12,<5",
 ]
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0.0",
-    "ruff>=0.3.0",
-    "black>=24.2.0",
+[project.optional-dependencies]
+# UI (Corte 3)
+ui = [
+  "streamlit>=1.31,<2",
+]
+
+# Neural IR (Corte 1/2 cuando toque embeddings)
+# OJO: esto trae torch; lo forzamos a CPU abajo
+neural = [
+  "sentence-transformers>=2.2,<3",
+  "torch",
+]
+
+# Vector store / ANN
+vector = [
+  "hnswlib>=0.7,<1",
+]
+
+# API opcional (solo si de verdad la van a usar)
+api = [
+  "fastapi>=0.109,<1",
+  "uvicorn>=0.27,<1",
+]
+
+# Utilidades de datos (si las necesitan)
+data = [
+  "pandas>=2.2,<3",
 ]
 
 [project.scripts]
 sri-dx = "sri_dx.app.cli:main"
+
+# Dev deps estándar (PEP 735)
+[dependency-groups]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.3,<1",
+]
+
+# ---- UV: forzar torch CPU (evita descargar paquetes NVIDIA CUDA) ----
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
