@@ -4,11 +4,12 @@ import time
 from collections import deque
 from typing import Optional
 
-from .config import AcquisitionConfig, Seed
+from .config import AcquisitionConfig
 from .models import CrawlTask
 from .ports import HttpClient, RobotsPolicy, HtmlExtractor, PdfExtractor, JsonlSink
 from . import urls as url_utils
 from .document_factory import build_document
+from .persist_policy import should_persist
 
 
 class AcquisitionService:
@@ -18,7 +19,8 @@ class AcquisitionService:
     Flujo:
       seeds -> frontier
       pop -> filtros (visited/deny/whitelist) -> robots -> http.get
-      -> extractor (html/pdf) -> build_document -> sink JSONL por tipo
+      -> extractor (html/pdf) -> build_document
+      -> (persist_policy decide si se guarda)
       -> si HTML: expand out_links (depth < max_depth)
     """
 
@@ -42,13 +44,15 @@ class AcquisitionService:
         self.sink_pdf = sink_pdf
 
         self._visited: set[str] = set()
-        self._seen_hashes: set[str] = set()  # dedupe por contenido
+        self._seen_hashes: set[str] = set()  # dedupe por contenido (solo para docs persistidos)
 
     def run(self) -> dict:
         frontier = deque(self._seed_tasks())
         written_html = 0
         written_pdf = 0
         visited_total = 0
+        skipped_not_persisted = 0
+        skipped_duplicates = 0
 
         while frontier and (written_html + written_pdf) < self.cfg.max_docs:
             task = frontier.popleft()
@@ -118,22 +122,38 @@ class AcquisitionService:
             except Exception:
                 continue
 
-            # dedupe por contenido (opcional pero útil con 2000 docs)
-            ch = doc.get("content_hash")
-            if isinstance(ch, str) and ch in self._seen_hashes:
-                # Igual puedes expandir links si quieres; aquí lo hacemos igual.
-                pass
-            else:
-                if isinstance(ch, str):
-                    self._seen_hashes.add(ch)
+            # --- persist policy: decide si se guarda o solo se usa para descubrir enlaces
+            try:
+                persist = should_persist(
+                    url=doc["url"],
+                    mime_type=mime,
+                    body=doc["content"]["body"],
+                    out_links_count=len(out_links) if mime.startswith("text/html") else 0,
+                    cfg=self.cfg,
+                )
+            except Exception:
+                # Si falla la política por configuración incompleta, por seguridad guardamos.
+                persist = True
 
-                # persist JSONL por tipo
-                if mime.startswith("text/html"):
-                    self.sink_html.write(doc)
-                    written_html += 1
+            if persist:
+                # dedupe por contenido (solo para docs que sí se guardan)
+                ch = doc.get("content_hash")
+                if isinstance(ch, str) and ch in self._seen_hashes:
+                    skipped_duplicates += 1
                 else:
-                    self.sink_pdf.write(doc)
-                    written_pdf += 1
+                    if isinstance(ch, str):
+                        self._seen_hashes.add(ch)
+
+                    # persist JSONL por tipo
+                    if mime.startswith("text/html"):
+                        self.sink_html.write(doc)
+                        written_html += 1
+                    else:
+                        self.sink_pdf.write(doc)
+                        written_pdf += 1
+            else:
+                skipped_not_persisted += 1
+                # NO hacemos continue, porque igual queremos expandir links si es HTML
 
             # expand links (solo HTML)
             if mime.startswith("text/html") and task.depth < self.cfg.max_depth:
@@ -164,6 +184,8 @@ class AcquisitionService:
             "written_pdf": written_pdf,
             "visited_total": visited_total,
             "unique_hashes": len(self._seen_hashes),
+            "skipped_not_persisted": skipped_not_persisted,
+            "skipped_duplicates": skipped_duplicates,
         }
 
     def _seed_tasks(self) -> list[CrawlTask]:

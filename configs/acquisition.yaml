@@ -2,26 +2,57 @@ user_agent: "sri-dx-acquisition/0.1"
 timeout_s: 20
 per_domain_delay_s: 1
 max_depth: 2
-max_docs: 2500
+max_docs: 20
+verify_ssl: false
 
 whitelist_domains:
   - who.int
-  - cdc.gov
+  - paho.org
   - medlineplus.gov
-  - nice.org.uk
-  - nhs.uk
   - msdmanuals.com
+  - portal.guiasalud.es
+  - mscbs.gob.es
+  - cdc.gov
 
 seeds:
   - seed_id: seed_001
-    seed_group: guidelines
-    url: https://www.nice.org.uk/guidance
+    seed_group: who_es
+    url: https://www.who.int/es
 
   - seed_id: seed_002
-    seed_group: conditions_az
-    url: https://medlineplus.gov/healthtopics.html
+    seed_group: paho_es
+    url: https://www.paho.org/es
+
+  - seed_id: seed_003
+    seed_group: medlineplus_es
+    url: https://medlineplus.gov/spanish/
+
+  - seed_id: seed_004
+    seed_group: msd_es
+    url: https://www.msdmanuals.com/es/professional
+
+  - seed_id: seed_005
+    seed_group: guiasalud
+    url: https://portal.guiasalud.es/
 
 out:
   dir: data/processed
   html_name: docs_html.jsonl
   pdf_name: docs_pdf.jsonl
+
+persist:
+  min_words_html: 200
+  min_words_pdf: 200
+  max_out_links_html: 120
+
+  skip_url_substrings:
+    - "/healthtopics.html"
+    - "/druginformation.html"
+    - "/quienes-somos"
+    - "/preguntas-frecuentes-faqs"
+    - "/all_"
+    - "/index"
+    - "/site-map"
+    - "/sitemap"
+
+  detect_az_index: true

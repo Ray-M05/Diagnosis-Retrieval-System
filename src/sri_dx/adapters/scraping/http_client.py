@@ -14,10 +14,10 @@ class HttpxClient(HttpClient):
     - Devuelve FetchResult con mime_type normalizado
     """
 
-    def __init__(self, user_agent: str) -> None:
+    def __init__(self, user_agent: str, verify_ssl: bool = True) -> None:
         self._client = httpx.Client(
             headers={"User-Agent": user_agent},
-            follow_redirects=True, verify=False #verify=certifi.where(),
+            follow_redirects=True, verify=(certifi.where() if verify_ssl else False), #verify=certifi.where(),
         )
 
     def get(self, url: str, *, timeout_s: float) -> FetchResult:
