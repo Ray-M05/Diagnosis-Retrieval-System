@@ -4,7 +4,8 @@ import hashlib
 import re
 from typing import Optional
 
-from sri_dx.core.schemas import AcquiredDocument, IndexDocument
+from sri_dx.core.schemas.acquired_document import AcquiredDocument
+from sri_dx.core.schemas.index_document import IndexDocument
 
 
 _WORD_RE = re.compile(r"\b\w+\b", flags=re.UNICODE)
