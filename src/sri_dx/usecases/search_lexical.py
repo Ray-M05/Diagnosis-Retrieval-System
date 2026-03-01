@@ -1,0 +1,37 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from sri_dx.core.ports.search_backend import SearchBackendPort
+from sri_dx.core.schemas.search_request import SearchRequest, SearchFilters
+from sri_dx.core.schemas.search_response import SearchResponse, DocumentRecord
+
+
+@dataclass
+class SearchLexicalUseCase:
+    backend: SearchBackendPort
+
+    def search(
+        self,
+        *,
+        query: str,
+        k: int = 10,
+        offset: int = 0,
+        filters: SearchFilters | None = None,
+        with_facets: bool = True,
+        with_highlights: bool = True,
+    ) -> SearchResponse:
+        req = SearchRequest(
+            query=query,
+            k=k,
+            offset=offset,
+            operator="and",
+            filters=filters or SearchFilters(),
+            return_highlights=with_highlights,
+            facet_fields=("source_domain", "mime_type", "seed_group") if with_facets else (),
+            facet_size=20,
+        )
+        return self.backend.search(req)
+
+    def get_document(self, doc_id: str) -> DocumentRecord | None:
+        return self.backend.get_document(doc_id)
