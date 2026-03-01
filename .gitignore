@@ -1,0 +1,44 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Typings
+.mypy_cache/
+.pyre/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Project Specific Data (modify as needed)
+/data/
+uv.lock
