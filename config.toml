@@ -1,0 +1,17 @@
+# SRI-DX Configuration
+
+[opensearch]
+host = "localhost"
+port = 9200
+use_ssl = false
+verify_certs = false
+index_name = "clinical_docs_v1"
+alias_name = "clinical_docs"
+
+[indexing]
+html_source = "data/processed/docs_html.jsonl"
+pdf_source = "data/processed/docs_pdf.jsonl"
+manifest_path = "data/index/manifest.sqlite"
+report_dir = "data/index/reports"
+bad_docs_path = "data/index/bad_docs.jsonl"
+batch_size = 500

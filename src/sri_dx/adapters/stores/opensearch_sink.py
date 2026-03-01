@@ -47,18 +47,38 @@ class OpenSearchIndexSink:
         )
 
     def ensure_index(self) -> None:
+        """Asegura que el índice configurado existe y el alias apunta allí si no existe."""
         if not self.client.indices.exists(index=self.cfg.index_name):
-            body = build_index_body(shards=self.cfg.shards, replicas=self.cfg.replicas)
-            self.client.indices.create(index=self.cfg.index_name, body=body)
+            self.create_index(self.cfg.index_name)
 
         # Alias estable -> index versionado
-        aliases = self.client.indices.get_alias(index="*")
-        alias_points_somewhere = any(
-            self.cfg.alias_name in info.get("aliases", {})
-            for info in aliases.values()
-        )
-        if not alias_points_somewhere:
-            self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
+        if not self.get_alias_targets(self.cfg.alias_name):
+            self.set_alias(self.cfg.alias_name, self.cfg.index_name)
+
+    def create_index(self, index_name: str) -> None:
+        """Crea un índice con el mapping predefinido."""
+        body = build_index_body(shards=self.cfg.shards, replicas=self.cfg.replicas)
+        self.client.indices.create(index=index_name, body=body)
+
+    def set_alias(self, alias_name: str, index_name: str, remove_others: bool = True) -> None:
+        """Apunta el alias al índice indicado."""
+        actions = []
+        if remove_others:
+            current_targets = self.get_alias_targets(alias_name)
+            for old_index in current_targets:
+                if old_index != index_name:
+                    actions.append({"remove": {"index": old_index, "alias": alias_name}})
+        
+        actions.append({"add": {"index": index_name, "alias": alias_name}})
+        self.client.indices.update_aliases(body={"actions": actions})
+
+    def get_alias_targets(self, alias_name: str) -> list[str]:
+        """Devuelve la lista de índices a los que apunta un alias."""
+        try:
+            res = self.client.indices.get_alias(name=alias_name)
+            return list(res.keys())
+        except Exception:
+            return []
 
     def bulk_upsert(self, docs: Iterable[IndexDocument | IndexUpsert], *, refresh: bool = False) -> list[str]:
         """
