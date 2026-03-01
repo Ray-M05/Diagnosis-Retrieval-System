@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from sri_dx.core.schemas import AcquiredDocument, IndexDocument
+from sri_dx.core.schemas.acquired_document import AcquiredDocument
 
 
 class DocumentSourcePort(ABC):
@@ -12,14 +12,4 @@ class DocumentSourcePort(ABC):
     """
     @abstractmethod
     def iter_documents(self) -> Iterable[AcquiredDocument]:
-        raise NotImplementedError
-
-
-class IndexDocumentSinkPort(ABC):
-    """
-    Aún no lo usamos en Fase A, pero lo defines ya para Fase C:
-    - Elasticsearch, Whoosh, índice casero, etc.
-    """
-    @abstractmethod
-    def upsert(self, doc: IndexDocument) -> None:
         raise NotImplementedError
