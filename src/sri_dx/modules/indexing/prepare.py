@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from typing import Optional
 
 from sri_dx.core.schemas.acquired_document import AcquiredDocument
 from sri_dx.core.schemas.index_document import IndexDocument
+from sri_dx.modules.indexing.text.text_pipeline import TextAnalyzer
 
 
-_WORD_RE = re.compile(r"\b\w+\b", flags=re.UNICODE)
+_analyzer = TextAnalyzer()
 
 
 def _flatten_sections(doc: AcquiredDocument) -> str:
@@ -43,14 +43,14 @@ def prepare_index_document(doc: AcquiredDocument) -> IndexDocument:
     # Si el módulo 1 no trajo content_hash, lo calculamos aquí (recomendado por el contrato)
     content_hash = doc.content_hash or _compute_hash(body)
 
-    # Stats simples: útiles para debugging + features futuras
-    word_count = len(_WORD_RE.findall(body))
-    char_len = len(body)
-
     language: Optional[str] = doc.page_meta.language if doc.page_meta else None
     published_at: Optional[str] = doc.page_meta.published_at if doc.page_meta else None
     updated_at: Optional[str] = doc.page_meta.updated_at if doc.page_meta else None
     author: Optional[str] = doc.page_meta.author if doc.page_meta else None
+
+    # Stats simples: útiles para debugging + features futuras
+    word_count = len(_analyzer.analyze(body, language=language).tokens)
+    char_len = len(body)
 
     return IndexDocument(
         doc_id=doc.doc_id,
