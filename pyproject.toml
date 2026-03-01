@@ -11,15 +11,12 @@ dependencies = [
   "python-dotenv>=1.0,<2",
   "requests>=2.31,<3",
   "beautifulsoup4>=4.12,<5",
-<<<<<<< HEAD
   "httpx>=0.28.1",
   "lxml>=6.0.2",
   "pypdf>=6.7.5",
   "pyyaml>=6.0.3",
   "certifi>=2026.2.25",
-=======
   "opensearch-py>=2.0.0",
->>>>>>> a53baf2 (feat: Implement OpenSearch indexing pipeline including text processing, schema definition, and a Docker Compose setup.)
 ]
 
 [project.optional-dependencies]
