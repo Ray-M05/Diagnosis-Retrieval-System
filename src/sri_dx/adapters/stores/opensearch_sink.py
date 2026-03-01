@@ -60,10 +60,10 @@ class OpenSearchIndexSink:
         if not alias_points_somewhere:
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
 
-    def bulk_upsert(self, docs: Iterable[IndexDocument | IndexUpsert], *, refresh: bool = False) -> int:
+    def bulk_upsert(self, docs: Iterable[IndexDocument | IndexUpsert], *, refresh: bool = False) -> list[str]:
         """
         Inserta/actualiza docs usando _id = doc_id.
-        Devuelve cantidad de operaciones enviadas.
+        Devuelve lista de _id de documentos indexados exitosamente.
         """
         def actions():
             for d in docs:
@@ -107,8 +107,14 @@ class OpenSearchIndexSink:
                     "_source": src,
                 }
 
-        # helpers.bulk devuelve (success_count, errors)
-        success, _ = helpers.bulk(self.client, actions())
+        ok_ids: list[str] = []
+        for ok, item in helpers.streaming_bulk(self.client, actions(), raise_on_error=False):
+            # item tiene forma {"index": {"_id": "...", "status": 201/200, ...}}
+            action = next(iter(item.values()))
+            _id = action.get("_id")
+            if ok and _id:
+                ok_ids.append(_id)
+
         if refresh:
             self.client.indices.refresh(index=self.cfg.index_name)
-        return success
+        return ok_ids

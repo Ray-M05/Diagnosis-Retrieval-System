@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
 from sri_dx.adapters.stores.opensearch_sink import OpenSearchConfig, OpenSearchIndexSink
+from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
 from sri_dx.usecases.index_opensearch import IndexOpenSearchUseCase
 
 
@@ -19,6 +20,7 @@ def main() -> None:
     ap.add_argument("--alias", default="clinical_docs")
     ap.add_argument("--batch-size", type=int, default=500)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--manifest", default="data/index/manifest.sqlite")
     args = ap.parse_args()
 
     source = JsonlDocumentSource(paths=[Path(args.html), Path(args.pdf)])
@@ -28,10 +30,11 @@ def main() -> None:
         index_name=args.index,
         alias_name=args.alias,
     ))
+    manifest = SqliteManifestStore(Path(args.manifest))
 
-    uc = IndexOpenSearchUseCase(source=source, sink=sink, batch_size=args.batch_size)
+    uc = IndexOpenSearchUseCase(source=source, sink=sink, manifest=manifest, batch_size=args.batch_size)
     stats = uc.run(refresh=args.refresh)
-    print("=== INDEX OPENSEARCH (FASE C) ===")
+    print("=== INDEX OPENSEARCH (FASE C/E) ===")
     print(stats)
 
 
