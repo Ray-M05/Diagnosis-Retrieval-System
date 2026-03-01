@@ -7,6 +7,8 @@ from typing import Iterable
 from sri_dx.core.ports.document_source import DocumentSourcePort
 from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink
 from sri_dx.modules.indexing.prepare import prepare_index_document
+from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor
+from sri_dx.modules.indexing.index_upsert import IndexUpsert
 
 
 @dataclass
@@ -17,6 +19,8 @@ class IndexOpenSearchUseCase:
 
     def run(self, *, refresh: bool = False) -> dict:
         self.sink.ensure_index()
+        
+        extractor = ConceptExtractor()
 
         total_docs = 0
         total_indexed = 0
@@ -24,7 +28,11 @@ class IndexOpenSearchUseCase:
         batch = []
         for acquired in self.source.iter_documents():
             idx_doc = prepare_index_document(acquired)
-            batch.append(idx_doc)
+            text_all = " ".join([idx_doc.title, idx_doc.sections_text, idx_doc.body])
+            concept_ids = extractor.extract(text_all, language=idx_doc.language or "es")
+            
+            upsert = IndexUpsert(doc=idx_doc, concept_ids=concept_ids)
+            batch.append(upsert)
             total_docs += 1
 
             if len(batch) >= self.batch_size:

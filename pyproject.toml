@@ -12,6 +12,7 @@ dependencies = [
   "requests>=2.31,<3",
   "beautifulsoup4>=4.12,<5",
   "opensearch-py>=2.0.0",
+  "pyahocorasick>=2.0.0",
 ]
 
 [project.optional-dependencies]

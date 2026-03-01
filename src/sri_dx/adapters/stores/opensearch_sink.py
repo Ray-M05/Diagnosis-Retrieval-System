@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 from opensearchpy import OpenSearch, helpers
 
 from sri_dx.core.schemas.index_document import IndexDocument
+from sri_dx.modules.indexing.index_upsert import IndexUpsert
 from sri_dx.modules.indexing.opensearch_schema import build_index_body
 
 
@@ -59,43 +60,50 @@ class OpenSearchIndexSink:
         if not alias_points_somewhere:
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
 
-    def bulk_upsert(self, docs: Iterable[IndexDocument], *, refresh: bool = False) -> int:
+    def bulk_upsert(self, docs: Iterable[IndexDocument | IndexUpsert], *, refresh: bool = False) -> int:
         """
         Inserta/actualiza docs usando _id = doc_id.
         Devuelve cantidad de operaciones enviadas.
         """
         def actions():
             for d in docs:
+                if hasattr(d, "doc"):
+                    base = getattr(d, "doc")
+                    concept_ids = getattr(d, "concept_ids", []) or []
+                else:
+                    base = d
+                    concept_ids = []
+
                 src = _drop_none({
-                    "url": d.url,
-                    "source_domain": d.source_domain,
-                    "fetched_at": d.fetched_at,
-                    "mime_type": d.mime_type,
-                    "seed_group": d.seed_group,
-                    "seed_id": d.seed_id,
-                    "depth": d.depth,
+                    "url": base.url,
+                    "source_domain": base.source_domain,
+                    "fetched_at": base.fetched_at,
+                    "mime_type": base.mime_type,
+                    "seed_group": base.seed_group,
+                    "seed_id": base.seed_id,
+                    "depth": base.depth,
 
-                    "title": d.title,
-                    "sections_text": d.sections_text,
-                    "body": d.body,
+                    "title": base.title,
+                    "sections_text": base.sections_text,
+                    "body": base.body,
 
-                    "language": d.language,
-                    "published_at": d.published_at,
-                    "updated_at": d.updated_at,
-                    "author": d.author,
+                    "language": base.language,
+                    "published_at": base.published_at,
+                    "updated_at": base.updated_at,
+                    "author": base.author,
 
-                    "content_hash": d.content_hash,
-                    "char_len": d.char_len,
-                    "word_count": d.word_count,
-                    "section_count": d.section_count,
+                    "content_hash": base.content_hash,
+                    "char_len": base.char_len,
+                    "word_count": base.word_count,
+                    "section_count": base.section_count,
 
-                    "concept_ids": [],  # Fase D
+                    "concept_ids": concept_ids,  # Fase D
                 })
 
                 yield {
                     "_op_type": "index",
                     "_index": self.cfg.index_name,
-                    "_id": d.doc_id,
+                    "_id": base.doc_id,
                     "_source": src,
                 }
 
