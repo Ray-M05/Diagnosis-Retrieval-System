@@ -16,10 +16,15 @@ Implementa la incrementalidad usando una base de datos SQLite local. Esto evita 
 
 ## OpenSearchIndexSink
 
-El adaptador principal para el motor de búsqueda.
+Adaptador para el índice de documentos completos (`clinical_docs`).
 
 - **Ruta**: `src/sri_dx/adapters/stores/opensearch_sink.py`
-- **Responsabilidades**:
-  - Crear el índice con el mapping correcto (`opensearch_schema.py`).
-  - Gestionar alias (ej: apuntar `clinical_docs` al índice versionado actual).
-  - Ejecutar operaciones `bulk_upsert` para máxima velocidad.
+- **Mapping**: `opensearch_schema.py`.
+
+## OpenSearchChunksSink
+
+Adaptador especializado en el índice de fragmentos (`clinical_chunks`).
+
+- **Ruta**: `src/sri_dx/adapters/stores/opensearch_chunk_sink.py`
+- **Mapping**: `opensearch_chunks_schema.py`.
+- **Características**: Soporte para **kNN** (búsqueda por proximidad vectorial).

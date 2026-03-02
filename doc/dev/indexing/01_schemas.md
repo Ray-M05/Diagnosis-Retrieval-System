@@ -21,6 +21,19 @@ El documento listo para ser insertado en OpenSearch. Contiene campos normalizado
   - `word_count`, `char_len`: Estadísticas de texto.
   - `concept_ids`: Lista de conceptos médicos detectados (Fase D).
 
+## ChunkDocument
+
+Representa un fragmento (chunk) de un documento. Diseñado para trazabilidad y búsqueda vectorial.
+
+- **Ruta**: `src/sri_dx/core/schemas/chunk_document.py`
+- **Campos Clave**:
+  - `chunk_id`: ID compuesto (`{doc_id}:{section_index}:{chunk_index}`).
+  - `doc_id`: Referencia al documento padre.
+  - `section_heading`: Título de la sección clínica de origen.
+  - `chunk_text`: Contenido textual del fragmento.
+  - `start_char`, `end_char`: Offsets dentro de la sección original.
+  - `embedding`: Vector numérico (768 dimensiones por defecto) para búsqueda kNN.
+
 ## ManifestEntry
 
 Entrada mínima para el seguimiento de la incrementalidad.

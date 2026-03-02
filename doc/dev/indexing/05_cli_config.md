@@ -32,13 +32,30 @@ El comando principal está definido en `src/sri_dx/app/cli.py`.
 - `index create --name <idx>`: Crea un nuevo índice configurado con los mappings de clinical documents.
 - `index alias --to <idx>`: Cambia el alias estable al índice indicado (útil para despliegue azul-verde).
 
-### Reportes
+### Reportes de Indexación (Documentos)
 
 Cada ejecución de `index run` genera un reporte en:
 `data/index/reports/index_run_YYYYMMDD_HHMMSS.json`
 
-Contiene:
+---
 
-- Documentos procesados, saltados y fallidos.
-- Estadísticas por tipo MIME y por dominio de origen.
-- Lista de errores de ejecución.
+## CLI de Fragmentación (`index_chunks_cli`)
+
+Localizado en `src/sri_dx/app/index_chunks_cli.py`, permite gestionar el índice de trozos.
+
+### Comandos y Parámetros
+
+Ejecución básica:
+
+```bash
+python -m sri_dx.app.index_chunks_cli --refresh
+```
+
+**Argumentos principales:**
+
+- `--max-chars`: Límite de caracteres por fragmento (default: 1200).
+- `--overlap`: Solapamiento entre fragmentos (default: 200).
+- `--min-chars`: Tamaño mínimo para considerar un fragmento válido (default: 100).
+- `--dim`: Dimensión del vector para el índice OpenSearch (default: 768).
+- `--no-concepts`: Salta la extracción de conceptos médicos.
+- `--refresh`: Refresca el índice al terminar.
