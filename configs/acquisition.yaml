@@ -1,39 +1,59 @@
 user_agent: "sri-dx-acquisition/0.1"
 timeout_s: 20
-per_domain_delay_s: 1
+per_domain_delay_s: 5
 max_depth: 2
 max_docs: 20
 verify_ssl: false
 
 whitelist_domains:
-  - who.int
-  - paho.org
-  - medlineplus.gov
   - msdmanuals.com
-  - portal.guiasalud.es
-  - mscbs.gob.es
-  - cdc.gov
+  - www.nhs.uk
+  - www.cdc.gov
 
 seeds:
   - seed_id: seed_001
-    seed_group: who_es
-    url: https://www.who.int/es
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/endocrine-and-metabolic-disorders/diabetes-mellitus-and-disorders-of-carbohydrate-metabolism/diabetes-mellitus-dm
 
   - seed_id: seed_002
-    seed_group: paho_es
-    url: https://www.paho.org/es
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/pulmonary-disorders/asthma-and-related-disorders/asthma
 
   - seed_id: seed_003
-    seed_group: medlineplus_es
-    url: https://medlineplus.gov/spanish/
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/cardiovascular-disorders/heart-failure/overview-of-heart-failure
 
   - seed_id: seed_004
-    seed_group: msd_es
-    url: https://www.msdmanuals.com/es/professional
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/pulmonary-disorders/pneumonia/overview-of-pneumonia
 
   - seed_id: seed_005
-    seed_group: guiasalud
-    url: https://portal.guiasalud.es/
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/neurologic-disorders/meningitis/overview-of-meningitis
+
+  - seed_id: seed_006
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/asthma/
+
+  - seed_id: seed_007
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/pneumonia/
+
+  - seed_id: seed_008
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/multiple-sclerosis/
+
+  - seed_id: seed_009
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/epilepsy/
+
+  - seed_id: seed_010
+    seed_group: cdc_symptoms_dx_tx
+    url: https://www.cdc.gov/yellow-fever/symptoms-diagnosis-treatment/index.html
+
+  - seed_id: seed_011
+    seed_group: cdc_symptoms_dx_tx
+    url: https://www.cdc.gov/chikungunya/symptoms-diagnosis-treatment/index.html
 
 out:
   dir: data/processed
@@ -46,13 +66,15 @@ persist:
   max_out_links_html: 120
 
   skip_url_substrings:
-    - "/healthtopics.html"
-    - "/druginformation.html"
-    - "/quienes-somos"
-    - "/preguntas-frecuentes-faqs"
-    - "/all_"
-    - "/index"
+    - "/about"
+    - "/contact"
+    - "/privacy"
+    - "/terms"
+    - "/cookie"
     - "/site-map"
     - "/sitemap"
+    - "/index"
+    - "/all_"
+    - "/search"
 
   detect_az_index: true
