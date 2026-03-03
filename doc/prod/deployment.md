@@ -9,10 +9,10 @@ Este documento detalla cómo levantar el sistema **SRI-DX** utilizando Docker, g
 
 ## 🚀 Levantando el servicio
 
-Para iniciar la aplicación en modo producción:
+Para iniciar la aplicación en modo producción (con OpenSearch):
 
 ```bash
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.opensearch.yml up --build -d
 ```
 
 ### Explicación de los archivos de infraestructura:

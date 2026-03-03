@@ -31,8 +31,14 @@ uv run streamlit run src/sri_dx/app/ui_streamlit.py
 
 ### Ejecución con Docker
 
+Para inicializar el sistema completo (incluyendo OpenSearch):
+
 ```bash
-docker compose up --build
+# 1. Configurar variables de entorno
+cp .env.example .env
+
+# 2. Levantar los contenedores
+docker compose -f docker-compose.yml -f docker-compose.opensearch.yml up --build -d
 ```
 
 ## 📂 Estructura del Repositorio
