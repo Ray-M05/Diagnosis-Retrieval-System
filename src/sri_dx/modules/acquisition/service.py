@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from collections import deque
 from typing import Optional
+import json
+from pathlib import Path
 
 from .config import AcquisitionConfig
 from .models import CrawlTask
@@ -45,6 +47,49 @@ class AcquisitionService:
 
         self._visited: set[str] = set()
         self._seen_hashes: set[str] = set()  # dedupe por contenido (solo para docs persistidos)
+        
+        # Cargar hashes existentes desde archivos JSONL para evitar duplicados entre ejecuciones
+        self._load_existing_hashes()
+
+    def _load_existing_hashes(self) -> None:
+        """
+        Carga los content_hash de documentos ya guardados en los archivos JSONL.
+        Esto previene duplicados entre múltiples ejecuciones del crawler.
+        """
+        
+        # Cargar hashes de HTML
+        html_path = Path(self.cfg.out_dir) / self.cfg.out_html_name
+        if html_path.exists():
+            try:
+                with html_path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            doc = json.loads(line)
+                            ch = doc.get("content_hash")
+                            if isinstance(ch, str) and ch:
+                                self._seen_hashes.add(ch)
+                        except json.JSONDecodeError:
+                            # Skip líneas mal formadas
+                            continue
+            except Exception:
+                # Si falla la lectura, continuamos sin hashes previos
+                pass
+        
+        # Cargar hashes de PDF
+        pdf_path = Path(self.cfg.out_dir) / self.cfg.out_pdf_name
+        if pdf_path.exists():
+            try:
+                with pdf_path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            doc = json.loads(line)
+                            ch = doc.get("content_hash")
+                            if isinstance(ch, str) and ch:
+                                self._seen_hashes.add(ch)
+                        except json.JSONDecodeError:
+                            continue
+            except Exception:
+                pass
 
     def run(self) -> dict:
         frontier = deque(self._seed_tasks())
@@ -139,9 +184,11 @@ class AcquisitionService:
                 # dedupe por contenido (solo para docs que sí se guardan)
                 ch = doc.get("content_hash")
                 if isinstance(ch, str) and ch in self._seen_hashes:
+                    # Hash duplicado: skip y no escribir
                     skipped_duplicates += 1
                 else:
-                    if isinstance(ch, str):
+                    # Hash nuevo: agregar al set y persistir
+                    if isinstance(ch, str) and ch:
                         self._seen_hashes.add(ch)
 
                     # persist JSONL por tipo

@@ -2,7 +2,7 @@ user_agent: "sri-dx-acquisition/0.1"
 timeout_s: 20
 per_domain_delay_s: 5
 max_depth: 2
-max_docs: 20
+max_docs: 25
 verify_ssl: false
 
 whitelist_domains:
