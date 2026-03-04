@@ -340,8 +340,14 @@ Si tienes problemas:
 ---
 
 **¿Primera vez clonando el proyecto?** Solo ejecuta:
+
+Para inicializar el sistema completo (incluyendo OpenSearch):
 ```bash
-docker compose up --build
+# 1. Configurar variables de entorno
+cp .env.example .env
+
+# 2. Levantar los contenedores
+docker compose -f docker-compose.yml -f docker-compose.opensearch.yml up --build -d
 ```
 
 ¡Y ya está! 🎉
