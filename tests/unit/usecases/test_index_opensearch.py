@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import MagicMock, call
 
-from sri_dx.core.ports.document_source import DocumentSourcePort
-from sri_dx.core.schemas.acquired_document import AcquiredDocument, Content, CrawlMeta, PageMeta
-from sri_dx.core.ports.manifest_store import ManifestStorePort, ManifestEntry
+from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument, Content, CrawlMeta, PageMeta
+from sri_dx.core.ports.acquisition.manifest_store import ManifestStorePort, ManifestEntry
 from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink
-from sri_dx.usecases.index_opensearch import IndexOpenSearchUseCase
+from sri_dx.usecases.indexing.index_opensearch import IndexOpenSearchUseCase
 from sri_dx.modules.indexing.pipeline_version import PIPELINE_VERSION
 
 
@@ -59,7 +59,7 @@ def test_index_opensearch_all_new(mock_source, mock_sink, mock_manifest, monkeyp
     # Mock ConceptExtractor para no hacer el extractor real
     mock_extractor = MagicMock()
     mock_extractor.extract.return_value = []
-    monkeypatch.setattr("sri_dx.usecases.index_opensearch.ConceptExtractor", lambda: mock_extractor)
+    monkeypatch.setattr("sri_dx.usecases.indexing.index_opensearch.ConceptExtractor", lambda: mock_extractor)
 
     uc = IndexOpenSearchUseCase(
         source=mock_source, 
@@ -94,7 +94,7 @@ def test_index_opensearch_all_skipped(mock_source, mock_sink, mock_manifest, mon
 
     # Mock ConceptExtractor
     mock_extractor = MagicMock()
-    monkeypatch.setattr("sri_dx.usecases.index_opensearch.ConceptExtractor", lambda: mock_extractor)
+    monkeypatch.setattr("sri_dx.usecases.indexing.index_opensearch.ConceptExtractor", lambda: mock_extractor)
 
     uc = IndexOpenSearchUseCase(
         source=mock_source, 
@@ -131,7 +131,7 @@ def test_index_opensearch_hash_changed(mock_source, mock_sink, mock_manifest, mo
 
     # Mock ConceptExtractor
     mock_extractor = MagicMock()
-    monkeypatch.setattr("sri_dx.usecases.index_opensearch.ConceptExtractor", lambda: mock_extractor)
+    monkeypatch.setattr("sri_dx.usecases.indexing.index_opensearch.ConceptExtractor", lambda: mock_extractor)
 
     uc = IndexOpenSearchUseCase(
         source=mock_source, 
@@ -166,7 +166,7 @@ def test_index_opensearch_pipeline_version_changed(mock_source, mock_sink, mock_
 
     # Mock ConceptExtractor
     mock_extractor = MagicMock()
-    monkeypatch.setattr("sri_dx.usecases.index_opensearch.ConceptExtractor", lambda: mock_extractor)
+    monkeypatch.setattr("sri_dx.usecases.indexing.index_opensearch.ConceptExtractor", lambda: mock_extractor)
 
     uc = IndexOpenSearchUseCase(
         source=mock_source, 

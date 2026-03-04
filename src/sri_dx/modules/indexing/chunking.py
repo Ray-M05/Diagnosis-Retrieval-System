@@ -3,8 +3,8 @@ import hashlib
 from dataclasses import dataclass
 from typing import Iterable, List, Tuple
 
-from sri_dx.core.schemas.acquired_document import AcquiredDocument
-from sri_dx.core.schemas.chunk_document import ChunkDocument
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
+from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
 
 @dataclass(frozen=True)
 class ChunkingConfig:

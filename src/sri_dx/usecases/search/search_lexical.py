@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sri_dx.core.ports.search_backend import SearchBackendPort
-from sri_dx.core.schemas.search_request import SearchRequest, SearchFilters
-from sri_dx.core.schemas.search_response import SearchResponse, DocumentRecord
+from sri_dx.core.ports.search.search_backend import SearchBackendPort
+from sri_dx.core.schemas.search.search_request import SearchRequest, SearchFilters
+from sri_dx.core.schemas.search.search_response import SearchResponse, DocumentRecord
 
 
 @dataclass

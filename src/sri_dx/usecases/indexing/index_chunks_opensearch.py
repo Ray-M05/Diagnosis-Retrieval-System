@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 
-from sri_dx.core.ports.document_source import DocumentSourcePort
+from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
 from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksSink
 from sri_dx.modules.indexing.chunking import chunk_acquired_document, ChunkingConfig
 

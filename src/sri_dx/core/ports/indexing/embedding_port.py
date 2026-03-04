@@ -1,8 +1,13 @@
 # core/ports/embedding_port.py
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List, Optional
-import numpy as np
-from ..schemas.embedding_schema import EmbeddingConfig
+from typing import List, Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+from sri_dx.core.schemas.indexing.embedding_config import EmbeddingConfig
 
 class EmbeddingPort(ABC):
     """
@@ -15,7 +20,7 @@ class EmbeddingPort(ABC):
         self, 
         texts: List[str], 
         config: Optional[EmbeddingConfig] = None
-    ) -> np.ndarray:
+    ) -> "NDArray[Any]":
         """
         Genera embeddings para una lista de textos.
         
@@ -33,7 +38,7 @@ class EmbeddingPort(ABC):
         self, 
         query: str, 
         config: Optional[EmbeddingConfig] = None
-    ) -> np.ndarray:
+    ) -> "NDArray[Any]":
         """
         Genera embedding para query (puede tener tratamiento especial).
         

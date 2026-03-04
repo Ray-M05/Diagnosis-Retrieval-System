@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from sri_dx.core.ports.manifest_store import ManifestEntry, ManifestStorePort
+from sri_dx.core.ports.acquisition.manifest_store import ManifestEntry, ManifestStorePort
 
 
 @dataclass

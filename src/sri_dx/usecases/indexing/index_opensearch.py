@@ -5,8 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Any
 
-from sri_dx.core.ports.document_source import DocumentSourcePort
-from sri_dx.core.ports.manifest_store import ManifestStorePort, ManifestEntry
+from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
+from sri_dx.core.ports.acquisition.manifest_store import ManifestStorePort, ManifestEntry
 from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink
 from sri_dx.modules.indexing.prepare import prepare_index_document
 from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor

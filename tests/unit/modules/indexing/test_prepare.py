@@ -1,5 +1,5 @@
 from sri_dx.modules.indexing.prepare import prepare_index_document
-from sri_dx.core.schemas.acquired_document import AcquiredDocument, CrawlMeta, Content, Section
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument, CrawlMeta, Content, Section
 
 def test_prepare_index_document():
     """

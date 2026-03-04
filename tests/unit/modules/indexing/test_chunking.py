@@ -1,5 +1,5 @@
 import pytest
-from sri_dx.core.schemas.acquired_document import AcquiredDocument, Content, Section, CrawlMeta
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument, Content, Section, CrawlMeta
 from sri_dx.modules.indexing.chunking import chunk_acquired_document, ChunkingConfig, _split_with_overlap
 
 def test_split_with_overlap_basic():

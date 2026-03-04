@@ -1,8 +1,8 @@
 # core/ports/hybrid_search_port.py
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
-from ..schemas.search_query_schema import HybridQuery
-from ..schemas.search_result_schema import HybridSearchResult
+from sri_dx.core.schemas.search.search_query_schema import HybridQuery
+from sri_dx.core.schemas.search.search_result_schema import HybridSearchResult
 
 class HybridSearchPort(ABC):
     """

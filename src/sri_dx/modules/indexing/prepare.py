@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Optional
 
-from sri_dx.core.schemas.acquired_document import AcquiredDocument
-from sri_dx.core.schemas.index_document import IndexDocument
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
+from sri_dx.core.schemas.indexing.index_document import IndexDocument
 from sri_dx.modules.indexing.text.text_pipeline import TextAnalyzer
 
 

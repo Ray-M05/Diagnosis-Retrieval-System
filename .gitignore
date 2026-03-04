@@ -88,8 +88,8 @@ uv.lock
 # Docker
 .dockerignore
 
-# Elasticsearch data (mounted volumes)
-elasticsearch-data/
+# OpenSearch data (mounted volumes)
+opensearch-data/
 
 # Temporary files
 *.tmp

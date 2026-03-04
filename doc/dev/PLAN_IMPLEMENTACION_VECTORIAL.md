@@ -1,22 +1,26 @@
 # Plan de Implementación: Sistema de Base de Datos Vectorial para Diagnósticos Médicos
 
-**Versión**: 2.0 (Actualizada - Arquitectura centrada en Elasticsearch)  
+**Versión**: 3.0 (Actualizada - Arquitectura centrada en OpenSearch)  
 **Fecha**: Marzo 2026  
 **Proyecto**: SRI-DX (Diagnosis Retrieval System)  
-**Objetivo**: Implementar un sistema vectorial genérico usando **Elasticsearch como núcleo central** para recuperación de diagnósticos médicos de alta calidad
+**Objetivo**: Implementar un sistema vectorial genérico usando **OpenSearch como núcleo central** para recuperación de diagnósticos médicos de alta calidad
+
+**Estado Actual**: El módulo de indexación ya está implementado en la rama `master` con indexación en OpenSearch (índices `clinical_docs_v1` y `clinical_chunks_v1`). Este plan se enfoca en completar el módulo vectorial con embeddings y búsqueda híbrida.
 
 ---
 
 ## 📋 Tabla de Contenidos
 
 1. [Visión General](#1-visión-general)
-2. [🎯 Decisión Arquitectural: Elasticsearch Central](#2-decisión-arquitectural-elasticsearch-central)
-3. [Arquitectura del Sistema Vectorial](#3-arquitectura-del-sistema-vectorial)
-4. [Fase 1: Definición de Puertos (Interfaces)](#4-fase-1-definición-de-puertos-interfaces)
-5. [Fase 2: Procesamiento de Documentos y Chunking](#5-fase-2-procesamiento-de-documentos-y-chunking)
-6. [Fase 3: Generación de Embeddings](#6-fase-3-generación-de-embeddings)
-7. [Fase 4: Adaptador Elasticsearch (Núcleo)](#7-fase-4-adaptador-elasticsearch-núcleo)
-8. [Fase 5: Casos de Uso de Búsqueda](#8-fase-5-casos-de-uso-de-búsqueda)
+2. [🎯 Decisión Arquitectural: OpenSearch Central](#2-decisión-arquitectural-opensearch-central)
+3. [Estado de Implementación Actual](#3-estado-de-implementación-actual)
+4. [Arquitectura del Sistema Vectorial](#4-arquitectura-del-sistema-vectorial)
+4. [Arquitectura del Sistema Vectorial](#4-arquitectura-del-sistema-vectorial)
+5. [Fase 1: Definición de Puertos (Interfaces)](#5-fase-1-definición-de-puertos-interfaces)  
+6. [Fase 2: Procesamiento de Documentos y Chunking](#6-fase-2-procesamiento-de-documentos-y-chunking)
+7. [Fase 3: Generación de Embeddings](#7-fase-3-generación-de-embeddings)
+8. [Fase 4: Adaptador OpenSearch (Núcleo)](#8-fase-4-adaptador-opensearch-núcleo)
+9. [Fase 5: Casos de Uso de Búsqueda](#9-fase-5-casos-de-uso-de-búsqueda)
 9. [Fase 6: Optimizaciones Específicas para Dominio Médico](#9-fase-6-optimizaciones-específicas-para-dominio-médico)
 10. [Cronograma de Implementación](#10-cronograma-de-implementación)
 11. [Métricas de Calidad](#11-métricas-de-calidad)
@@ -110,16 +114,16 @@
 
 ---
 
-## 2. 🎯 Decisión Arquitectural: Elasticsearch Central
+## 2. 🎯 Decisión Arquitectural: OpenSearch Central
 
-### 2.1 Capacidades Nativas de Elasticsearch
+### 2.1 Capacidades Nativas de OpenSearch
 
-Elasticsearch (versión 8.0+) incluye **todas** las capacidades necesarias para el sistema:
+OpenSearch (fork de Elasticsearch, versión 2.0+) incluye **todas** las capacidades necesarias para el sistema:
 
-| Capacidad | Implementación en ES | Reemplaza Módulo |
-|-----------|---------------------|------------------|
-| **Búsqueda Vectorial** | `dense_vector` field type + kNN search | ❌ HNSW/FAISS adapters |
-| **Algoritmo ANN** | HNSW interno optimizado | ❌ HNSWLib standalone |
+| Capacidad | Implementación en OpenSearch | Reemplaza Módulo |
+|-----------|------------------------------|------------------|
+| **Búsqueda Vectorial** | `knn_vector` field type + kNN search | ❌ HNSW/FAISS adapters |
+| **Algoritmo ANN** | HNSW/nmslib interno optimizado | ❌ HNSWLib standalone |
 | **Búsqueda Léxica** | BM25 nativo + analyzers | ❌ Whoosh/PyTerrier |
 | **Búsqueda Híbrida** | kNN + query en una request | ❌ Módulo fusion/ completo |
 | **Operaciones Booleanas** | Bool queries (must/should/must_not) | ❌ Módulo set_ops/ |
@@ -129,39 +133,43 @@ Elasticsearch (versión 8.0+) incluye **todas** las capacidades necesarias para 
 | **Explicabilidad** | Explain API | ❌ Logging manual |
 | **Escalabilidad** | Sharding automático | ❌ Configuración manual |
 
+**Ventaja adicional**: OpenSearch es 100% open-source y no tiene restricciones de licencia tipo SSPL.
+
 ### 2.2 Ejemplo de Query Híbrida Nativa
 
-**Con Elasticsearch (1 request)**:
+**Con OpenSearch (1 request)**:
 ```json
 {
-  "knn": {
-    "field": "embedding",
-    "query_vector": [0.1, 0.2, ...],
-    "k": 10,
-    "boost": 0.7
-  },
   "query": {
     "bool": {
       "should": [
         {
+          "knn": {
+            "embedding": {
+              "vector": [0.1, 0.2, ...],
+              "k": 10
+            }
+          }
+        },
+        {
           "match": {
-            "content": {
+            "chunk_text": {
               "query": "chest pain shortness breath",
-              "boost": 0.3
+              "boost": 0.5
             }
           }
         }
       ],
       "filter": [
-        {"term": {"metadata.specialty": "cardiology"}},
-        {"range": {"metadata.year": {"gte": 2020}}}
+        {"term": {"source_domain": "medlineplus.gov"}},
+        {"terms": {"concept_ids": ["DISNEA", "DOLOR_TORACICO"]}}
       ]
     }
   }
 }
 ```
 
-**Sin Elasticsearch (múltiples requests + código Python)**:
+**Sin OpenSearch (múltiples requests + código Python)**:
 ```python
 # 1. Búsqueda vectorial
 vector_results = hnsw_index.search(vector, k=50)
@@ -181,29 +189,100 @@ filtered = [r for r in hybrid_results
 final = sorted(filtered, key=lambda x: x.score, reverse=True)[:10]
 ```
 
-**Resultado**: Elasticsearch es **más simple**, **más rápido** (1 red call vs 2+), y **más mantenible**.
+**Resultado**: OpenSearch es **más simple**, **más rápido** (1 red call vs 2+), y **más mantenible**.
 
 ### 2.3 Beneficios vs Costos
 
 | Aspecto | Beneficio | Detalle |
-|---------|-----------|---------|
+|---------|-----------|---------|  
 | ✅ **Desarrollo** | -60% líneas código | No necesitas fusion/, set_ops/, metadata_store/ |
 | ✅ **Latencia** | -50% tiempo | 1 request vs 2+ requests + procesamiento |
-| ✅ **Mantenimiento** | 1 servicio | Solo ES vs ES+HNSW+Redis |
+| ✅ **Mantenimiento** | 1 servicio | Solo OpenSearch vs OpenSearch+HNSW+Redis |
 | ✅ **Debugging** | Explain API | Scores transparentes built-in |
 | ✅ **Escalabilidad** | Automática | Sharding, réplicas out-of-the-box |
-| ⚠️ **Lock-in** | Moderado | Código usa Query DSL de ES (pero port interface abstrae) |
-| ⚠️ **Recursos** | +RAM | ES usa más memoria que HNSW puro |
+| ✅ **Open Source** | 100% libre | Sin restricciones de licencia |
+| ⚠️ **Lock-in** | Moderado | Código usa Query DSL de OpenSearch (pero port interface abstrae) |
+| ⚠️ **Recursos** | +RAM | OpenSearch usa más memoria que HNSW puro |
 
 **Decisión**: Los beneficios **superan ampliamente** los costos para SRI-DX.
 
 ---
 
-## 3. Arquitectura del Sistema Vectorial
+## 3. Estado de Implementación Actual
 
-### 3.1 Estructura de Directorios (Arquitectura centrada en Elasticsearch)
+### 3.1 ¿Qué ya está implementado? (Rama `master`)
 
-**🎯 DECISIÓN ARQUITECTURAL**: Elasticsearch como núcleo central del sistema.
+Según el análisis de los módulos existentes, el sistema ya cuenta con:
+
+#### ✅ Módulo 1: Acquisition (Completo)
+- **Crawler BFS** con control de profundidad
+- **Extracción estructurada** de HTML y PDF
+- **Políticas de filtrado** (whitelist, denylist, robots.txt)
+- **Salida**: Archivos JSONL con documentos adquiridos
+
+#### ✅ Módulo 2: Indexing (Completo)
+- **Doble índice en OpenSearch**:
+  - `clinical_docs_v1`: Documentos completos (BM25)
+  - `clinical_chunks_v1`: Fragmentos con soporte kNN
+  
+- **Chunking de dos niveles**:
+  - Nivel 1: Segmentación por secciones clínicas
+  - Nivel 2: Ventana deslizante con overlap (1200 chars, overlap 200)
+  
+- **Extracción de conceptos médicos**:
+  - Algoritmo Aho-Corasick
+  - Léxico español con términos clínicos
+  - Normalización de texto
+  
+- **Pipeline de texto**:
+  - Normalización Unicode
+  - Eliminación de stopwords
+  - Tokenización inteligente
+
+- **Schemas OpenSearch ya definidos**:
+  ```json
+  // clinical_chunks_v1
+  {
+    "chunk_id": "keyword",
+    "doc_id": "keyword",
+    "section_heading": "keyword",
+    "chunk_text": "text",
+    "concept_ids": ["keyword"],
+    "embedding": {
+      "type": "knn_vector",
+      "dimension": 768,
+      "method": {
+        "name": "hnsw",
+        "space_type": "l2",
+        "engine": "nmslib",
+        "parameters": {
+          "ef_construction": 128,
+          "m": 16
+        }
+      }
+    }
+  }
+  ```
+
+### 3.2 ¿Qué falta implementar? (Este Plan)
+
+#### ❌ Generación de Embeddings
+- Adaptador para modelos de embeddings (BioBERT/PubMedBERT)
+- Pipeline para generar vectores 768D
+- Caché de embeddings
+- Procesamiento por lotes
+
+#### ❌ Población del Campo `embedding`
+- Use case para actualizar chunks existentes con embeddings
+- Script de migración/actualización de índice
+- Validación de integridad
+---
+
+## 4. Arquitectura del Sistema Vectorial
+
+### 4.1 Estructura de Directorios (Arquitectura centrada en OpenSearch)
+
+**🎯 DECISIÓN ARQUITECTURAL**: OpenSearch como núcleo central del sistema.
 
 **Ventajas**:
 - ✅ Un solo sistema para vectorial + léxico + híbrido
@@ -211,65 +290,72 @@ final = sorted(filtered, key=lambda x: x.score, reverse=True)[:10]
 - ✅ Búsqueda híbrida nativa (sin fusión manual)
 - ✅ Filtros de metadata nativos (Query DSL)
 - ✅ Escalabilidad probada (sharding automático)
-- ✅ Monitoreo incluido (Kibana)
+- ✅ **Ya implementado parcialmente** en la rama master
 
 ```
 src/sri_dx/
 ├── core/
 │   ├── ports/
-│   │   ├── chunker_port.py              # Interface para chunking
-│   │   ├── embedding_port.py            # Interface para embeddings
-│   │   └── search_port.py               # Interface unificada para búsqueda (ES)
+│   │   ├── chunker_port.py              # ✅ YA EXISTE
+│   │   ├── embedding_port.py            # ❌ POR IMPLEMENTAR
+│   │   ├── search_backend.py            # ✅ YA EXISTE (búsqueda básica)
+│   │   └── hybrid_search_port.py        # ❌ POR IMPLEMENTAR (híbrida)
 │   │
 │   ├── schemas/
-│   │   ├── chunk_schema.py              # Modelo de Chunk
-│   │   ├── embedding_schema.py          # Modelo de Embedding
-│   │   ├── search_query_schema.py       # Modelo de Query (léxica/vectorial/híbrida)
-│   │   ├── search_result_schema.py      # Modelo de Resultado
-│   │   └── metadata_schema.py           # Modelo de Metadatos médicos
+│   │   ├── chunk_schema.py              # ✅ YA EXISTE (ChunkDocument)
+│   │   ├── embedding_schema.py          # ❌ POR IMPLEMENTAR  
+│   │   ├── search_request.py            # ✅ YA EXISTE (léxica)
+│   │   ├── search_result.py             # ❌ POR IMPLEMENTAR (híbrida)
+│   │   └── metadata_schema.py           # ✅ PARCIAL (en AcquiredDocument)
 │   │
 │   └── domain/
-│       ├── chunking_strategy.py         # Estrategias de chunking médico
-│       └── ranking_strategy.py          # Estrategias de re-ranking
+│       ├── chunking_strategy.py         # ✅ YA EXISTE (segmentation + overlap)
+│       └── ranking_strategy.py          # ❌ POR IMPLEMENTAR
 │
 ├── modules/
-│   ├── chunking/
-│   │   ├── medical_section_chunker.py   # Chunking por secciones médicas ⭐
-│   │   ├── semantic_chunker.py          # Chunking semántico
-│   │   └── sliding_window_chunker.py    # Chunking de ventana (fallback)
+│   ├── chunking/                        # ✅ YA IMPLEMENTADO
+│   │   └── chunker.py                   # Lógica de chunking de dos niveles
 │   │
-│   ├── embedding/
-│   │   ├── biomedical_embedder.py       # BioBERT/PubMedBERT ⭐
+│   ├── indexing/                        # ✅ YA IMPLEMENTADO 
+│   │   ├── concepts/                    # Extracción de conceptos médicos
+│   │   └── prepare.py                   # Pipeline de texto
+│   │
+│   ├── embedding/                       # ❌ POR IMPLEMENTAR ⭐
+│   │   ├── biomedical_embedder.py       # BioBERT/PubMedBERT
 │   │   ├── cached_embedder.py           # Decorator: caché de embeddings
 │   │   └── batch_embedder.py            # Decorator: procesamiento batch
 │   │
-│   ├── ner/
-│   │   └── medical_ner.py               # Extracción entidades médicas
-│   │
-│   ├── query_expansion/
-│   │   └── medical_query_expander.py    # Expansión términos médicos
-│   │
-│   └── ranking/
+│   └── ranking/                         # ❌ POR IMPLEMENTAR
 │       └── medical_reranker.py          # Re-ranking específico médico
 │
 ├── adapters/
-│   ├── elasticsearch/
-│   │   └── es_adapter.py                # 🎯 ADAPTADOR PRINCIPAL
-│   │                                    # - Índices vectoriales (kNN)
-│   │                                    # - Búsqueda léxica (BM25)
-│   │                                    # - Búsqueda híbrida nativa
-│   │                                    # - Metadatos y filtros (Query DSL)
-│   │                                    # - Operaciones de conjuntos (bool queries)
+│   ├── stores/
+│   │   ├── opensearch_sink.py           # ✅ YA EXISTE (docs completos)
+│   │   ├── opensearch_chunk_sink.py     # ✅ YA EXISTE (chunks)
+│   │   └── opensearch_search_backend.py # ✅ YA EXISTE (búsqueda léxica)
+│   │   └── opensearch_hybrid_adapter.py # ❌ POR IMPLEMENTAR ⭐
+│   │                                    # - Búsqueda híbrida (kNN + BM25)
+│   │                                    # - Filtros por conceptos médicos
 │   │
-│   └── embeddings/
+│   └── embeddings/                      # ❌ POR IMPLEMENTAR ⭐
 │       ├── sentence_transformer_adapter.py  # Sentence-BERT local
 │       └── openai_adapter.py                # OpenAI API (opcional)
 │
 └── usecases/
-    ├── indexing_usecase.py              # Indexar documentos con chunks + embeddings
-    ├── search_usecase.py                # Búsqueda unificada (delega a ES)
-    └── evaluation_usecase.py            # Evaluar calidad de búsqueda
+    ├── index_opensearch.py              # ✅ YA EXISTE (docs)
+    ├── index_chunks_opensearch.py       # ✅ YA EXISTE (chunks)
+    ├── embed_chunks_usecase.py          # ❌ POR IMPLEMENTAR ⭐
+    ├── search_hybrid_usecase.py         # ❌ POR IMPLEMENTAR ⭐
+    └── evaluation_usecase.py            # ❌ POR IMPLEMENTAR
 ```
+
+**📦 SIMPLIFICACIÓN vs Plan Original**: 
+- ❌ **Eliminados** módulos `fusion/` → OpenSearch lo hace nativamente
+- ❌ **Eliminados** múltiples adaptadores ANN → Solo OpenSearch
+- ❌ **Eliminados** módulos `set_ops/` → Query DSL de OpenSearch (bool queries)
+- ✅ **Reutilizados** schemas y lógica de chunking existente
+- ✅ **Centralizados** todos los índices en OpenSearch
+- ✅ **Aprovechar** infraestructura ya funcional
 
 **📦 SIMPLIFICACIÓN**: 
 - ❌ **Eliminados** módulos `fusion/` → Elasticsearch lo hace nativamente
@@ -278,7 +364,7 @@ src/sri_dx/
 - ✅ **Centralizados** todos los índices en ES
 - ✅ **Unificado** puerto de búsqueda (un solo adaptador)
 
-### 2.2 Principios de Diseño
+### 4.2 Principios de Diseño
 
 1. **SOLID**
    - Single Responsibility: Cada clase una responsabilidad
@@ -289,10 +375,10 @@ src/sri_dx/
 
 2. **Design Patterns**
    - **Strategy Pattern**: Para algoritmos de chunking, embedding, ranking
-   - **Adapter Pattern**: Para Elasticsearch (único backend de búsqueda)
+   - **Adapter Pattern**: Para OpenSearch (único backend de búsqueda)
    - **Decorator Pattern**: Para caché de embeddings, logging, métricas
-   - **Facade Pattern**: Search UseCase simplifica acceso a ES
-   - **Builder Pattern**: Para construcción de queries complejas de ES
+   - **Facade Pattern**: Search UseCase simplifica acceso a OpenSearch
+   - **Builder Pattern**: Para construcción de queries complejas de OpenSearch
 
 3. **Principios Médicos**
    - **Trazabilidad**: Cada resultado debe ser explicable

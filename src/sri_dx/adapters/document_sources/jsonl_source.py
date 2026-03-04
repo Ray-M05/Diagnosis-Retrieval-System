@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional, Any
 
-from sri_dx.core.schemas.acquired_document import (
+from sri_dx.core.schemas.acquisition.acquired_document import (
     AcquiredDocument, CrawlMeta, Content, PageMeta, Section
 )
-from sri_dx.core.ports.document_source import DocumentSourcePort
+from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
 
 
 class InvalidDocumentError(ValueError):

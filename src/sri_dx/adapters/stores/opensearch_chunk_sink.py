@@ -4,7 +4,7 @@ from typing import Iterable, List
 
 from opensearchpy import OpenSearch, helpers
 
-from sri_dx.core.schemas.chunk_document import ChunkDocument
+from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
 from sri_dx.modules.indexing.opensearch_chunks_schema import build_chunks_index_body
 
 def _drop_none(d: dict) -> dict:

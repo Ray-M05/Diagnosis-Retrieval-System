@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sri_dx.core.ports.document_source import DocumentSourcePort
+from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
 from sri_dx.modules.indexing.prepare import prepare_index_document
 
 

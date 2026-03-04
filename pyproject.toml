@@ -11,13 +11,13 @@ dependencies = [
   "python-dotenv>=1.0,<2",
   "requests>=2.31,<3",
   "beautifulsoup4>=4.12,<5",
-  "elasticsearch>=8.11,<9",
   "httpx>=0.28.1",
   "lxml>=6.0.2",
   "pypdf>=6.7.5",
   "pyyaml>=6.0.3",
   "certifi>=2026.2.25",
   "opensearch-py>=2.0.0",
+  "pyahocorasick>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +30,7 @@ ui = [
 # OJO: esto trae torch; lo forzamos a CPU abajo
 neural = [
   "sentence-transformers>=2.2,<3",
+  "transformers>=4.35,<5",
   "torch",
 ]
 
@@ -50,7 +51,7 @@ data = [
 ]
 
 [project.scripts]
-sri-dx = "sri_dx.app.cli:main"
+sri-dx = "sri_dx.app.cli.cli:main"
 
 # Dev deps estándar (PEP 735)
 [dependency-groups]

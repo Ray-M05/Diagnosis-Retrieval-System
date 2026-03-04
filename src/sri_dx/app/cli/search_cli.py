@@ -5,8 +5,8 @@ import argparse
 from sri_dx.adapters.stores.opensearch_search_backend import (
     OpenSearchSearchBackend, OpenSearchSearchConfig
 )
-from sri_dx.core.schemas.search_request import SearchFilters
-from sri_dx.usecases.search_lexical import SearchLexicalUseCase
+from sri_dx.core.schemas.search.search_request import SearchFilters
+from sri_dx.usecases.search.search_lexical import SearchLexicalUseCase
 
 
 def main() -> None:

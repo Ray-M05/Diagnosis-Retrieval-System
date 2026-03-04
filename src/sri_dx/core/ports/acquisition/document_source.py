@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from sri_dx.core.schemas.acquired_document import AcquiredDocument
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 
 
 class DocumentSourcePort(ABC):

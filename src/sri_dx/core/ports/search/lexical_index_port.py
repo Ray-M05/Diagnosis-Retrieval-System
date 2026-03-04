@@ -1,8 +1,8 @@
 # core/ports/lexical_index_port.py
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
-from ..schemas.search_result_schema import LexicalSearchResult
-from ..schemas.search_query_schema import LexicalQuery
+from sri_dx.core.schemas.search.search_result_schema import LexicalSearchResult
+from sri_dx.core.schemas.search.search_query_schema import LexicalQuery
 
 class LexicalIndexPort(ABC):
     """

@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from ..schemas.chunk_schema import Chunk, ChunkingConfig
-from ..schemas.schema import Document
+from sri_dx.core.schemas.indexing.chunk_config import ChunkingConfig
+from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
+from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 
 class ChunkerPort(ABC):
     """
@@ -12,9 +13,9 @@ class ChunkerPort(ABC):
     @abstractmethod
     def chunk_document(
         self, 
-        document: Document, 
+        document: AcquiredDocument, 
         config: Optional[ChunkingConfig] = None
-    ) -> List[Chunk]:
+    ) -> List[ChunkDocument]:
         """
         Divide un documento en chunks.
         
@@ -30,9 +31,9 @@ class ChunkerPort(ABC):
     @abstractmethod
     def chunk_batch(
         self, 
-        documents: List[Document], 
+        documents: List[AcquiredDocument], 
         config: Optional[ChunkingConfig] = None
-    ) -> List[List[Chunk]]:
+    ) -> List[List[ChunkDocument]]:
         """
         Procesa múltiples documentos en lote.
         
@@ -42,8 +43,8 @@ class ChunkerPort(ABC):
         
 
     @abstractmethod
-    def chunk_strategy(self) -> Chunk:
+    def chunk_strategy(self) -> str:
         """
-        Procesa un único documento utilizando la estrategia de chunking definida.
+        Nombre de la estrategia de chunking utilizada.
         """
         

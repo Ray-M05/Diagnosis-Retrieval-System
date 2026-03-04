@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 import pytest
 
-from sri_dx.core.ports.manifest_store import ManifestEntry
+from sri_dx.core.ports.acquisition.manifest_store import ManifestEntry
 from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
 
 

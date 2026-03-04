@@ -1,8 +1,14 @@
 # core/ports/vector_index_port.py
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
-import numpy as np
-from ..schemas.search_result_schema import VectorSearchResult
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
+from sri_dx.core.schemas.search.search_result_schema import VectorSearchResult
 
 class VectorIndexPort(ABC):
     """
@@ -12,7 +18,7 @@ class VectorIndexPort(ABC):
     @abstractmethod
     def build_index(
         self, 
-        vectors: np.ndarray, 
+        vectors: "NDArray[Any]", 
         ids: List[str],
         metadata: Optional[List[Dict[str, Any]]] = None,
         config: Optional[Dict] = None
@@ -31,7 +37,7 @@ class VectorIndexPort(ABC):
     @abstractmethod
     def search(
         self, 
-        query_vector: np.ndarray, 
+        query_vector: "NDArray[Any]", 
         k: int = 50,
         filter_criteria: Optional[Dict] = None
     ) -> List[VectorSearchResult]:
@@ -51,7 +57,7 @@ class VectorIndexPort(ABC):
     @abstractmethod
     def batch_search(
         self, 
-        query_vectors: np.ndarray, 
+        query_vectors: "NDArray[Any]", 
         k: int = 50
     ) -> List[List[VectorSearchResult]]:
         """Búsqueda por lotes (optimizada)."""
@@ -60,7 +66,7 @@ class VectorIndexPort(ABC):
     @abstractmethod
     def add_vectors(
         self, 
-        vectors: np.ndarray, 
+        vectors: "NDArray[Any]", 
         ids: List[str],
         metadata: Optional[List[Dict]] = None
     ) -> None:

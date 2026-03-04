@@ -1,7 +1,7 @@
 # core/ports/set_operations_port.py
 from abc import ABC, abstractmethod
 from typing import Dict, List, Set, Callable, Optional
-from ..schemas.search_result_schema import SearchResult
+from sri_dx.core.schemas.search.search_result_schema import SearchResult
 
 class SetOperationsPort(ABC):
     """

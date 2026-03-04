@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from sri_dx.core.schemas.index_document import IndexDocument
+from sri_dx.core.schemas.indexing.index_document import IndexDocument
 
 
 class IndexDocumentSinkPort(ABC):

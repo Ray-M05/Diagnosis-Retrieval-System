@@ -5,9 +5,9 @@ from typing import Optional, Any
 
 from opensearchpy import OpenSearch
 
-from sri_dx.core.ports.search_backend import SearchBackendPort
-from sri_dx.core.schemas.search_request import SearchRequest
-from sri_dx.core.schemas.search_response import (
+from sri_dx.core.ports.search.search_backend import SearchBackendPort
+from sri_dx.core.schemas.search.search_request import SearchRequest
+from sri_dx.core.schemas.search.search_response import (
     SearchResponse, SearchHit, FacetBucket, DocumentRecord
 )
 

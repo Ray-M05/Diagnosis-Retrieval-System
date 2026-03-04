@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 
 from opensearchpy import OpenSearch, helpers
 
-from sri_dx.core.schemas.index_document import IndexDocument
+from sri_dx.core.schemas.indexing.index_document import IndexDocument
 from sri_dx.modules.indexing.index_upsert import IndexUpsert
 from sri_dx.modules.indexing.opensearch_schema import build_index_body
 
