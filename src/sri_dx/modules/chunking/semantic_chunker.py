@@ -148,6 +148,71 @@ class SemanticChunker(ChunkerPort):
         
         return chunks
     
+    def split_text(self, text: str) -> List[Tuple[int, int, str]]:
+        """
+        Divide un texto arbitrario en fragmentos usando similitud semántica.
+        Retorna una lista de tuplas (start_char, end_char, chunk_text).
+        (Nota: start_char y end_char son relativos al texto original crudo para mantener compatibilidad)
+        """
+        if not text.strip():
+            return []
+            
+        sentences = self._split_into_sentences(text)
+        if len(sentences) == 0:
+            return []
+            
+        if len(sentences) <= self.semantic_config.min_sentences_per_chunk:
+            return [(0, len(text), text)]
+            
+        if self.semantic_config.combine_short_sentences:
+            sentences = self._combine_short_sentences(sentences)
+            
+        embeddings = self.bert_adapter.encode(
+            sentences, 
+            show_progress=len(sentences) > 100
+        )
+        
+        breakpoints = self._find_semantic_breakpoints(embeddings, sentences)
+        
+        chunks_info = []
+        breakpoints = breakpoints + [len(sentences)]
+        
+        for i in range(len(breakpoints) - 1):
+            start_idx = breakpoints[i]
+            end_idx = breakpoints[i + 1]
+            chunk_text = " ".join(sentences[start_idx:end_idx])
+            
+            if len(chunk_text) < self.semantic_config.min_chunk_chars and chunks_info:
+                # Merge with previous chunk
+                prev_start, prev_end, prev_text = chunks_info[-1]
+                merged_text = prev_text + " " + chunk_text
+                chunks_info[-1] = (prev_start, prev_end + len(chunk_text) + 1, merged_text)
+            else:
+                # We do not compute accurate start/end character offsets natively from _split_into_sentences
+                # but we can try to find the start index in the original text or just approximate.
+                # Para simplificar la compatibilidad con el pipeline, calculamos offsets.
+                # Si el texto es una unión limpia, el offset es directo.
+                # Pero las oraciones pueden tener newlines. Busquémosla.
+                start_char_approx = text.find(chunk_text[:30]) if len(chunk_text) > 30 else text.find(chunk_text)
+                if start_char_approx == -1:
+                    start_char_approx = 0
+                end_char_approx = start_char_approx + len(chunk_text)
+                chunks_info.append((start_char_approx, end_char_approx, chunk_text))
+                
+        # Reparar iterativamente para que los offsets tengan algo de coherencia
+        # si start_char_approx falló y dio -1 o 0 a mitades
+        current_offset = 0
+        fixed_chunks = []
+        for _, _, c_text in chunks_info:
+            pos = text.find(c_text, current_offset)
+            if pos == -1:
+                pos = current_offset # Fallback
+            fixed_chunks.append((pos, pos + len(c_text), c_text))
+            current_offset = pos + len(c_text)
+            
+        return fixed_chunks
+
+    
     def chunk_batch(
         self, 
         documents: List[AcquiredDocument], 

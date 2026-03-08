@@ -1,10 +1,17 @@
 from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Optional
 
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
+
+# Intenta importar el SemanticChunker. Si falla (dependencias no satisfechas), 
+# se ignorará graciosamente o se levantará alerta en tiempo de ejecución.
+try:
+    from sri_dx.modules.chunking.semantic_chunker import SemanticChunker
+except ImportError:
+    SemanticChunker = None
 
 @dataclass(frozen=True)
 class ChunkingConfig:
@@ -15,52 +22,6 @@ class ChunkingConfig:
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-def _split_with_overlap(text: str, cfg: ChunkingConfig) -> List[Tuple[int, int, str]]:
-    """
-    Divide un texto en ventanas de caracteres con solapamiento.
-    Intenta no cortar palabras a la mitad.
-    """
-    text = (text or "").strip()
-    if not text:
-        return []
-        
-    if len(text) <= cfg.max_chars:
-        return [(0, len(text), text)] if len(text) >= cfg.min_chars else []
-
-    out = []
-    start = 0
-    n = len(text)
-
-    while start < n:
-        end = min(n, start + cfg.max_chars)
-
-        # Intenta retroceder hasta un espacio en blanco para no cortar palabras
-        if end < n:
-            back = end
-            # No retrocedemos más de 80 caracteres para no crear chunks demasiado pequeños
-            limit = max(start + cfg.min_chars, end - 80)
-            while back > limit and not text[back - 1].isspace():
-                back -= 1
-            if back > start + cfg.min_chars:
-                end = back
-
-        chunk = text[start:end].strip()
-        # Solo guardamos si cumple el mínimo (el último chunk puede ser muy pequeño)
-        if len(chunk) >= cfg.min_chars or (end == n and len(chunk) > 0):
-            out.append((start, end, chunk))
-
-        if end >= n:
-            break
-            
-        # El siguiente inicio es el fin actual menos el overlap
-        start = max(0, end - cfg.overlap_chars)
-        
-        # Salvaguarda: si no avanzamos, forzamos avance para evitar bucle infinito
-        if start >= end:
-            start = end
-
-    return out
-
 def build_chunk_id(doc_id: str, section_index: int, chunk_index: int) -> str:
     return f"{doc_id}:{section_index}:{chunk_index}"
 
@@ -69,18 +30,38 @@ def chunk_acquired_document(
     *,
     cfg: ChunkingConfig = ChunkingConfig(),
     concept_extractor=None,
+    semantic_chunker: Optional["SemanticChunker"] = None
 ) -> Iterable[ChunkDocument]:
     """
     Transforma un documento adquirido en múltiples ChunkDocument.
-    1. Itera sobre las secciones clínicas.
-    2. Divide cada sección en trozos según la configuración de ventana.
+    1. Trata cada sección completa como un único chunk primario.
+    2. Si la sección excede 'max_chars', la divide usando SemanticChunking en lugar de ventana.
     """
     language = doc.page_meta.language if doc.page_meta else None
     content_hash = doc.content_hash
+    
+    # Inicialización perezosa para evitar dependencias forzadas si no es necesario
+    if semantic_chunker is None and SemanticChunker is not None:
+        semantic_chunker = SemanticChunker()
 
     for s_idx, sec in enumerate(doc.content.sections):
         heading = (sec.heading or "").strip() or "main"
-        pieces = _split_with_overlap(sec.text, cfg)
+        sec_text = (sec.text or "").strip()
+        
+        if not sec_text:
+            continue
+            
+        pieces = []
+        # Si la sección excede el tamaño máximo y el chunker semántico está disponible,
+        # dividimos la sección base en componentes semánticos.
+        if len(sec_text) > cfg.max_chars and semantic_chunker is not None:
+            pieces = semantic_chunker.split_text(sec_text)
+            
+            # Si por algún motivo el semantic chunker falló, caemos al valor crudo.
+            if not pieces:
+                pieces = [(0, len(sec_text), sec_text)]
+        else:
+            pieces = [(0, len(sec_text), sec_text)]
 
         for c_idx, (start, end, chunk_text) in enumerate(pieces):
             chunk_id = build_chunk_id(doc.doc_id, s_idx, c_idx)
