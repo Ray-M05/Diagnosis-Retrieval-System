@@ -71,7 +71,7 @@ def chunk_acquired_document(
             if concept_extractor is not None:
                 # Si existe el extractor, lo usamos (Fase B/D)
                 try:
-                    concept_ids = concept_extractor.extract(chunk_text, language=language or "es")
+                    concept_ids = concept_extractor.extract(chunk_text, language=language or "en")
                 except Exception:
                     concept_ids = []
 

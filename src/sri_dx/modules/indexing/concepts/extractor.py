@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from sri_dx.modules.indexing.text.text_pipeline import normalize_text, TextPipelineConfig
-from .lexicon_es import LEXICON_ES
+from .lexicon_en import LEXICON_EN
 
 try:
     import ahocorasick  # pyahocorasick
@@ -36,7 +36,7 @@ class ConceptExtractor:
             return None
 
         A = ahocorasick.Automaton()
-        for concept_id, aliases in LEXICON_ES.items():
+        for concept_id, aliases in LEXICON_EN.items():
             for alias in aliases:
                 alias_norm = normalize_text(alias, self.cfg.text_cfg)
                 if alias_norm:
@@ -45,10 +45,9 @@ class ConceptExtractor:
         A.make_automaton()
         return A
 
-    def extract(self, text: str, *, language: Optional[str] = "es") -> list[str]:
+    def extract(self, text: str, *, language: Optional[str] = "en") -> list[str]:
         """
         Retorna concept_ids deduplicados.
-        language se deja por si luego agregas LEXICON_EN y decides por idioma.
         """
         if not text:
             return []
@@ -67,10 +66,11 @@ class ConceptExtractor:
 
         # Fallback simple (si no está pyahocorasick)
         # Búsqueda substring simple. Hay que iterar y usar `in`.
-        for concept_id, aliases in LEXICON_ES.items():
+        for concept_id, aliases in LEXICON_EN.items():
             for alias in aliases:
                 alias_norm = normalize_text(alias, self.cfg.text_cfg)
                 if alias_norm and alias_norm in text_norm:
                     found.add(concept_id)
                     break
         return sorted(found)
+
