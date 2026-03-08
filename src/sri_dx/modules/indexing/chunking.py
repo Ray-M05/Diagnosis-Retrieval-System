@@ -6,6 +6,12 @@ from typing import Iterable, List, Tuple, Optional
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
 
+try:
+    from sri_dx.core.ports.indexing.ner_tagger import NerTaggerPort
+except ImportError:
+    NerTaggerPort = None
+
+
 # Intenta importar el SemanticChunker. Si falla (dependencias no satisfechas), 
 # se ignorará graciosamente o se levantará alerta en tiempo de ejecución.
 try:
@@ -30,7 +36,8 @@ def chunk_acquired_document(
     *,
     cfg: ChunkingConfig = ChunkingConfig(),
     concept_extractor=None,
-    semantic_chunker: Optional["SemanticChunker"] = None
+    semantic_chunker: Optional["SemanticChunker"] = None,
+    ner_tagger: Optional["NerTaggerPort"] = None
 ) -> Iterable[ChunkDocument]:
     """
     Transforma un documento adquirido en múltiples ChunkDocument.
@@ -75,6 +82,13 @@ def chunk_acquired_document(
                 except Exception:
                     concept_ids = []
 
+            ner_entities = []
+            if ner_tagger is not None:
+                try:
+                    ner_entities = ner_tagger.tag(chunk_text, language=language or "en")
+                except Exception:
+                    ner_entities = []
+
             yield ChunkDocument(
                 chunk_id=chunk_id,
                 doc_id=doc.doc_id,
@@ -95,5 +109,7 @@ def chunk_acquired_document(
                 content_hash=content_hash,
                 chunk_hash=chunk_hash,
                 concept_ids=concept_ids,
+                ner_entities=ner_entities,
                 embedding=None, # Módulo 4
             )
+

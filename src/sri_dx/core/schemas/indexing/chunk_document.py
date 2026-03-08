@@ -1,7 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List
 
+from sri_dx.core.schemas.indexing.ner import NerEntity
 
 @dataclass(frozen=True)
 class ChunkDocument:
@@ -41,7 +42,9 @@ class ChunkDocument:
     chunk_hash: Optional[str] = None    # Hash solo del texto de este chunk
 
     # Enriquecimiento (Módulo 4: Conceptos / Módulo 4: Embeddings)
-    concept_ids: List[str] = None
+    concept_ids: List[str] = field(default_factory=list)
+    ner_entities: List[NerEntity] = field(default_factory=list)
 
     # Vector Search (kNN)
     embedding: Optional[List[float]] = None
+

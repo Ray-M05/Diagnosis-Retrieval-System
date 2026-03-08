@@ -52,6 +52,24 @@ def build_chunks_index_body(*, vector_dim: int = 768, shards: int = 1, replicas:
 
                 # Enriquecimiento (Fase D)
                 "concept_ids": {"type": "keyword"},
+                
+                # Entidades Named Entity Recognition
+                "ner_entities": {
+                    "type": "nested",
+                    "properties": {
+                        "label": {"type": "keyword"},
+                        "text": {
+                            "type": "text",
+                            "analyzer": "folding_analyzer",
+                            "fields": {
+                                "raw": {"type": "keyword"}
+                            }
+                        },
+                        "start_char": {"type": "integer"},
+                        "end_char": {"type": "integer"},
+                        "score": {"type": "float"}
+                    }
+                },
 
                 # Vectorial (Fase 4: RAG/ANN)
                 "embedding": {

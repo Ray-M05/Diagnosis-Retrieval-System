@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
+
+from sri_dx.core.schemas.indexing.ner import NerEntity
 
 
 @dataclass(frozen=True)
@@ -38,3 +40,8 @@ class IndexDocument:
     char_len: int
     word_count: int
     section_count: int
+    
+    # Enriquecimientos
+    concept_ids: List[str] = field(default_factory=list)
+    ner_entities: List[NerEntity] = field(default_factory=list)
+

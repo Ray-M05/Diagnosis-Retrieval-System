@@ -46,6 +46,24 @@ def build_index_body(*, shards: int = 1, replicas: int = 0) -> dict:
 
                 # Fase D: conceptos clínicos como keywords (array)
                 "concept_ids": {"type": "keyword"},
+                
+                # Entidades Named Entity Recognition locales e independientes
+                "ner_entities": {
+                    "type": "nested",
+                    "properties": {
+                        "label": {"type": "keyword"},
+                        "text": {
+                            "type": "text",
+                            "analyzer": "folding_analyzer",
+                            "fields": {
+                                "raw": {"type": "keyword"}
+                            }
+                        },
+                        "start_char": {"type": "integer"},
+                        "end_char": {"type": "integer"},
+                        "score": {"type": "float"}
+                    }
+                }
             }
         },
     }
