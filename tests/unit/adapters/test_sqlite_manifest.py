@@ -2,6 +2,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 import pytest
+import gc
 
 from sri_dx.core.ports.acquisition.manifest_store import ManifestEntry
 from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
@@ -12,7 +13,12 @@ def temp_manifest_store():
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = Path(temp_dir) / "test_manifest.sqlite"
         store = SqliteManifestStore(path=db_path)
-        yield store
+        try:
+            yield store
+        finally:
+            # Force garbage collection to close sqlite connections on Windows
+            del store
+            gc.collect()
 
 
 def test_sqlite_manifest_initialization(temp_manifest_store):

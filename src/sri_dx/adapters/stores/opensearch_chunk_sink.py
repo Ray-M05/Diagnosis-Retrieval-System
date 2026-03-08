@@ -1,6 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import Iterable, List
+
+from .schemas.opensearch_chunks_config import OpenSearchChunksConfig
 
 from opensearchpy import OpenSearch, helpers
 
@@ -10,18 +11,7 @@ from sri_dx.modules.indexing.opensearch_chunks_schema import build_chunks_index_
 def _drop_none(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
-@dataclass(frozen=True)
-class OpenSearchChunksConfig:
-    host: str = "localhost"
-    port: int = 9200
-    use_ssl: bool = False
-    verify_certs: bool = False
-    index_name: str = "clinical_chunks_v1"
-    alias_name: str = "clinical_chunks"
-    vector_dim: int = 768
-    shards: int = 1
-    replicas: int = 0
-    request_timeout: int = 60
+# OpenSearchChunksConfig is provided by adapters.stores.schemas.opensearch_chunks_config
 
 class OpenSearchChunksSink:
     """

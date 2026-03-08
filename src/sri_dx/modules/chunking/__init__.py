@@ -12,6 +12,7 @@ Estrategias por implementar:
 Estado: ✅ IMPLEMENTADO (SemanticChunker)
 """
 
-from .semantic_chunker import SemanticChunker, SemanticChunkingConfig
+from .semantic_chunker import SemanticChunker
+from .schemas.chunking_config import SemanticChunkingConfig
 
 __all__ = ["SemanticChunker", "SemanticChunkingConfig"]

@@ -14,6 +14,7 @@ Tipos de entidades soportadas:
 Estado: ✅ IMPLEMENTADO
 """
 
-from .clinical_bert_extractor import ClinicalBERTEntityExtractor
+from .biomedical_ner_extractor import BiomedicalNEREntityExtractor
+from .schemas.extractor_config import BiomedicalNERExtractorConfig
 
-__all__ = ["ClinicalBERTEntityExtractor"]
+__all__ = ["BiomedicalNEREntityExtractor", "BiomedicalNERExtractorConfig"]

@@ -4,8 +4,7 @@
 from .acquisition import IndexDocumentSinkPort, DocumentSourcePort, ManifestStorePort
 from .search import (
     SearchBackendPort,
-    LexicalIndexPort, 
-    VectorIndexPort,
+    LexicalIndexPort,
     HybridSearchPort,
     SetOperationsPort,
 )
@@ -19,7 +18,6 @@ __all__ = [
     # Search
     "SearchBackendPort",
     "LexicalIndexPort",
-    "VectorIndexPort",
     "HybridSearchPort",
     "SetOperationsPort",
     # Indexing

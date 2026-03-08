@@ -17,7 +17,6 @@ Modelo: emilyalsentzer/Bio_ClinicalBERT
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import List, Optional, Union, TYPE_CHECKING
 
@@ -28,27 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ClinicalBERTConfig:
-    """Configuración del adaptador Bio_ClinicalBERT."""
-    
-    model_name: str = "emilyalsentzer/Bio_ClinicalBERT"
-    """Nombre del modelo en HuggingFace Hub."""
-    
-    max_length: int = 512
-    """Longitud máxima de secuencia en tokens."""
-    
-    batch_size: int = 16
-    """Tamaño de batch para inferencia."""
-    
-    device: str = "cpu"
-    """Dispositivo: 'cpu', 'cuda', 'cuda:0', etc."""
-    
-    pooling_strategy: str = "mean"
-    """Estrategia de pooling: 'mean', 'cls', 'max'."""
-    
-    normalize_embeddings: bool = True
-    """Si True, normaliza embeddings a norma unitaria."""
+from .schemas.clinical_bert_config import ClinicalBERTConfig
 
 
 class ClinicalBERTAdapter:

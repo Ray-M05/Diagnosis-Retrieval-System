@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, TYPE_CHECKING
+
+from .schemas.opensearch_embedding_config import OpenSearchEmbeddingConfig
 
 from opensearchpy import OpenSearch, helpers
 
@@ -25,22 +26,7 @@ def _drop_none(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
-@dataclass(frozen=True)
-class OpenSearchEmbeddingConfig:
-    """Configuración del sink de embeddings."""
-    
-    host: str = "localhost"
-    port: int = 9200
-    use_ssl: bool = False
-    verify_certs: bool = False
-    index_name: str = "clinical_embeddings_v1"
-    alias_name: str = "clinical_embeddings"
-    vector_dim: int = 768
-    shards: int = 1
-    replicas: int = 0
-    request_timeout: int = 60
-    ef_construction: int = 256
-    m: int = 16
+# OpenSearchEmbeddingConfig is provided by adapters.stores.schemas.opensearch_embedding_config
 
 
 class OpenSearchEmbeddingSink(EmbeddingStorePort):

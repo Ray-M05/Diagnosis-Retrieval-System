@@ -23,12 +23,13 @@ from __future__ import annotations
 
 import re
 import logging
-from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from sri_dx.core.ports.indexing.chunker_port import ChunkerPort
 from sri_dx.core.schemas.indexing.chunk_config import ChunkingConfig
 from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
+from .schemas.chunking_config import SemanticChunkingConfig
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 
 if TYPE_CHECKING:
@@ -37,33 +38,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SemanticChunkingConfig:
-    """Configuración específica para chunking semántico."""
-    
-    similarity_threshold: float = 0.5
-    """Umbral de similitud. Debajo de este valor se crea un nuevo chunk."""
-    
-    min_sentences_per_chunk: int = 2
-    """Mínimo de oraciones por chunk."""
-    
-    max_sentences_per_chunk: int = 15
-    """Máximo de oraciones por chunk (fuerza split si se excede)."""
-    
-    min_chunk_chars: int = 100
-    """Chunks más pequeños se fusionan con el anterior."""
-    
-    max_chunk_chars: int = 2000
-    """Chunks más grandes se fuerzan a dividir."""
-    
-    combine_short_sentences: bool = True
-    """Si True, combina oraciones muy cortas antes del análisis."""
-    
-    short_sentence_threshold: int = 20
-    """Oraciones con menos caracteres se consideran 'cortas'."""
-    
-    batch_size: int = 32
-    """Batch size para encoding de embeddings."""
+# SemanticChunkingConfig now lives in modules/chunking/schemas/chunking_config.py
 
 
 # Patrones para dividir en oraciones (considerando texto médico)

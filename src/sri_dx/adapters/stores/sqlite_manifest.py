@@ -25,10 +25,23 @@ class SqliteManifestStore(ManifestStorePort):
             """)
             con.execute("CREATE INDEX IF NOT EXISTS idx_manifest_hash ON manifest(content_hash)")
             con.commit()
+            # Ensure journal mode is not WAL (which can leave .wal/.shm files on Windows)
+            try:
+                con.execute("PRAGMA journal_mode=DELETE")
+                con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                # Best effort; don't fail initialization if pragmas aren't supported
+                pass
 
     def _connect(self) -> sqlite3.Connection:
-        con = sqlite3.connect(str(self.path))
+        # Use a small timeout and disable WAL by default to avoid leftover
+        # journal files locking the DB on Windows during test teardown.
+        con = sqlite3.connect(str(self.path), timeout=5)
         con.row_factory = sqlite3.Row
+        try:
+            con.execute("PRAGMA journal_mode=DELETE")
+        except Exception:
+            pass
         return con
 
     def get(self, doc_id: str) -> ManifestEntry | None:

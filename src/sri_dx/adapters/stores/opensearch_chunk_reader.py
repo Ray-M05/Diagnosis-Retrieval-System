@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Iterator
+
+from .schemas.opensearch_chunk_reader_config import OpenSearchChunkReaderConfig
 
 from opensearchpy import OpenSearch
 
@@ -14,18 +15,7 @@ from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class OpenSearchChunkReaderConfig:
-    """Configuración del lector de chunks."""
-    
-    host: str = "localhost"
-    port: int = 9200
-    use_ssl: bool = False
-    verify_certs: bool = False
-    index_name: str = "clinical_chunks_v1"
-    scroll_size: int = 500
-    scroll_timeout: str = "5m"
-    request_timeout: int = 60
+# OpenSearchChunkReaderConfig is provided by adapters.stores.schemas.opensearch_chunk_reader_config
 
 
 class OpenSearchChunkReader:

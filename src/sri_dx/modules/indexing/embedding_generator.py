@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 
 from sri_dx.core.schemas.indexing.chunk_document import ChunkDocument
 from sri_dx.core.schemas.indexing.embedding_document import EmbeddingDocument
+from .schemas.embedding_config import EmbeddingGeneratorConfig
 
 if TYPE_CHECKING:
     from sri_dx.adapters.embeddings.clinical_bert_adapter import ClinicalBERTAdapter
@@ -18,16 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class EmbeddingGeneratorConfig:
-    """Configuración del generador de embeddings."""
-    
-    model_name: str = "Bio_ClinicalBERT"
-    model_version: str = "1.0"
-    embedding_dim: int = 768
-    batch_size: int = 32
-    text_preview_length: int = 200
-    normalize_vectors: bool = True
+# EmbeddingGeneratorConfig is provided by modules.indexing.schemas.embedding_config
 
 
 class EmbeddingGenerator:

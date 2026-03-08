@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from sri_dx.usecases.indexing.schemas.embed_chunks_config import EmbedChunksConfig
 from typing import List, Optional, Dict, Any
 
 from sri_dx.core.schemas.indexing.embedding_document import EmbeddingBatchResult
@@ -25,29 +25,7 @@ from sri_dx.adapters.stores.opensearch_embedding_sink import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class EmbedChunksConfig:
-    """Configuración del UseCase."""
-    
-    # Lector de chunks
-    chunks_host: str = "localhost"
-    chunks_port: int = 9200
-    chunks_index: str = "clinical_chunks_v1"
-    
-    # Sink de embeddings
-    embeddings_host: str = "localhost"
-    embeddings_port: int = 9200
-    embeddings_index: str = "clinical_embeddings_v1"
-    embeddings_alias: str = "clinical_embeddings"
-    
-    # Procesamiento
-    batch_size: int = 32
-    skip_existing: bool = True
-    """Si True, no re-genera embeddings si el hash del chunk no cambió"""
-    
-    # Filtros opcionales
-    seed_group: Optional[str] = None
-    source_domain: Optional[str] = None
+# EmbedChunksConfig moved to usecases.indexing.schemas.embed_chunks_config
 
 
 class EmbedChunksUseCase:
