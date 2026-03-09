@@ -6,7 +6,7 @@ from pathlib import Path
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
 from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksConfig, OpenSearchChunksSink
 from sri_dx.modules.indexing.chunking import ChunkingConfig
-from sri_dx.usecases.index_chunks_opensearch import IndexChunksOpenSearchUseCase
+from sri_dx.usecases.indexing.index_chunks_opensearch import IndexChunksOpenSearchUseCase
 
 # Configuración de logging básica
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -31,4 +31,4 @@ RUN uv sync --frozen --all-extras
 EXPOSE 8501
 
 # Default command to run Streamlit
-CMD ["/app/.venv/bin/python", "-m", "streamlit", "run", "src/sri_dx/app/ui_streamlit.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["/app/.venv/bin/python", "-m", "streamlit", "run", "src/sri_dx/app/ui/ui_streamlit.py", "--server.port=8501", "--server.address=0.0.0.0"]

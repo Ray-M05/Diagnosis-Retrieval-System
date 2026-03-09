@@ -5,9 +5,9 @@ import argparse
 from pathlib import Path
 
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
-from sri_dx.adapters.stores.opensearch_sink import OpenSearchConfig, OpenSearchIndexSink
+from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink, OpenSearchConfig
 from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
-from sri_dx.usecases.index_opensearch import IndexOpenSearchUseCase
+from sri_dx.usecases.indexing.index_opensearch import IndexOpenSearchUseCase
 
 
 def main() -> None:

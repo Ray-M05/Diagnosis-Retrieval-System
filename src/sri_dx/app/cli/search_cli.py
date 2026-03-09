@@ -5,8 +5,8 @@ import argparse
 from sri_dx.adapters.stores.opensearch_search_backend import (
     OpenSearchSearchBackend, OpenSearchSearchConfig
 )
-from sri_dx.adapters.stores.opensearch_embedding_store import (
-    OpenSearchEmbeddingStore, OpenSearchEmbeddingConfig
+from sri_dx.adapters.stores import (
+    OpenSearchEmbeddingSink, OpenSearchEmbeddingConfig
 )
 from sri_dx.core.schemas.search.search_request import SearchFilters
 from sri_dx.usecases.search.search_lexical import SearchLexicalUseCase
@@ -83,7 +83,7 @@ def main() -> None:
                 print(f"  {field}: {top}")
 
     elif args.type == "semantic":
-        store = OpenSearchEmbeddingStore(OpenSearchEmbeddingConfig(
+        store = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
             host=args.host, port=args.port, index_name=args.chunks_index
         ))
         uc = SearchSemanticUseCase(embedding_store=store)
@@ -102,7 +102,7 @@ def main() -> None:
         backend = OpenSearchSearchBackend(OpenSearchSearchConfig(
             host=args.host, port=args.port, index_alias=args.index_alias
         ))
-        store = OpenSearchEmbeddingStore(OpenSearchEmbeddingConfig(
+        store = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
             host=args.host, port=args.port, index_name=args.chunks_index
         ))
         config = HybridSearchConfig(fusion_method=args.fusion, min_semantic_score=args.min_score)

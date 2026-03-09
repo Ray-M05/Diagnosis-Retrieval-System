@@ -30,13 +30,14 @@ def main() -> None:
     parser.add_argument("--skip-docs", action="store_true", help="Salta la Fase 2 (Docs OpenSearch)")
     parser.add_argument("--skip-chunks", action="store_true", help="Salta la Fase 3 (Chunks OpenSearch)")
     parser.add_argument("--skip-embeddings", action="store_true", help="Salta la Fase 4 (Vector DB)")
+    parser.add_argument("--host", default="localhost", help="Host de OpenSearch")
     args = parser.parse_args()
 
     steps = [
         {"desc": "Fase 1: Adquisición", "cmd": ["uv", "run", "python", "src/sri_dx/scripts/run_acquisition.py"], "skip": args.skip_acquisition},
-        {"desc": "Fase 2: Indexación Docs", "cmd": ["uv", "run", "python", "src/sri_dx/app/cli/index_opensearch.py"], "skip": args.skip_docs},
-        {"desc": "Fase 3: Indexación Chunks", "cmd": ["uv", "run", "python", "src/sri_dx/app/cli/index_chunks_cli.py"], "skip": args.skip_chunks},
-        {"desc": "Fase 4: Embeddings", "cmd": ["uv", "run", "python", "src/sri_dx/app/embed_cli.py"], "skip": args.skip_embeddings},
+        {"desc": "Fase 2: Indexación Docs", "cmd": ["uv", "run", "python", "src/sri_dx/app/cli/index_opensearch.py", "--host", args.host], "skip": args.skip_docs},
+        {"desc": "Fase 3: Indexación Chunks", "cmd": ["uv", "run", "python", "src/sri_dx/app/cli/index_chunks_cli.py", "--host", args.host], "skip": args.skip_chunks},
+        {"desc": "Fase 4: Embeddings", "cmd": ["uv", "run", "python", "src/sri_dx/app/cli/embed_cli.py", "--host", args.host], "skip": args.skip_embeddings},
     ]
 
     for step in steps:
