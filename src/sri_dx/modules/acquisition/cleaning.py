@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from .models import Section
+from sri_dx.core.schemas.acquisition.acquired_document import Section
 
 _ws = re.compile(r"[ \t]+")
 _nl = re.compile(r"\n{3,}")

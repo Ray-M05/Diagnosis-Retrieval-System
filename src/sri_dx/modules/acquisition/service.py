@@ -7,9 +7,15 @@ from typing import Optional
 import json
 from pathlib import Path
 
-from .config import AcquisitionConfig
+from .schemas.acquisition_config import AcquisitionConfig
 from .models import CrawlTask
-from .ports import HttpClient, RobotsPolicy, HtmlExtractor, PdfExtractor, JsonlSink
+from sri_dx.core.ports.acquisition import (
+    HttpClientPort,
+    RobotsPolicyPort,
+    HtmlExtractorPort,
+    PdfExtractorPort,
+    JsonlSinkPort,
+)
 from . import urls as url_utils
 from .document_factory import build_document
 from .persist_policy import should_persist
@@ -40,12 +46,12 @@ class AcquisitionService:
         self,
         *,
         cfg: AcquisitionConfig,
-        http: HttpClient,
-        robots: RobotsPolicy,
-        html_extractor: HtmlExtractor,
-        pdf_extractor: PdfExtractor,
-        sink_html: JsonlSink,
-        sink_pdf: JsonlSink,
+        http: HttpClientPort,
+        robots: RobotsPolicyPort,
+        html_extractor: HtmlExtractorPort,
+        pdf_extractor: PdfExtractorPort,
+        sink_html: JsonlSinkPort,
+        sink_pdf: JsonlSinkPort,
     ) -> None:
         self.cfg = cfg
         self.http = http

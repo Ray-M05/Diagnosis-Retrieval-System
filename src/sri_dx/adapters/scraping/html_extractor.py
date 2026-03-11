@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Optional
 from bs4 import BeautifulSoup
 
-from sri_dx.modules.acquisition.models import Section
+from sri_dx.core.schemas.acquisition.acquired_document import Section
+from sri_dx.core.ports.acquisition.html_extractor_port import HtmlExtractorPort
 
 
 def _safe_text(el) -> str:
@@ -23,7 +24,7 @@ def _pick_main_container(soup: BeautifulSoup):
     return soup.body or soup
 
 
-class SimpleHtmlExtractor:
+class SimpleHtmlExtractor(HtmlExtractorPort):
     """
     Extractor HTML minimalista (offline):
     - title: og:title -> <title> -> <h1>

@@ -4,10 +4,10 @@ import threading
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
-from sri_dx.modules.acquisition.ports import RobotsPolicy
+from sri_dx.core.ports.acquisition.robots_policy_port import RobotsPolicyPort
 
 
-class RobotsTxtPolicy(RobotsPolicy):
+class RobotsTxtPolicy(RobotsPolicyPort):
     """
     Política robots.txt con caché por dominio. Thread-safe.
     """

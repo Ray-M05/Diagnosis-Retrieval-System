@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from .config import AcquisitionConfig, Seed
+from .schemas.acquisition_config import AcquisitionConfig, Seed
 
 
 def load_acquisition_config(path: Path) -> AcquisitionConfig:

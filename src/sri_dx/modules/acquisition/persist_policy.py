@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from .config import AcquisitionConfig
+from .schemas.acquisition_config import AcquisitionConfig
 
 WORD_RE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+", re.UNICODE)
 AZ_RE = re.compile(r"\bA\s+B\s+C\s+D\s+E\b")

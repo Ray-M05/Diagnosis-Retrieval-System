@@ -3,10 +3,11 @@ from io import BytesIO
 from typing import Optional
 from pypdf import PdfReader
 
-from sri_dx.modules.acquisition.models import Section
+from sri_dx.core.schemas.acquisition.acquired_document import Section
+from sri_dx.core.ports.acquisition.pdf_extractor_port import PdfExtractorPort
 
 
-class SimplePdfExtractor:
+class SimplePdfExtractor(PdfExtractorPort):
     """
     Extractor PDF minimalista (offline):
     - title: metadata del PDF si existe

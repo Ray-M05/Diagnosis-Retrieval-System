@@ -2,6 +2,7 @@
 # Modelos de datos para documentos adquiridos
 
 from .acquired_document import AcquiredDocument, CrawlMeta, Content, PageMeta, Section
+from .fetch_result import FetchResult
 
 __all__ = [
     "AcquiredDocument",
@@ -9,4 +10,5 @@ __all__ = [
     "Content",
     "PageMeta",
     "Section",
+    "FetchResult",
 ]

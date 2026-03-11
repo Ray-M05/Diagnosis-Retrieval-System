@@ -4,10 +4,10 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from sri_dx.modules.acquisition.ports import JsonlSink
+from sri_dx.core.ports.acquisition.jsonl_sink_port import JsonlSinkPort
 
 
-class JsonlFileSink(JsonlSink):
+class JsonlFileSink(JsonlSinkPort):
     """
     1 doc = 1 línea JSON. Thread-safe.
     """
