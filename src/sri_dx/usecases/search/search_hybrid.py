@@ -213,7 +213,12 @@ class SearchHybridUseCase:
         
         # Crear mapas de metadatos
         lexical_meta = {doc_id: (score, meta) for doc_id, score, meta in lexical_results}
-        semantic_meta = {doc_id: (score, meta) for doc_id, score, meta in semantic_results}
+        
+        # Para semántica, si hay múltiples chunks por doc_id, nos quedamos con el de mayor score
+        semantic_meta: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        for doc_id, score, meta in semantic_results:
+            if doc_id not in semantic_meta or score > semantic_meta[doc_id][0]:
+                semantic_meta[doc_id] = (score, meta)
         
         # Aplicar RRF
         fused_scores = reciprocal_rank_fusion(
@@ -262,7 +267,12 @@ class SearchHybridUseCase:
         
         # Crear mapas de metadatos
         lexical_meta = {doc_id: (score, meta) for doc_id, score, meta in lexical_results}
-        semantic_meta = {doc_id: (score, meta) for doc_id, score, meta in semantic_results}
+        
+        # Para semántica, si hay múltiples chunks por doc_id, nos quedamos con el de mayor score
+        semantic_meta: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        for doc_id, score, meta in semantic_results:
+            if doc_id not in semantic_meta or score > semantic_meta[doc_id][0]:
+                semantic_meta[doc_id] = (score, meta)
         
         # Aplicar weighted sum
         fused_scores = weighted_sum_fusion(
