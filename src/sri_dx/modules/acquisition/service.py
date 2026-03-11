@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from typing import Optional
 import json
 from pathlib import Path
@@ -24,6 +25,15 @@ class AcquisitionService:
       -> extractor (html/pdf) -> build_document
       -> (persist_policy decide si se guarda)
       -> si HTML: expand out_links (depth < max_depth)
+
+    Concurrency model:
+      - cfg.max_workers workers run in a ThreadPoolExecutor.
+      - Workers NEVER sleep. They only do network I/O + CPU extraction.
+      - Per-domain rate limiting is enforced by the scheduler (_submit_from_frontier)
+        running in the main thread: if a domain is still cooling down its slot is
+        skipped and the task is re-queued, so other domains keep running.
+      - The main loop runs until both `pending` AND `frontier` are exhausted,
+        avoiding premature exit when a domain cooldown temporarily empties the pool.
     """
 
     def __init__(
@@ -46,9 +56,8 @@ class AcquisitionService:
         self.sink_pdf = sink_pdf
 
         self._visited: set[str] = set()
-        self._seen_hashes: set[str] = set()  # dedupe por contenido (solo para docs persistidos)
-        
-        # Cargar hashes existentes desde archivos JSONL para evitar duplicados entre ejecuciones
+        self._seen_hashes: set[str] = set()
+
         self._load_existing_hashes()
 
     def _load_existing_hashes(self) -> None:
@@ -56,30 +65,14 @@ class AcquisitionService:
         Carga los content_hash de documentos ya guardados en los archivos JSONL.
         Esto previene duplicados entre múltiples ejecuciones del crawler.
         """
-        
-        # Cargar hashes de HTML
-        html_path = Path(self.cfg.out_dir) / self.cfg.out_html_name
-        if html_path.exists():
+        for path in (
+            Path(self.cfg.out_dir) / self.cfg.out_html_name,
+            Path(self.cfg.out_dir) / self.cfg.out_pdf_name,
+        ):
+            if not path.exists():
+                continue
             try:
-                with html_path.open("r", encoding="utf-8") as f:
-                    for line in f:
-                        try:
-                            doc = json.loads(line)
-                            ch = doc.get("content_hash")
-                            if isinstance(ch, str) and ch:
-                                self._seen_hashes.add(ch)
-                        except json.JSONDecodeError:
-                            # Skip líneas mal formadas
-                            continue
-            except Exception:
-                # Si falla la lectura, continuamos sin hashes previos
-                pass
-        
-        # Cargar hashes de PDF
-        pdf_path = Path(self.cfg.out_dir) / self.cfg.out_pdf_name
-        if pdf_path.exists():
-            try:
-                with pdf_path.open("r", encoding="utf-8") as f:
+                with path.open("r", encoding="utf-8") as f:
                     for line in f:
                         try:
                             doc = json.loads(line)
@@ -91,140 +84,211 @@ class AcquisitionService:
             except Exception:
                 pass
 
+    def _process_task(
+        self, task: CrawlTask
+    ) -> tuple[list[CrawlTask], dict | None, str | None, int]:
+        """
+        Fetch + extract + build for one URL.
+        No sleeping here — rate limiting is done by the scheduler in run().
+        Thread-safe: reads only immutable config and stateless adapters.
+        """
+        url = url_utils.normalize_url(task.url)
+
+        if not self.robots.allowed(url, self.cfg.user_agent):
+            return [], None, None, 0
+
+        try:
+            fr = self.http.get(url, timeout_s=self.cfg.timeout_s)
+        except Exception:
+            return [], None, None, 0
+
+        if fr.status_code >= 400 or not fr.content:
+            return [], None, None, 0
+
+        mime = (fr.mime_type or "").split(";")[0].strip().lower()
+
+        title: Optional[str] = None
+        sections = []
+        body = ""
+        out_links: list[str] = []
+        meta_partial: dict = {}
+
+        try:
+            if mime.startswith("text/html"):
+                title, sections, body, out_links, meta_partial = (
+                    self.html_extractor.extract(fr.url, fr.content)
+                )
+            elif mime == "application/pdf":
+                title, sections, body, meta_partial = self.pdf_extractor.extract(
+                    fr.url, fr.content
+                )
+            else:
+                return [], None, None, 0
+        except Exception:
+            return [], None, None, 0
+
+        try:
+            doc = build_document(
+                task=task,
+                final_url=fr.url,
+                mime_type=mime,
+                fetched_at=fr.fetched_at,
+                title=title,
+                sections=sections,
+                body=body,
+                page_meta_partial=meta_partial,
+            )
+        except Exception:
+            return [], None, None, 0
+
+        candidate_tasks: list[CrawlTask] = []
+        if mime.startswith("text/html") and task.depth < self.cfg.max_depth:
+            for href in out_links:
+                nxt = url_utils.absolutize(fr.url, href)
+                if not nxt:
+                    continue
+                if url_utils.is_denied(nxt):
+                    continue
+                if not url_utils.within_whitelist(nxt, self.cfg.whitelist_domains):
+                    continue
+                candidate_tasks.append(
+                    CrawlTask(
+                        url=nxt,
+                        depth=task.depth + 1,
+                        parent_url=fr.url,
+                        seed_id=task.seed_id,
+                        seed_group=task.seed_group,
+                    )
+                )
+
+        return candidate_tasks, doc, mime, len(out_links)
+
     def run(self) -> dict:
-        frontier = deque(self._seed_tasks())
+        frontier: deque[CrawlTask] = deque(self._seed_tasks())
         written_html = 0
         written_pdf = 0
         visited_total = 0
         skipped_not_persisted = 0
         skipped_duplicates = 0
+        max_workers = self.cfg.max_workers
+        cfg_delay = self.cfg.per_domain_delay_s
+        # Tracks earliest time (monotonic) the next request to each domain may be sent.
+        domain_next_time: dict[str, float] = {}
 
-        while frontier and (written_html + written_pdf) < self.cfg.max_docs:
-            task = frontier.popleft()
-            url = url_utils.normalize_url(task.url)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            pending: dict = {}
 
-            # visited
-            if url in self._visited:
-                continue
-            self._visited.add(url)
-            visited_total += 1
+            def _submit_from_frontier() -> None:
+                """
+                Pull tasks from frontier, apply cheap filters + non-blocking
+                per-domain rate limit, then submit to the thread pool.
 
-            # denylist + whitelist
-            if url_utils.is_denied(url):
-                continue
-            if not url_utils.within_whitelist(url, self.cfg.whitelist_domains):
-                continue
+                Tasks for domains that are still cooling down are deferred back
+                to the front of the frontier so they are retried on the next
+                scheduling cycle without blocking any worker thread.
+                """
+                nonlocal visited_total
+                deferred: list[CrawlTask] = []
 
-            # robots
-            if not self.robots.allowed(url, self.cfg.user_agent):
-                continue
+                while frontier and len(pending) < max_workers * 2:
+                    task = frontier.popleft()
+                    url = url_utils.normalize_url(task.url)
 
-            # politeness (simple)
-            if self.cfg.per_domain_delay_s > 0:
-                time.sleep(self.cfg.per_domain_delay_s)
-
-            # fetch
-            try:
-                fr = self.http.get(url, timeout_s=self.cfg.timeout_s)
-            except Exception:
-                continue
-
-            if fr.status_code >= 400 or not fr.content:
-                continue
-
-            mime = (fr.mime_type or "").split(";")[0].strip().lower()
-
-            # parse + extract
-            title: Optional[str] = None
-            sections = []
-            body = ""
-            out_links: list[str] = []
-            meta_partial: dict = {}
-
-            try:
-                if mime.startswith("text/html"):
-                    title, sections, body, out_links, meta_partial = self.html_extractor.extract(fr.url, fr.content)
-                elif mime == "application/pdf":
-                    title, sections, body, meta_partial = self.pdf_extractor.extract(fr.url, fr.content)
-                else:
-                    # tipo no soportado
-                    continue
-            except Exception:
-                continue
-
-            # build final document dict (incluye cleaning + hashes)
-            try:
-                doc = build_document(
-                    task=task,
-                    final_url=fr.url,
-                    mime_type=mime,
-                    fetched_at=fr.fetched_at,
-                    title=title,
-                    sections=sections,
-                    body=body,
-                    page_meta_partial=meta_partial,
-                )
-            except Exception:
-                continue
-
-            # --- persist policy: decide si se guarda o solo se usa para descubrir enlaces
-            try:
-                persist = should_persist(
-                    url=doc["url"],
-                    mime_type=mime,
-                    body=doc["content"]["body"],
-                    out_links_count=len(out_links) if mime.startswith("text/html") else 0,
-                    cfg=self.cfg,
-                )
-            except Exception:
-                # Si falla la política por configuración incompleta, por seguridad guardamos.
-                persist = True
-
-            if persist:
-                # dedupe por contenido (solo para docs que sí se guardan)
-                ch = doc.get("content_hash")
-                if isinstance(ch, str) and ch in self._seen_hashes:
-                    # Hash duplicado: skip y no escribir
-                    skipped_duplicates += 1
-                else:
-                    # Hash nuevo: agregar al set y persistir
-                    if isinstance(ch, str) and ch:
-                        self._seen_hashes.add(ch)
-
-                    # persist JSONL por tipo
-                    if mime.startswith("text/html"):
-                        self.sink_html.write(doc)
-                        written_html += 1
-                    else:
-                        self.sink_pdf.write(doc)
-                        written_pdf += 1
-            else:
-                skipped_not_persisted += 1
-                # NO hacemos continue, porque igual queremos expandir links si es HTML
-
-            # expand links (solo HTML)
-            if mime.startswith("text/html") and task.depth < self.cfg.max_depth:
-                for href in out_links:
-                    nxt = url_utils.absolutize(fr.url, href)
-                    if not nxt:
+                    if url in self._visited:
                         continue
-                    # filtros antes de encolar (más barato)
-                    if url_utils.is_denied(nxt):
+                    if url_utils.is_denied(url):
                         continue
-                    if not url_utils.within_whitelist(nxt, self.cfg.whitelist_domains):
-                        continue
-                    if nxt in self._visited:
+                    if not url_utils.within_whitelist(url, self.cfg.whitelist_domains):
                         continue
 
-                    frontier.append(
-                        CrawlTask(
-                            url=nxt,
-                            depth=task.depth + 1,
-                            parent_url=fr.url,
-                            seed_id=task.seed_id,
-                            seed_group=task.seed_group,
-                        )
+                    # Non-blocking domain rate limit
+                    if cfg_delay > 0:
+                        domain = url_utils.get_domain(url)
+                        now = time.monotonic()
+                        if now < domain_next_time.get(domain, 0.0):
+                            # Domain cooling down — defer and try next task
+                            deferred.append(task)
+                            continue
+                        # Claim this slot for the domain immediately
+                        domain_next_time[domain] = now + cfg_delay
+
+                    self._visited.add(url)
+                    visited_total += 1
+                    f = executor.submit(self._process_task, task)
+                    pending[f] = task
+
+                # Re-queue deferred tasks at the front so they are tried first
+                for t in reversed(deferred):
+                    frontier.appendleft(t)
+
+            _submit_from_frontier()
+
+            # Keep going until both the pool AND the frontier are drained.
+            # Using only `while pending` would cause premature exit when all
+            # workers finish but the frontier still has tasks waiting for a
+            # domain cooldown to expire.
+            while pending or frontier:
+                if pending:
+                    done_set, _ = wait(
+                        list(pending.keys()), timeout=1.0, return_when=FIRST_COMPLETED
                     )
+                else:
+                    # No active workers: all frontier tasks are domain-throttled.
+                    # Sleep briefly then let _submit_from_frontier retry.
+                    time.sleep(0.5)
+                    done_set = set()
+
+                for f in done_set:
+                    pending.pop(f, None)
+                    try:
+                        candidate_tasks, doc, mime, out_links_count = f.result()
+                    except Exception:
+                        continue
+
+                    if doc is None:
+                        continue
+
+                    try:
+                        persist = should_persist(
+                            url=doc["url"],
+                            mime_type=mime,
+                            body=doc["content"]["body"],
+                            out_links_count=out_links_count if mime.startswith("text/html") else 0,
+                            cfg=self.cfg,
+                        )
+                    except Exception:
+                        persist = True
+
+                    if persist:
+                        ch = doc.get("content_hash")
+                        if isinstance(ch, str) and ch in self._seen_hashes:
+                            skipped_duplicates += 1
+                        else:
+                            if isinstance(ch, str) and ch:
+                                self._seen_hashes.add(ch)
+                            if mime.startswith("text/html"):
+                                self.sink_html.write(doc)
+                                written_html += 1
+                            else:
+                                self.sink_pdf.write(doc)
+                                written_pdf += 1
+                    else:
+                        skipped_not_persisted += 1
+
+                    if (written_html + written_pdf) >= self.cfg.max_docs:
+                        # Cancel remaining pending tasks and stop expanding frontier
+                        for remaining in list(pending.keys()):
+                            remaining.cancel()
+                        pending.clear()
+                        frontier.clear()
+                        break
+
+                    for t in candidate_tasks:
+                        if url_utils.normalize_url(t.url) not in self._visited:
+                            frontier.append(t)
+
+                if (written_html + written_pdf) < self.cfg.max_docs:
+                    _submit_from_frontier()
 
         return {
             "written_html": written_html,

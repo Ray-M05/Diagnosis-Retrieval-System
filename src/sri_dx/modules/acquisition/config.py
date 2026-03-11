@@ -22,6 +22,7 @@ class AcquisitionConfig:
     max_depth: int = 2
     max_docs: int = 2500
     verify_ssl: bool = True
+    max_workers: int = 8  # concurrent fetcher threads
 
     # Fuentes permitidas
     whitelist_domains: Tuple[str, ...] = ()
