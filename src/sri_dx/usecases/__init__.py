@@ -4,6 +4,7 @@
 # indexing/ - Casos de uso de indexación
 # search/   - Casos de uso de búsqueda
 
+from .acquisition import RunAcquisitionUseCase
 from .indexing import (
     IndexOpenSearchUseCase,
     IndexChunksOpenSearchUseCase,
@@ -12,6 +13,8 @@ from .indexing import (
 from .search import SearchLexicalUseCase
 
 __all__ = [
+    # Acquisition
+    "RunAcquisitionUseCase",
     # Indexing
     "IndexOpenSearchUseCase",
     "IndexChunksOpenSearchUseCase",

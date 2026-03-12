@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 import httpx
 import certifi
 
-from sri_dx.modules.acquisition.models import FetchResult
-from sri_dx.modules.acquisition.ports import HttpClient
+from sri_dx.core.schemas.acquisition.fetch_result import FetchResult
+from sri_dx.core.ports.acquisition.http_client_port import HttpClientPort
 
 
-class HttpxClient(HttpClient):
+class HttpxClient(HttpClientPort):
     """
     Cliente HTTP real (adapter).
     - Sigue redirects

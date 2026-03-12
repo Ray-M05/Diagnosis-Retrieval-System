@@ -7,6 +7,7 @@ from .acquisition import (
     Content,
     PageMeta,
     Section,
+    FetchResult,
 )
 from .indexing import (
     ChunkDocument,
@@ -26,6 +27,7 @@ __all__ = [
     "Content",
     "PageMeta",
     "Section",
+    "FetchResult",
     # Indexing
     "ChunkDocument",
     "IndexDocument",

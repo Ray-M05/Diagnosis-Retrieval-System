@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from .config import AcquisitionConfig, Seed
+from .schemas.acquisition_config import AcquisitionConfig, Seed
 
 
 def load_acquisition_config(path: Path) -> AcquisitionConfig:
@@ -23,6 +23,7 @@ def load_acquisition_config(path: Path) -> AcquisitionConfig:
     per_domain_delay_s = float(data.get("per_domain_delay_s", AcquisitionConfig.per_domain_delay_s))
     max_depth = int(data.get("max_depth", AcquisitionConfig.max_depth))
     max_docs = int(data.get("max_docs", AcquisitionConfig.max_docs))
+    max_workers = int(data.get("max_workers", AcquisitionConfig.max_workers))
 
     # Whitelist
     whitelist = data.get("whitelist_domains", [])
@@ -57,15 +58,36 @@ def load_acquisition_config(path: Path) -> AcquisitionConfig:
     out_html_name = str(out.get("html_name", AcquisitionConfig.out_html_name))
     out_pdf_name = str(out.get("pdf_name", AcquisitionConfig.out_pdf_name))
 
+    # Persist policy (opcional)
+    persist = data.get("persist", {}) or {}
+    if not isinstance(persist, dict):
+        raise ValueError("persist debe ser un dict si se provee.")
+    min_words_html = int(persist.get("min_words_html", AcquisitionConfig.min_words_html))
+    min_words_pdf = int(persist.get("min_words_pdf", AcquisitionConfig.min_words_pdf))
+    max_out_links_html = int(persist.get("max_out_links_html", AcquisitionConfig.max_out_links_html))
+    detect_az_index = bool(persist.get("detect_az_index", AcquisitionConfig.detect_az_index))
+    skip_raw = persist.get("skip_url_substrings", [])
+    if skip_raw is None:
+        skip_raw = []
+    skip_persist_url_substrings = tuple(
+        str(s).strip() for s in skip_raw if str(s).strip()
+    )
+
     return AcquisitionConfig(
         user_agent=user_agent,
         timeout_s=timeout_s,
         per_domain_delay_s=per_domain_delay_s,
         max_depth=max_depth,
         max_docs=max_docs,
+        max_workers=max_workers,
         whitelist_domains=whitelist_domains,
         seeds=tuple(seeds),
         out_dir=out_dir,
         out_html_name=out_html_name,
         out_pdf_name=out_pdf_name,
+        min_words_html=min_words_html,
+        min_words_pdf=min_words_pdf,
+        max_out_links_html=max_out_links_html,
+        detect_az_index=detect_az_index,
+        skip_persist_url_substrings=skip_persist_url_substrings,
     )

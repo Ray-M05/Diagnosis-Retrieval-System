@@ -4,7 +4,8 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional
 
-from .models import CrawlTask, Section
+from .models import CrawlTask
+from sri_dx.core.schemas.acquisition.acquired_document import Section
 from .urls import get_domain, normalize_url
 from .cleaning import clean_text, clean_sections, build_body_from_sections
 
