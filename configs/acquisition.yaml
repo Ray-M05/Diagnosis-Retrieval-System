@@ -2,7 +2,7 @@ user_agent: "sri-dx-acquisition/0.1"
 timeout_s: 20
 per_domain_delay_s: 5
 max_depth: 2
-max_docs: 1000
+max_docs: 300
 max_workers: 15
 verify_ssl: false
 
@@ -13,17 +13,17 @@ whitelist_domains:
   #   - www.cdc.gov
 
 seeds:
-  - seed_id: seed_0012
-    seed_group: msd_topics_en
-    url: https://www.msdmanuals.com/professional/health-topics
+  # - seed_id: seed_0012
+  #   seed_group: msd_topics_en
+  #   url: https://www.msdmanuals.com/professional/health-topics
 
-  # - seed_id: seed_0013
-  #   seed_group: nhs_conditions_az_en
-  #   url: https://www.nhs.uk/conditions/
+  - seed_id: seed_0013
+    seed_group: nhs_conditions_az_en
+    url: https://www.nhs.uk/conditions/
 
-  - seed_id: seed_0014
-    seed_group: mayo_conditions_az_en
-    url: https://www.mayoclinic.org/diseases-conditions
+  # - seed_id: seed_0014
+  #   seed_group: mayo_conditions_az_en
+  #   url: https://www.mayoclinic.org/diseases-conditions
 
   # - seed_id: seed_001
   #   seed_group: msd_guides_en
@@ -77,7 +77,7 @@ out:
 persist:
   min_words_html: 120
   min_words_pdf: 120
-  max_out_links_html: 180
+  max_out_links_html: 200
 
   skip_url_substrings:
     - "/about"
