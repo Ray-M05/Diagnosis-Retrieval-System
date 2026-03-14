@@ -20,10 +20,14 @@ from .clinical_bert_adapter import ClinicalBERTAdapter
 from .schemas.clinical_bert_config import ClinicalBERTConfig
 from .biomedical_ner_adapter import BiomedicalNERAdapter
 from .schemas.biomedical_ner_config import BiomedicalNERConfig
+from .sentences_transformers_cross_encoder_adapter import (
+    SentenceTransformersCrossEncoderAdapter,
+)
 
 __all__ = [
   "ClinicalBERTAdapter",
   "ClinicalBERTConfig",
   "BiomedicalNERAdapter",
   "BiomedicalNERConfig",
+  "SentenceTransformersCrossEncoderAdapter",
 ]
