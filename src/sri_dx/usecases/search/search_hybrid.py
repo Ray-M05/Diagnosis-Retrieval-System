@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional, Dict, Any, Tuple
 
 from sri_dx.core.ports.search.search_backend import SearchBackendPort
@@ -14,6 +14,7 @@ from sri_dx.core.schemas.search.search_result_schema import HybridSearchResult
 from sri_dx.adapters.embeddings.clinical_bert_adapter import ClinicalBERTAdapter
 from sri_dx.modules.ranking.fusion import reciprocal_rank_fusion, weighted_sum_fusion
 from sri_dx.usecases.search.schemas.hybrid_search_config import HybridSearchConfig
+from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -110,12 +111,22 @@ class SearchHybridUseCase:
         Returns:
             Lista de (doc_id, score, metadata)
         """
+        # Expansion by concepts
+        extractor = ConceptExtractor()
+        concepts = extractor.extract(query)
+        
+        final_filters = filters or SearchFilters()
+        if concepts:
+            current = set(final_filters.concept_ids or [])
+            current.update(concepts)
+            final_filters = replace(final_filters, concept_ids=list(current))
+
         request = SearchRequest(
             query=query,
             k=self.config.lexical_k,
             offset=0,
-            operator="and",
-            filters=filters or SearchFilters(),
+            operator="or" if concepts else "and",
+            filters=final_filters,
             return_highlights=False,
             facet_fields=()
         )
