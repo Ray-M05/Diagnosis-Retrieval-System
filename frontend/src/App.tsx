@@ -45,7 +45,7 @@ export default function App() {
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight">
             Find health information <br className="hidden md:block" />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-blue-500">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">
               by symptoms.
             </span>
           </h1>
@@ -94,9 +94,9 @@ export default function App() {
         <div className="bg-amber-50 border border-amber-100 p-5 rounded-2xl flex items-start gap-4 max-w-2xl mx-auto shadow-sm">
           <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-900 leading-relaxed font-medium">
-            <span className="font-bold text-amber-800 uppercase tracking-wide block mb-1">Importante:</span>
-            Este es un sistema para Apoyo a Diagnóstico Diferencial, no sustituye atención médica. 
-            Su función es recuperar información y citar fuentes; toda decisión clínica debe tomarse con profesionales de la salud.
+            <span className="font-bold text-amber-800 uppercase tracking-wide block mb-1">Important:</span>
+            This is a Differential Diagnosis Support system and does not replace professional medical care. 
+            Its function is to retrieve information and cite sources; all clinical decisions must be made with health professionals.
           </p>
         </div>
 
