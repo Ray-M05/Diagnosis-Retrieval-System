@@ -17,49 +17,49 @@ seeds:
   #   seed_group: msd_topics_en
   #   url: https://www.msdmanuals.com/professional/health-topics
 
-  - seed_id: seed_0013
-    seed_group: nhs_conditions_az_en
-    url: https://www.nhs.uk/conditions/
+  # - seed_id: seed_0013
+  #   seed_group: nhs_conditions_az_en
+  #   url: https://www.nhs.uk/conditions/
 
   # - seed_id: seed_0014
   #   seed_group: mayo_conditions_az_en
   #   url: https://www.mayoclinic.org/diseases-conditions
 
-  # - seed_id: seed_001
-  #   seed_group: msd_guides_en
-  #   url: https://www.msdmanuals.com/professional/endocrine-and-metabolic-disorders/diabetes-mellitus-and-disorders-of-carbohydrate-metabolism/diabetes-mellitus-dm
+  - seed_id: seed_001
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/endocrine-and-metabolic-disorders/diabetes-mellitus-and-disorders-of-carbohydrate-metabolism/diabetes-mellitus-dm
 
-#   - seed_id: seed_002
-#     seed_group: msd_guides_en
-#     url: https://www.msdmanuals.com/professional/pulmonary-disorders/asthma-and-related-disorders/asthma
+  - seed_id: seed_002
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/pulmonary-disorders/asthma-and-related-disorders/asthma
 
-#   - seed_id: seed_003
-#     seed_group: msd_guides_en
-#     url: https://www.msdmanuals.com/professional/cardiovascular-disorders/heart-failure/overview-of-heart-failure
+  - seed_id: seed_003
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/cardiovascular-disorders/heart-failure/overview-of-heart-failure
 
-#   - seed_id: seed_004
-#     seed_group: msd_guides_en
-#     url: https://www.msdmanuals.com/professional/pulmonary-disorders/pneumonia/overview-of-pneumonia
+  - seed_id: seed_004
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/pulmonary-disorders/pneumonia/overview-of-pneumonia
 
-#   - seed_id: seed_005
-#     seed_group: msd_guides_en
-#     url: https://www.msdmanuals.com/professional/neurologic-disorders/meningitis/overview-of-meningitis
+  - seed_id: seed_005
+    seed_group: msd_guides_en
+    url: https://www.msdmanuals.com/professional/neurologic-disorders/meningitis/overview-of-meningitis
 
-#   - seed_id: seed_006
-#     seed_group: nhs_conditions_en
-#     url: https://www.nhs.uk/conditions/asthma/
+  - seed_id: seed_006
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/asthma/
 
-#   - seed_id: seed_007
-#     seed_group: nhs_conditions_en
-#     url: https://www.nhs.uk/conditions/pneumonia/
+  - seed_id: seed_007
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/pneumonia/
 
-#   - seed_id: seed_008
-#     seed_group: nhs_conditions_en
-#     url: https://www.nhs.uk/conditions/multiple-sclerosis/
+  - seed_id: seed_008
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/multiple-sclerosis/
 
-#   - seed_id: seed_009
-#     seed_group: nhs_conditions_en
-#     url: https://www.nhs.uk/conditions/epilepsy/
+  - seed_id: seed_009
+    seed_group: nhs_conditions_en
+    url: https://www.nhs.uk/conditions/epilepsy/
 
 #   - seed_id: seed_010
 #     seed_group: cdc_symptoms_dx_tx
@@ -85,6 +85,10 @@ persist:
     - "/terms"
   #  - "/index"
     - "/all_"
+    - "/tests-and-treatments"
+    - "/symptoms"
+    - "/medicines"
+    - "/vaccinations"
     - "/search"
 
   detect_az_index: true
