@@ -1,0 +1,147 @@
+{
+  "total_docs": 2110,
+  "by_mime_type": {
+    "text/html": 2109
+  },
+  "by_language": {
+    "en": 2109
+  },
+  "by_seed_group": {
+    "msd_guides_en": 429,
+    "nhs_conditions_en": 14,
+    "cdc_symptoms_dx_tx": 10,
+    "nhs_conditions_az_en": 662,
+    "mayo_conditions_az_en": 995
+  },
+  "by_seed_id": {
+    "seed_001": 335,
+    "seed_002": 31,
+    "seed_003": 42,
+    "seed_004": 10,
+    "seed_005": 11,
+    "seed_006": 2,
+    "seed_007": 6,
+    "seed_008": 3,
+    "seed_009": 3,
+    "seed_010": 5,
+    "seed_011": 5,
+    "seed_0013": 662,
+    "seed_0014": 995
+  },
+  "by_depth": {
+    "0": 11,
+    "1": 635,
+    "2": 1464
+  },
+  "top_source_domains": [
+    [
+      "www.mayoclinic.org",
+      995
+    ],
+    [
+      "www.nhs.uk",
+      676
+    ],
+    [
+      "www.msdmanuals.com",
+      429
+    ],
+    [
+      "www.cdc.gov",
+      10
+    ]
+  ],
+  "top_headings": [
+    [
+      "products & services",
+      1739
+    ],
+    [
+      "main",
+      1614
+    ],
+    [
+      "risk factors",
+      922
+    ],
+    [
+      "symptoms",
+      908
+    ],
+    [
+      "when to see a doctor",
+      865
+    ],
+    [
+      "causes",
+      861
+    ],
+    [
+      "associated procedures",
+      780
+    ],
+    [
+      "complications",
+      755
+    ],
+    [
+      "mayo clinic press",
+      733
+    ],
+    [
+      "overview",
+      713
+    ],
+    [
+      "prevention",
+      523
+    ],
+    [
+      "related",
+      422
+    ],
+    [
+      "non-urgent advice: see a gp if:",
+      218
+    ]
+  ],
+  "body_chars": {
+    "avg": 10147,
+    "min": 975,
+    "max": 139309,
+    "p50": 6979,
+    "p90": 19288,
+    "p95": 28165,
+    "p99": 60442
+  },
+  "body_words": {
+    "avg": 1508,
+    "min": 139,
+    "max": 20400,
+    "p50": 1062,
+    "p90": 2771,
+    "p95": 4060,
+    "p99": 8570
+  },
+  "sections": {
+    "avg_count": 13.18,
+    "min": 1,
+    "max": 85,
+    "p50": 12,
+    "p90": 21,
+    "p95": 24,
+    "p99": 34
+  },
+  "missing_fields": {
+    "missing_title": 0,
+    "missing_language": 0
+  },
+  "duplicates": {
+    "duplicate_docs_total": 0,
+    "duplicate_hashes_unique": 0
+  },
+  "structural_quality": {
+    "docs_with_symptoms_and_diagnosis_headings": 7,
+    "rate": 0.0033
+  }
+}
