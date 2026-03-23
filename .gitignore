@@ -95,3 +95,5 @@ opensearch-data/
 *.tmp
 *.temp
 .cache/
+
+node_modules
