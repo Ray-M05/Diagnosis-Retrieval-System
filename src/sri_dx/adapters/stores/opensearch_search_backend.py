@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Any
 
 from opensearchpy import OpenSearch
@@ -20,6 +20,7 @@ class OpenSearchSearchConfig:
     verify_certs: bool = False
     index_alias: str = "clinical_docs"
     request_timeout: int = 30
+    search_fields: list[str] = field(default_factory=lambda: ["title^3", "sections_text^2", "body"])
 
 
 class OpenSearchSearchBackend(SearchBackendPort):
@@ -52,7 +53,16 @@ class OpenSearchSearchBackend(SearchBackendPort):
         hits: list[SearchHit] = []
         for h in hits_block.get("hits", []):
             src = h.get("_source", {}) or {}
-            doc_id = str(h.get("_id", ""))
+            
+            _id_val = str(h.get("_id", ""))
+            inner_doc_id = src.get("doc_id")
+            if inner_doc_id and inner_doc_id != _id_val:
+                doc_id = str(inner_doc_id)
+                chunk_id = _id_val
+            else:
+                doc_id = _id_val
+                chunk_id = None
+                
             score = float(h.get("_score") or 0.0)
 
             highlights = h.get("highlight", {}) or {}
@@ -60,6 +70,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
 
             hits.append(SearchHit(
                 doc_id=doc_id,
+                chunk_id=chunk_id,
                 score=score,
                 url=str(src.get("url", "")),
                 title=str(src.get("title", "")),
@@ -111,7 +122,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
                         {
                             "multi_match": {
                                 "query": q,
-                                "fields": ["title^3", "sections_text^2", "body"],
+                                "fields": self.cfg.search_fields,
                                 "type": "best_fields",
                                 "operator": req.operator,
                                 "boost": 1.0
@@ -131,7 +142,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
             main_clause = {
                 "multi_match": {
                     "query": q,
-                    "fields": ["title^3", "sections_text^2", "body"],
+                    "fields": self.cfg.search_fields,
                     "type": "best_fields",
                     "operator": req.operator,
                 }

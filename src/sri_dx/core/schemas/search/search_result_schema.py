@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 class SearchResult(BaseModel):
     """Resultado base de búsqueda."""
     doc_id: str
+    chunk_id: Optional[str] = None
     score: float
     metadata: Optional[Dict[str, Any]] = None
 

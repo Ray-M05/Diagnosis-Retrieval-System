@@ -136,13 +136,15 @@ class SearchHybridUseCase:
         results = []
         for hit in response.hits:
             metadata = {
+                "chunk_id": hit.chunk_id,
+                "doc_id": hit.doc_id,
                 "url": hit.url,
                 "title": hit.title,
                 "source_domain": hit.source_domain,
                 "mime_type": hit.mime_type,
                 "concept_ids": hit.concept_ids or []
             }
-            results.append((hit.doc_id, hit.score, metadata))
+            results.append((hit.chunk_id or hit.doc_id, hit.score, metadata))
         
         return results
     
@@ -174,12 +176,13 @@ class SearchHybridUseCase:
         for chunk_result in chunk_results:
             metadata = {
                 "chunk_id": chunk_result.chunk_id,
+                "doc_id": chunk_result.doc_id,
                 "chunk_text_preview": chunk_result.chunk_text_preview,
                 "section_heading": chunk_result.section_heading,
                 "source_domain": chunk_result.metadata.get("source_domain") if chunk_result.metadata else None,
                 "seed_group": chunk_result.metadata.get("seed_group") if chunk_result.metadata else None,
             }
-            results.append((chunk_result.doc_id, chunk_result.score, metadata))
+            results.append((chunk_result.chunk_id, chunk_result.score, metadata))
         
         return results
     
@@ -218,18 +221,17 @@ class SearchHybridUseCase:
         k: int
     ) -> List[HybridSearchResult]:
         """Fusión con Reciprocal Rank Fusion."""
-        # Extraer rankings (solo doc_ids ordenados)
-        lexical_ranking = [doc_id for doc_id, _, _ in lexical_results]
-        semantic_ranking = [doc_id for doc_id, _, _ in semantic_results]
+        # Extraer rankings (ahora chunk_ids)
+        lexical_ranking = [chunk_id for chunk_id, _, _ in lexical_results]
+        semantic_ranking = [chunk_id for chunk_id, _, _ in semantic_results]
         
-        # Crear mapas de metadatos
-        lexical_meta = {doc_id: (score, meta) for doc_id, score, meta in lexical_results}
+        lexical_meta = {chunk_id: (score, meta) for chunk_id, score, meta in lexical_results}
         
-        # Para semántica, si hay múltiples chunks por doc_id, nos quedamos con el de mayor score
+        # Para semántica
         semantic_meta: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-        for doc_id, score, meta in semantic_results:
-            if doc_id not in semantic_meta or score > semantic_meta[doc_id][0]:
-                semantic_meta[doc_id] = (score, meta)
+        for chunk_id, score, meta in semantic_results:
+            if chunk_id not in semantic_meta or score > semantic_meta[chunk_id][0]:
+                semantic_meta[chunk_id] = (score, meta)
         
         # Aplicar RRF
         fused_scores = reciprocal_rank_fusion(
@@ -239,20 +241,20 @@ class SearchHybridUseCase:
         
         # Construir resultados híbridos
         results = []
-        for doc_id, rrf_score in fused_scores[:k]:
-            lexical_score = lexical_meta.get(doc_id, (0.0, {}))[0]
-            semantic_score = semantic_meta.get(doc_id, (0.0, {}))[0]
+        for chunk_id, rrf_score in fused_scores[:k]:
+            lexical_score = lexical_meta.get(chunk_id, (0.0, {}))[0]
+            semantic_score = semantic_meta.get(chunk_id, (0.0, {}))[0]
             
             # Combinar metadatos
             metadata = {}
-            if doc_id in lexical_meta:
-                metadata.update(lexical_meta[doc_id][1])
-            if doc_id in semantic_meta:
-                # Metadatos semánticos tienen prioridad para chunk info
-                metadata.update(semantic_meta[doc_id][1])
+            if chunk_id in lexical_meta:
+                metadata.update(lexical_meta[chunk_id][1])
+            if chunk_id in semantic_meta:
+                metadata.update(semantic_meta[chunk_id][1])
             
             results.append(HybridSearchResult(
-                doc_id=doc_id,
+                doc_id=metadata.get("doc_id", chunk_id),
+                chunk_id=chunk_id,
                 score=rrf_score,
                 lexical_score=lexical_score if lexical_score > 0 else None,
                 vector_score=semantic_score if semantic_score > 0 else None,
@@ -269,21 +271,19 @@ class SearchHybridUseCase:
         k: int
     ) -> List[HybridSearchResult]:
         """Fusión con suma ponderada de scores."""
-        # Preparar datos para weighted_sum_fusion
-        lexical_ranking = [doc_id for doc_id, _, _ in lexical_results]
+        # Preparar datos
+        lexical_ranking = [chunk_id for chunk_id, _, _ in lexical_results]
         lexical_scores = [score for _, score, _ in lexical_results]
         
-        semantic_ranking = [doc_id for doc_id, _, _ in semantic_results]
+        semantic_ranking = [chunk_id for chunk_id, _, _ in semantic_results]
         semantic_scores = [score for _, score, _ in semantic_results]
         
-        # Crear mapas de metadatos
-        lexical_meta = {doc_id: (score, meta) for doc_id, score, meta in lexical_results}
+        lexical_meta = {chunk_id: (score, meta) for chunk_id, score, meta in lexical_results}
         
-        # Para semántica, si hay múltiples chunks por doc_id, nos quedamos con el de mayor score
         semantic_meta: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-        for doc_id, score, meta in semantic_results:
-            if doc_id not in semantic_meta or score > semantic_meta[doc_id][0]:
-                semantic_meta[doc_id] = (score, meta)
+        for chunk_id, score, meta in semantic_results:
+            if chunk_id not in semantic_meta or score > semantic_meta[chunk_id][0]:
+                semantic_meta[chunk_id] = (score, meta)
         
         # Aplicar weighted sum
         fused_scores = weighted_sum_fusion(
@@ -297,19 +297,20 @@ class SearchHybridUseCase:
         
         # Construir resultados híbridos
         results = []
-        for doc_id, combined_score in fused_scores[:k]:
-            lexical_score = lexical_meta.get(doc_id, (0.0, {}))[0]
-            semantic_score = semantic_meta.get(doc_id, (0.0, {}))[0]
+        for chunk_id, combined_score in fused_scores[:k]:
+            lexical_score = lexical_meta.get(chunk_id, (0.0, {}))[0]
+            semantic_score = semantic_meta.get(chunk_id, (0.0, {}))[0]
             
             # Combinar metadatos
             metadata = {}
-            if doc_id in lexical_meta:
-                metadata.update(lexical_meta[doc_id][1])
-            if doc_id in semantic_meta:
-                metadata.update(semantic_meta[doc_id][1])
+            if chunk_id in lexical_meta:
+                metadata.update(lexical_meta[chunk_id][1])
+            if chunk_id in semantic_meta:
+                metadata.update(semantic_meta[chunk_id][1])
             
             results.append(HybridSearchResult(
-                doc_id=doc_id,
+                doc_id=metadata.get("doc_id", chunk_id),
+                chunk_id=chunk_id,
                 score=combined_score,
                 lexical_score=lexical_score if lexical_score > 0 else None,
                 vector_score=semantic_score if semantic_score > 0 else None,
