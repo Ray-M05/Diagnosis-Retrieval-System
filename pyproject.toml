@@ -18,25 +18,16 @@ dependencies = [
   "certifi>=2026.2.25",
   "opensearch-py>=2.0.0",
   "pyahocorasick>=2.0.0",
+  "numpy>=2.0.0",
+  "sentence-transformers>=2.2,<3",
+  "transformers>=4.35,<5",
+  "torch",
 ]
 
 [project.optional-dependencies]
 # UI (Corte 3)
 ui = [
   "streamlit>=1.31,<2",
-]
-
-# Neural IR (Corte 1/2 cuando toque embeddings)
-# OJO: esto trae torch; lo forzamos a CPU abajo
-neural = [
-  "sentence-transformers>=2.2,<3",
-  "transformers>=4.35,<5",
-  "torch",
-]
-
-# Vector store / ANN
-vector = [
-  "hnswlib>=0.7,<1",
 ]
 
 # API opcional (solo si de verdad la van a usar)
@@ -52,6 +43,7 @@ data = [
 
 [project.scripts]
 sri-dx = "sri_dx.app.cli.cli:main"
+download-models = "sri_dx.scripts.download_models:main"
 
 # Dev deps estándar (PEP 735)
 [dependency-groups]

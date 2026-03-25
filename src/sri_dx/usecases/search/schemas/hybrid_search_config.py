@@ -23,3 +23,11 @@ class HybridSearchConfig(BaseModel):
     semantic_k: int = 100
     min_semantic_score: float = 0.3
     normalize_scores: bool = True
+
+    # Reranking configuration
+    use_reranking: bool = False
+    rerank_top_k: int = 10
+    rerank_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_batch_size: int = 32
+    rerank_score_threshold: Optional[float] = None
+    rerank_content_field: str = "content"

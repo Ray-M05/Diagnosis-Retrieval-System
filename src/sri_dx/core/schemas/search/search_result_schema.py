@@ -30,4 +30,5 @@ class HybridSearchResult(SearchResult):
     """Resultado de búsqueda híbrida."""
     lexical_score: Optional[float] = None
     vector_score: Optional[float] = None
-    fusion_method: Optional[str] = "rrf"  # reciprocal rank fusion
+    rerank_score: Optional[float] = None
+    fusion_method: Optional[str] = "rrf"  # reciprocal rank fusion, cross-encoder, etc.

@@ -9,12 +9,19 @@ from typing import List, Optional, Dict, Any, Tuple
 
 from sri_dx.core.ports.search.search_backend import SearchBackendPort
 from sri_dx.core.ports.search.embedding_store_port import EmbeddingStorePort
+from sri_dx.core.ports.search.cross_encoder_port import CrossEncoderPort
 from sri_dx.core.schemas.search.search_request import SearchRequest, SearchFilters
 from sri_dx.core.schemas.search.search_result_schema import HybridSearchResult
 from sri_dx.adapters.embeddings.clinical_bert_adapter import ClinicalBERTAdapter
+from sri_dx.adapters.embeddings import SentenceTransformersCrossEncoderAdapter
 from sri_dx.modules.ranking.fusion import reciprocal_rank_fusion, weighted_sum_fusion
 from sri_dx.usecases.search.schemas.hybrid_search_config import HybridSearchConfig
 from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor
+from sri_dx.modules.ranking.schemas import (
+    CrossEncoderConfig,
+    RerankRequest,
+    RerankResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +58,22 @@ class SearchHybridUseCase:
     embedding_store: EmbeddingStorePort
     config: HybridSearchConfig = field(default_factory=HybridSearchConfig)
     bert_adapter: Optional[ClinicalBERTAdapter] = None
+    cross_encoder: Optional[CrossEncoderPort] = None
     
     def __post_init__(self):
-        """Initialize BERT adapter if not provided."""
+        """Initialize adapters and cross-encoder if not provided."""
         if self.bert_adapter is None:
             self.bert_adapter = ClinicalBERTAdapter.get_instance()
+        
+        if self.cross_encoder is None and self.config.use_reranking:
+            logger.info(f"Inicializando cross-encoder: {self.config.rerank_model_name}")
+            ce_config = CrossEncoderConfig(
+                model_name=self.config.rerank_model_name,
+                batch_size=self.config.rerank_batch_size,
+                top_k=self.config.rerank_top_k,
+                score_threshold=self.config.rerank_score_threshold
+            )
+            self.cross_encoder = SentenceTransformersCrossEncoderAdapter(ce_config)
     
     def search(
         self,
@@ -94,11 +112,17 @@ class SearchHybridUseCase:
         fused_results = self._fuse_results(
             lexical_results,
             semantic_results,
-            k
+            k if not self.config.use_reranking else self.config.lexical_k
         )
         
-        logger.info(f"Búsqueda híbrida completada: {len(fused_results)} resultados")
-        return fused_results
+        # 4. Reranking (opcional)
+        final_results = fused_results
+        if self.config.use_reranking and self.cross_encoder:
+            logger.info(f"Ejecutando reranking sobre {len(fused_results)} candidatos")
+            final_results = self._rerank(query, fused_results, k)
+        
+        logger.info(f"Búsqueda híbrida completada: {len(final_results)} resultados")
+        return final_results
     
     def _lexical_search(
         self,
@@ -319,3 +343,43 @@ class SearchHybridUseCase:
             ))
         
         return results
+
+    def _rerank(
+        self,
+        query: str,
+        results: List[HybridSearchResult],
+        k: int
+    ) -> List[HybridSearchResult]:
+        """
+        Ejecuta reranking con cross-encoder.
+        
+        Args:
+            query: Query original
+            results: Resultados fusionados (candidatos)
+            k: Número de resultados finales
+            
+        Returns:
+            Lista de resultados reordenados por el cross-encoder
+        """
+        if not results:
+            return []
+
+        request = RerankRequest(
+            query=query,
+            results=results,
+            top_k=k,
+            content_field=self.config.rerank_content_field
+        )
+        
+        response = self.cross_encoder.rerank(request)
+        
+        reranked_results = []
+        for rr in response.ranked_results:
+            # Actualizar el HybridSearchResult con el score del rerank
+            res = rr.original_result
+            res.rerank_score = rr.rerank_score
+            res.score = rr.rerank_score  # El score "principal" ahora es el del rerank
+            res.fusion_method = "cross-encoder"
+            reranked_results.append(res)
+            
+        return reranked_results
