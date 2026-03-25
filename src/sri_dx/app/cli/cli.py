@@ -7,7 +7,7 @@ from sri_dx.core.config import load_config
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
 from sri_dx.adapters.stores.opensearch_sink import OpenSearchConfig, OpenSearchIndexSink
 from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
-from sri_dx.usecases.index_opensearch import IndexOpenSearchUseCase
+from sri_dx.usecases.indexing.index_opensearch import IndexOpenSearchUseCase
 
 def cmd_index_run(args):
     cfg = load_config(args.config)

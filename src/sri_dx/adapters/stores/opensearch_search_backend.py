@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Any
 
 from opensearchpy import OpenSearch
@@ -20,6 +20,7 @@ class OpenSearchSearchConfig:
     verify_certs: bool = False
     index_alias: str = "clinical_docs"
     request_timeout: int = 30
+    search_fields: list[str] = field(default_factory=lambda: ["title^3", "sections_text^2", "body"])
 
 
 class OpenSearchSearchBackend(SearchBackendPort):
@@ -52,7 +53,16 @@ class OpenSearchSearchBackend(SearchBackendPort):
         hits: list[SearchHit] = []
         for h in hits_block.get("hits", []):
             src = h.get("_source", {}) or {}
-            doc_id = str(h.get("_id", ""))
+            
+            _id_val = str(h.get("_id", ""))
+            inner_doc_id = src.get("doc_id")
+            if inner_doc_id and inner_doc_id != _id_val:
+                doc_id = str(inner_doc_id)
+                chunk_id = _id_val
+            else:
+                doc_id = _id_val
+                chunk_id = None
+                
             score = float(h.get("_score") or 0.0)
 
             highlights = h.get("highlight", {}) or {}
@@ -60,6 +70,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
 
             hits.append(SearchHit(
                 doc_id=doc_id,
+                chunk_id=chunk_id,
                 score=score,
                 url=str(src.get("url", "")),
                 title=str(src.get("title", "")),
@@ -99,33 +110,61 @@ class OpenSearchSearchBackend(SearchBackendPort):
     # -------------------- internals --------------------
 
     def _build_query(self, req: SearchRequest) -> dict[str, Any]:
-        must_clause: dict[str, Any]
         q = (req.query or "").strip()
-
-        if q:
-            must_clause = {
+        f = req.filters
+        
+        # Construir la cláusula principal (must_clause o should_expansion)
+        if q and f.concept_ids:
+            # Expansión: match por texto O por concepto
+            main_clause = {
+                "bool": {
+                    "should": [
+                        {
+                            "multi_match": {
+                                "query": q,
+                                "fields": self.cfg.search_fields,
+                                "type": "best_fields",
+                                "operator": req.operator,
+                                "boost": 1.0
+                            }
+                        },
+                        {
+                            "terms": {
+                                "concept_ids": f.concept_ids,
+                                "boost": 3.0  # Boost alto para matches exactos de concepto
+                            }
+                        }
+                    ],
+                    "minimum_should_match": 1
+                }
+            }
+        elif q:
+            main_clause = {
                 "multi_match": {
                     "query": q,
-                    "fields": ["title^3", "sections_text^2", "body"],
+                    "fields": self.cfg.search_fields,
                     "type": "best_fields",
                     "operator": req.operator,
                 }
             }
         else:
-            must_clause = {"match_all": {}}
+            main_clause = {"match_all": {}}
 
-        filters = []
-        f = req.filters
-
-        def terms(field: str, values: Optional[list[str]]) -> None:
+        # Filtros estrictos (concept_ids se mueve a main_clause si hay q, sino se queda aquí)
+        filtering_clauses = []
+        
+        def terms_filter(field: str, values: Optional[list[str]]) -> None:
             if values:
-                filters.append({"terms": {field: values}})
+                filtering_clauses.append({"terms": {field: values}})
 
-        terms("source_domain", f.source_domains)
-        terms("mime_type", f.mime_types)
-        terms("seed_group", f.seed_groups)
-        terms("seed_id", f.seed_ids)
-        terms("concept_ids", f.concept_ids)
+        terms_filter("source_domain", f.source_domains)
+        terms_filter("mime_type", f.mime_types)
+        terms_filter("seed_group", f.seed_groups)
+        terms_filter("seed_id", f.seed_ids)
+        
+        # Si NO hay query, concept_ids actúan como filtro estricto
+        if not q:
+            terms_filter("concept_ids", f.concept_ids)
 
         if f.fetched_from or f.fetched_to:
             r: dict[str, Any] = {}
@@ -133,12 +172,12 @@ class OpenSearchSearchBackend(SearchBackendPort):
                 r["gte"] = f.fetched_from
             if f.fetched_to:
                 r["lte"] = f.fetched_to
-            filters.append({"range": {"fetched_at": r}})
+            filtering_clauses.append({"range": {"fetched_at": r}})
 
         body: dict[str, Any] = {
             "from": max(0, req.offset),
             "size": max(1, req.k),
-            "query": {"bool": {"must": [must_clause], "filter": filters}},
+            "query": {"bool": {"must": [main_clause], "filter": filtering_clauses}},
         }
 
         if req.return_highlights:

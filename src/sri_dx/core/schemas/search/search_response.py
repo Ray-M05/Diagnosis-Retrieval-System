@@ -21,6 +21,7 @@ class SearchHit:
     mime_type: str
     fetched_at: str
 
+    chunk_id: Optional[str] = None
     highlights: dict[str, list[str]] = field(default_factory=dict)
     concept_ids: list[str] = field(default_factory=list)
 

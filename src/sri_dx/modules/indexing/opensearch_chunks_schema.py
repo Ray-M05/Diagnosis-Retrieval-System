@@ -36,7 +36,13 @@ def build_chunks_index_body(*, vector_dim: int = 768, shards: int = 1, replicas:
                 "depth": {"type": "integer"},
 
                 # Trazabilidad Sección/Chunk
-                "section_heading": {"type": "keyword"},
+                "section_heading": {
+                    "type": "text", 
+                    "analyzer": "folding_analyzer",
+                    "fields": {
+                        "raw": {"type": "keyword"}
+                    }
+                },
                 "section_index": {"type": "integer"},
                 "chunk_index": {"type": "integer"},
                 "start_char": {"type": "integer"},

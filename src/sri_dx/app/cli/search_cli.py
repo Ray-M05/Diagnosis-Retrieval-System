@@ -26,6 +26,7 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=9200)
     ap.add_argument("--index-alias", default="clinical_docs", help="Alias del índice léxico")
     ap.add_argument("--chunks-index", default="clinical_embeddings_v1", help="Índice de embeddings para vectores")
+    ap.add_argument("--lexical-chunks-index", default="clinical_chunks", help="Alias del índice léxico de chunks")
     
     # Filtros
     ap.add_argument("--mime", action="append", default=None, help="mime_type filter (repeatable)")
@@ -100,7 +101,8 @@ def main() -> None:
 
     elif args.type == "hybrid":
         backend = OpenSearchSearchBackend(OpenSearchSearchConfig(
-            host=args.host, port=args.port, index_alias=args.index_alias
+            host=args.host, port=args.port, index_alias=args.lexical_chunks_index,
+            search_fields=["section_heading^3", "chunk_text^1"]
         ))
         store = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
             host=args.host, port=args.port, index_name=args.chunks_index
@@ -115,13 +117,13 @@ def main() -> None:
         print(f"TOP {len(res)} RESULTADOS HÍBRIDOS (Fusión: {args.fusion})")
         for i, h in enumerate(res, start=1):
             print("-" * 80)
-            print(f"{i}) score={h.score:.4f} doc_id={h.doc_id}")
+            print(f"{i}) score={h.score:.4f} doc_id={h.doc_id} chunk_id={h.chunk_id}")
             if h.lexical_score:
                 print(f"   [Léxico] Score: {h.lexical_score:.4f}")
             if h.vector_score:
                 print(f"   [Semántico] Score: {h.vector_score:.4f}")
-                if "chunk_text_preview" in h.metadata:
-                    print(f"   chunk='{h.metadata['chunk_text_preview']}...'")
+            if "chunk_text_preview" in h.metadata:
+                print(f"   chunk='{h.metadata['chunk_text_preview']}...'")
             if "title" in h.metadata:
                 print(f"   title={h.metadata['title']}")
             if "url" in h.metadata:

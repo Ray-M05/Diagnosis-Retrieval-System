@@ -33,6 +33,13 @@ class IndexChunksOpenSearchUseCase:
             except ImportError:
                 logger.warning("ConceptExtractor no encontrado. Procediendo sin extracción de conceptos.")
 
+        chunker = None
+        try:
+            from sri_dx.modules.chunking.semantic_chunker import SemanticChunker
+            chunker = SemanticChunker()
+        except ImportError:
+            pass
+
         seen_docs = 0
         seen_chunks = 0
         indexed_ops = 0
@@ -45,7 +52,8 @@ class IndexChunksOpenSearchUseCase:
             chunks_gen = chunk_acquired_document(
                 doc, 
                 cfg=self.chunk_cfg, 
-                concept_extractor=extractor
+                concept_extractor=extractor,
+                semantic_chunker=chunker
             )
             
             for ch in chunks_gen:
