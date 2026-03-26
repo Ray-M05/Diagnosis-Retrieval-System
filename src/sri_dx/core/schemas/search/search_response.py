@@ -20,6 +20,7 @@ class SearchHit:
     source_domain: str
     mime_type: str
     fetched_at: str
+    content: str = ""
 
     chunk_id: Optional[str] = None
     highlights: dict[str, list[str]] = field(default_factory=dict)

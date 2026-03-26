@@ -166,7 +166,9 @@ class SearchHybridUseCase:
                 "title": hit.title,
                 "source_domain": hit.source_domain,
                 "mime_type": hit.mime_type,
-                "concept_ids": hit.concept_ids or []
+                "concept_ids": hit.concept_ids or [],
+                "chunk_text": hit.content,
+                "content": hit.content
             }
             results.append((hit.chunk_id or hit.doc_id, hit.score, metadata))
         
@@ -202,6 +204,7 @@ class SearchHybridUseCase:
                 "chunk_id": chunk_result.chunk_id,
                 "doc_id": chunk_result.doc_id,
                 "chunk_text_preview": chunk_result.chunk_text_preview,
+                "content": chunk_result.chunk_text_preview,  # Alias para reranker
                 "section_heading": chunk_result.section_heading,
                 "source_domain": chunk_result.metadata.get("source_domain") if chunk_result.metadata else None,
                 "seed_group": chunk_result.metadata.get("seed_group") if chunk_result.metadata else None,
