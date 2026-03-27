@@ -47,6 +47,11 @@ def main() -> None:
     ap.add_argument("--rerank-model", default="cross-encoder/ms-marco-MiniLM-L-6-v2", help="Modelo de Cross-Encoder")
     ap.add_argument("--rerank-threshold", type=float, default=None, help="Umbral de score para reranking")
 
+    # Opciones de diagnóstico por enfermedades
+    ap.add_argument("--diseases", action="store_true", help="Agregar chunks por enfermedad (requiere --type hybrid --rerank)")
+    ap.add_argument("--max-diseases", type=int, default=10, help="Máximo de enfermedades a retornar")
+    ap.add_argument("--min-ner-score", type=float, default=0.5, help="Confianza mínima de NER para enfermedades")
+
     args = ap.parse_args()
 
     filters = SearchFilters(
@@ -112,44 +117,63 @@ def main() -> None:
         store = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
             host=args.host, port=args.port, index_name=args.chunks_index
         ))
-        
+
         config = HybridSearchConfig(
-            fusion_method=args.fusion, 
+            fusion_method=args.fusion,
             min_semantic_score=args.min_score,
-            use_reranking=args.rerank,
+            use_reranking=args.rerank or args.diseases,
             rerank_model_name=args.rerank_model,
             rerank_score_threshold=args.rerank_threshold,
             rerank_top_k=args.k
         )
-        
-        uc = SearchHybridUseCase(lexical_backend=backend, embedding_store=store, config=config)
-        
-        res = uc.search(
-            query=args.q, k=args.k, filters=filters, metadata_filters=metadata_filters if metadata_filters else None
-        )
 
-        title = f"TOP {len(res)} RESULTADOS HÍBRIDOS"
-        if args.rerank:
-            title += " + RERANKING"
-        print(f"{title} (Fusión: {args.fusion})")
-        
-        for i, h in enumerate(res, start=1):
-            print("-" * 80)
-            print(f"{i}) score={h.score:.4f} doc_id={h.doc_id} chunk_id={h.chunk_id}")
-            if h.rerank_score:
-                print(f"   [Cross-Encoder] Score: {h.rerank_score:.4f}")
-            if h.lexical_score:
-                print(f"   [Léxico] Score: {h.lexical_score:.4f}")
-            if h.vector_score:
-                print(f"   [Semántico] Score: {h.vector_score:.4f}")
-            if "chunk_text_preview" in h.metadata:
-                print(f"   chunk='{h.metadata['chunk_text_preview']}...'")
-            elif "chunk_text" in h.metadata:
-                print(f"   chunk='{h.metadata['chunk_text'][:200]}...'")
-            if "title" in h.metadata:
-                print(f"   title={h.metadata['title']}")
-            if "url" in h.metadata:
-                print(f"   url={h.metadata['url']}")
+        uc = SearchHybridUseCase(lexical_backend=backend, embedding_store=store, config=config)
+
+        if args.diseases:
+            from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
+                TwoStageRetrievalPipeline, TwoStageRetrievalConfig,
+            )
+            pipeline_config = TwoStageRetrievalConfig(
+                hybrid_candidates=100,
+                final_results=args.k,
+                cross_encoder_model=args.rerank_model,
+                score_threshold=args.rerank_threshold,
+                min_ner_score=args.min_ner_score,
+                max_diseases=args.max_diseases,
+            )
+            pipeline = TwoStageRetrievalPipeline(
+                hybrid_search=uc,
+                config=pipeline_config,
+            )
+            diseases = pipeline.search_diseases(query=args.q)
+            pipeline.print_disease_results(diseases)
+        else:
+            res = uc.search(
+                query=args.q, k=args.k, filters=filters, metadata_filters=metadata_filters if metadata_filters else None
+            )
+
+            title = f"TOP {len(res)} RESULTADOS HÍBRIDOS"
+            if args.rerank:
+                title += " + RERANKING"
+            print(f"{title} (Fusión: {args.fusion})")
+
+            for i, h in enumerate(res, start=1):
+                print("-" * 80)
+                print(f"{i}) score={h.score:.4f} doc_id={h.doc_id} chunk_id={h.chunk_id}")
+                if h.rerank_score:
+                    print(f"   [Cross-Encoder] Score: {h.rerank_score:.4f}")
+                if h.lexical_score:
+                    print(f"   [Léxico] Score: {h.lexical_score:.4f}")
+                if h.vector_score:
+                    print(f"   [Semántico] Score: {h.vector_score:.4f}")
+                if "chunk_text_preview" in h.metadata:
+                    print(f"   chunk='{h.metadata['chunk_text_preview']}...'")
+                elif "chunk_text" in h.metadata:
+                    print(f"   chunk='{h.metadata['chunk_text'][:200]}...'")
+                if "title" in h.metadata:
+                    print(f"   title={h.metadata['title']}")
+                if "url" in h.metadata:
+                    print(f"   url={h.metadata['url']}")
 
 if __name__ == "__main__":
     main()

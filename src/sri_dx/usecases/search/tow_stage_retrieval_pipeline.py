@@ -24,6 +24,8 @@ from sri_dx.modules.ranking.schemas import (
     RerankRequest,
     RerankResult,
 )
+from sri_dx.modules.ranking.disease_aggregator import DiseaseAggregator, DiseaseAggregatorConfig
+from sri_dx.core.schemas.search.disease_result import DiseaseResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,10 @@ class TwoStageRetrievalConfig:
     
     # Content extraction
     content_field: str = "content"  # Campo en metadata con el texto del documento
+
+    # Disease aggregation
+    min_ner_score: float = 0.5  # Confianza mínima de NER
+    max_diseases: int = 10  # Máximo de enfermedades a retornar
 
 
 @dataclass
@@ -113,6 +119,7 @@ class TwoStageRetrievalPipeline:
     hybrid_search: SearchHybridUseCase
     config: TwoStageRetrievalConfig = field(default_factory=TwoStageRetrievalConfig)
     cross_encoder: Optional[SentenceTransformersCrossEncoderAdapter] = None
+    disease_aggregator: Optional[DiseaseAggregator] = None
     
     def __post_init__(self):
         """Inicializa el cross-encoder si no fue proporcionado."""
@@ -219,6 +226,52 @@ class TwoStageRetrievalPipeline:
         
         return enriched
     
+    def search_diseases(
+        self,
+        query: str,
+        hybrid_candidates: Optional[int] = None,
+        final_results: Optional[int] = None,
+    ) -> List[DiseaseResult]:
+        """
+        Búsqueda en tres etapas: híbrida → reranking → agregación por enfermedad.
+
+        Args:
+            query: Query del usuario (síntomas, lab tests, etc.)
+            hybrid_candidates: Override de número de candidatos
+            final_results: Override de resultados del cross-encoder
+
+        Returns:
+            Lista de enfermedades rankeadas con evidencia de soporte.
+        """
+        chunk_results = self.search(query, hybrid_candidates, final_results)
+
+        if not chunk_results:
+            logger.warning("No hay chunks para agregar en enfermedades")
+            return []
+
+        if self.disease_aggregator is None:
+            self.disease_aggregator = DiseaseAggregator(
+                DiseaseAggregatorConfig(
+                    min_ner_score=self.config.min_ner_score,
+                    max_diseases=self.config.max_diseases,
+                )
+            )
+
+        diseases = self.disease_aggregator.aggregate(chunk_results)
+        logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
+        return diseases
+
+    def print_disease_results(self, diseases: List[DiseaseResult]) -> None:
+        """Imprime ranking de enfermedades de forma legible."""
+        print("\n" + "=" * 80)
+        print(f"ENFERMEDADES IDENTIFICADAS: {len(diseases)}")
+        print("=" * 80)
+
+        for disease in diseases:
+            print("\n" + str(disease))
+
+        print("\n" + "=" * 80)
+
     def print_results(self, results: List[RetrievalResult]) -> None:
         """
         Imprime resultados de forma legible.

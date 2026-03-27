@@ -76,6 +76,16 @@ class OpenSearchChunksSink:
                     "content_hash": c.content_hash,
                     "chunk_hash": c.chunk_hash,
                     "concept_ids": c.concept_ids or [],
+                    "ner_entities": [
+                        {
+                            "text": e.text,
+                            "label": e.label,
+                            "start_char": e.start_char,
+                            "end_char": e.end_char,
+                            "score": e.score,
+                        }
+                        for e in (c.ner_entities or [])
+                    ] or None,
                     "embedding": c.embedding,
                 })
                 yield {

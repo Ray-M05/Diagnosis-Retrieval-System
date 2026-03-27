@@ -25,6 +25,7 @@ class SearchHit:
     chunk_id: Optional[str] = None
     highlights: dict[str, list[str]] = field(default_factory=dict)
     concept_ids: list[str] = field(default_factory=list)
+    ner_entities: list[dict] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -1,8 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import logging
+from typing import Optional
 
 from sri_dx.core.ports.acquisition.document_source import DocumentSourcePort
+from sri_dx.core.ports.indexing.ner_tagger import NerTaggerPort
 from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksSink
 from sri_dx.modules.indexing.chunking import chunk_acquired_document, ChunkingConfig
 
@@ -20,6 +22,7 @@ class IndexChunksOpenSearchUseCase:
     sink: OpenSearchChunksSink
     chunk_cfg: ChunkingConfig = ChunkingConfig()
     batch_size: int = 500
+    ner_tagger: Optional[NerTaggerPort] = None
 
     def run(self, *, refresh: bool = False, with_concepts: bool = True) -> dict:
         self.sink.ensure_index()
@@ -50,10 +53,11 @@ class IndexChunksOpenSearchUseCase:
             
             # Dividir documento en trozos
             chunks_gen = chunk_acquired_document(
-                doc, 
-                cfg=self.chunk_cfg, 
+                doc,
+                cfg=self.chunk_cfg,
                 concept_extractor=extractor,
-                semantic_chunker=chunker
+                semantic_chunker=chunker,
+                ner_tagger=self.ner_tagger,
             )
             
             for ch in chunks_gen:

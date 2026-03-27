@@ -67,6 +67,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
 
             highlights = h.get("highlight", {}) or {}
             concept_ids = src.get("concept_ids") or []
+            ner_entities = src.get("ner_entities") or []
 
             hits.append(SearchHit(
                 doc_id=doc_id,
@@ -80,6 +81,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
                 content=str(src.get("body", src.get("sections_text", src.get("chunk_text", "")))),
                 highlights={k: list(v) for k, v in highlights.items()},
                 concept_ids=list(concept_ids) if isinstance(concept_ids, list) else [],
+                ner_entities=list(ner_entities) if isinstance(ner_entities, list) else [],
             ))
 
         facets: dict[str, list[FacetBucket]] = {}

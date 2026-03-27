@@ -167,6 +167,7 @@ class SearchHybridUseCase:
                 "source_domain": hit.source_domain,
                 "mime_type": hit.mime_type,
                 "concept_ids": hit.concept_ids or [],
+                "ner_entities": hit.ner_entities or [],
                 "chunk_text": hit.content,
                 "content": hit.content
             }
