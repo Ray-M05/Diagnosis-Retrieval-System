@@ -36,6 +36,7 @@ class ClinicalBERTConfig(BaseModel):
     pooling_strategy: str = "mean"
     normalize_embeddings: bool = True
     use_fp16: bool = True
+    use_onnx: bool = True
 
     @model_validator(mode="after")
     def _resolve(self) -> "ClinicalBERTConfig":

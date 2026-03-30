@@ -25,6 +25,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Aceleración CPU para embeddings (2-4x más rápido sin GPU)
+onnx = [
+  "onnxruntime>=1.17,<2",
+]
+
 # UI (Corte 3)
 ui = [
   "streamlit>=1.31,<2",
