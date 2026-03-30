@@ -6,7 +6,7 @@ def build_embeddings_index_body(
     vector_dim: int = 768,
     shards: int = 1,
     replicas: int = 0,
-    ef_construction: int = 256,
+    ef_construction: int = 128,
     m: int = 16,
 ) -> dict:
     """

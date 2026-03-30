@@ -68,8 +68,15 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         except Exception:
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
     
+    def set_refresh_interval(self, interval: str) -> None:
+        """Cambia el refresh_interval del índice. Usar '-1' durante bulk masivo."""
+        self.client.indices.put_settings(
+            index=self.cfg.index_name,
+            body={"index": {"refresh_interval": interval}},
+        )
+
     def store_embeddings(
-        self, 
+        self,
         embeddings: List[EmbeddingDocument],
         refresh: bool = False
     ) -> int:
@@ -106,9 +113,11 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         
         success_count = 0
         for ok, _ in helpers.streaming_bulk(
-            self.client, 
-            actions(), 
-            raise_on_error=False
+            self.client,
+            actions(),
+            chunk_size=500,
+            max_retries=3,
+            raise_on_error=False,
         ):
             if ok:
                 success_count += 1

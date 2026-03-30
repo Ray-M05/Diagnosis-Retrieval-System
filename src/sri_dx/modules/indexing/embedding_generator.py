@@ -58,6 +58,7 @@ class EmbeddingGenerator:
             bert_config = ClinicalBERTConfig(
                 batch_size=self.config.batch_size,
                 normalize_embeddings=self.config.normalize_vectors,
+                device=self.config.device,
             )
             self._bert_adapter = ClinicalBERTAdapter.get_instance(bert_config)
         return self._bert_adapter

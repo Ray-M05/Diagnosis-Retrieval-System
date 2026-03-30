@@ -49,6 +49,13 @@ class OpenSearchChunksSink:
             # Si el índice es nuevo o no tiene alias, lo ponemos
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
 
+    def set_refresh_interval(self, interval: str) -> None:
+        """Cambia el refresh_interval del índice. Usar '-1' durante bulk masivo."""
+        self.client.indices.put_settings(
+            index=self.cfg.index_name,
+            body={"index": {"refresh_interval": interval}},
+        )
+
     def bulk_upsert(self, chunks: Iterable[ChunkDocument], *, refresh: bool = False) -> int:
         """
         Indexa una lista de chunks en bloque.
@@ -96,7 +103,7 @@ class OpenSearchChunksSink:
                 }
 
         success_count = 0
-        for ok, action in helpers.streaming_bulk(self.client, actions(), raise_on_error=False):
+        for ok, action in helpers.streaming_bulk(self.client, actions(), chunk_size=500, max_retries=3, raise_on_error=False):
             if ok:
                 success_count += 1
 

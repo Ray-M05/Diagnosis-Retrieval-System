@@ -24,7 +24,8 @@ class EmbedChunksConfig(BaseModel):
     embeddings_index: str = "clinical_embeddings_v1"
     embeddings_alias: str = "clinical_embeddings"
 
-    batch_size: int = 32
+    batch_size: int = 128
+    device: str = "auto"
     skip_existing: bool = True
 
     seed_group: Optional[str] = None

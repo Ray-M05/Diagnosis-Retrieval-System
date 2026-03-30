@@ -80,6 +80,13 @@ class OpenSearchIndexSink:
         except Exception:
             return []
 
+    def set_refresh_interval(self, interval: str) -> None:
+        """Cambia el refresh_interval del índice. Usar '-1' durante bulk masivo."""
+        self.client.indices.put_settings(
+            index=self.cfg.index_name,
+            body={"index": {"refresh_interval": interval}},
+        )
+
     def bulk_upsert(self, docs: Iterable[IndexDocument | IndexUpsert], *, refresh: bool = False) -> list[str]:
         """
         Inserta/actualiza docs usando _id = doc_id.
@@ -128,7 +135,7 @@ class OpenSearchIndexSink:
                 }
 
         ok_ids: list[str] = []
-        for ok, item in helpers.streaming_bulk(self.client, actions(), raise_on_error=False):
+        for ok, item in helpers.streaming_bulk(self.client, actions(), chunk_size=500, max_retries=3, raise_on_error=False):
             # item tiene forma {"index": {"_id": "...", "status": 201/200, ...}}
             action = next(iter(item.values()))
             _id = action.get("_id")

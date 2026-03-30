@@ -27,8 +27,9 @@ class IndexOpenSearchUseCase:
 
     def run(self, *, refresh: bool = False) -> dict[str, Any]:
         self.sink.ensure_index()
+        self.sink.set_refresh_interval("-1")
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        
+
         extractor = ConceptExtractor()
 
         seen = 0
@@ -77,6 +78,7 @@ class IndexOpenSearchUseCase:
         if batch:
             indexed_ok += self._flush_batch(batch, refresh=False)
 
+        self.sink.set_refresh_interval("1s")
         if refresh:
             self.sink.client.indices.refresh(index=self.sink.cfg.index_name)
 

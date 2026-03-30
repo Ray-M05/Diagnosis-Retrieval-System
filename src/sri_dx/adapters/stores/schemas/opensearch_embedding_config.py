@@ -16,5 +16,5 @@ class OpenSearchEmbeddingConfig(BaseModel):
     shards: int = 1
     replicas: int = 0
     request_timeout: int = 60
-    ef_construction: int = 256
+    ef_construction: int = 128
     m: int = 16

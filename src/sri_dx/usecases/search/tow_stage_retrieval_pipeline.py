@@ -233,7 +233,9 @@ class TwoStageRetrievalPipeline:
         final_results: Optional[int] = None,
     ) -> List[DiseaseResult]:
         """
-        Búsqueda en tres etapas: híbrida → reranking → agregación por enfermedad.
+        Búsqueda en tres etapas: híbrida → reranking → NER on-demand → agregación por enfermedad.
+
+        NER se calcula solo sobre los top-K chunks rerankeados (no durante indexado).
 
         Args:
             query: Query del usuario (síntomas, lab tests, etc.)
@@ -249,6 +251,9 @@ class TwoStageRetrievalPipeline:
             logger.warning("No hay chunks para agregar en enfermedades")
             return []
 
+        # NER on-demand: calcular entidades solo para los chunks rerankeados
+        self._apply_ner_to_results(chunk_results)
+
         if self.disease_aggregator is None:
             self.disease_aggregator = DiseaseAggregator(
                 DiseaseAggregatorConfig(
@@ -260,6 +265,41 @@ class TwoStageRetrievalPipeline:
         diseases = self.disease_aggregator.aggregate(chunk_results)
         logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
         return diseases
+
+    def _apply_ner_to_results(self, results: List[RetrievalResult]) -> None:
+        """Aplica NER en batch sobre los chunks rerankeados e inyecta ner_entities en metadata."""
+        try:
+            from sri_dx.adapters.embeddings.biomedical_ner_adapter import BiomedicalNERAdapter
+        except ImportError:
+            logger.warning("BiomedicalNERAdapter no disponible. Enfermedades sin NER.")
+            return
+
+        texts = []
+        for r in results:
+            text = (r.content or r.metadata.get("content", "") or "").strip()
+            texts.append(text)
+
+        if not any(texts):
+            return
+
+        ner_adapter = BiomedicalNERAdapter.get_instance()
+        logger.info("Ejecutando NER on-demand sobre %d chunks rerankeados...", len(texts))
+        batch_entities = ner_adapter.predict_batch(texts)
+
+        for result, entities in zip(results, batch_entities):
+            ner_list = [
+                {
+                    "text": e["word"],
+                    "label": e["domain_label"],
+                    "start_char": e["start"],
+                    "end_char": e["end"],
+                    "score": e["score"],
+                }
+                for e in entities
+            ]
+            if result.metadata is None:
+                result.metadata = {}
+            result.metadata["ner_entities"] = ner_list
 
     def print_disease_results(self, diseases: List[DiseaseResult]) -> None:
         """Imprime ranking de enfermedades de forma legible."""

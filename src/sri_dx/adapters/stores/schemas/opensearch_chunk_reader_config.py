@@ -11,6 +11,6 @@ class OpenSearchChunkReaderConfig(BaseModel):
     use_ssl: bool = False
     verify_certs: bool = False
     index_name: str = "clinical_chunks_v1"
-    scroll_size: int = 100
+    scroll_size: int = 500
     scroll_timeout: str = "20m"
     request_timeout: int = 60

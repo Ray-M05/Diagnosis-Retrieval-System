@@ -88,16 +88,20 @@ class ClinicalBERTAdapter:
         
         self._tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
         self._model = AutoModel.from_pretrained(self.config.model_name)
-        
-        # Mover a dispositivo
+
+        # Mover a dispositivo y aplicar FP16 si corresponde
         if self.config.device != "cpu" and torch.cuda.is_available():
             self._model = self._model.to(self.config.device)
-        
+            if self.config.use_fp16:
+                self._model = self._model.half()
+                logger.info("Modelo en FP16 (half precision)")
+            torch.backends.cudnn.benchmark = True
+
         # Modo evaluación (desactiva dropout)
         self._model.eval()
         self._loaded = True
-        
-        logger.info(f"Modelo cargado en {self.config.device}")
+
+        logger.info(f"Modelo cargado en {self.config.device} (batch_size={self.config.batch_size})")
     
     def _unload_model(self) -> None:
         """Libera memoria del modelo."""

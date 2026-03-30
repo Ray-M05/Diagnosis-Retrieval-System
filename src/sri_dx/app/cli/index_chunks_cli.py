@@ -26,7 +26,6 @@ def main() -> None:
     ap.add_argument("--overlap", type=int, default=200, help="Caracteres de solapamiento.")
     ap.add_argument("--min-chars", type=int, default=100, help="Mínimo de caracteres por chunk.")
     ap.add_argument("--no-concepts", action="store_true", help="Deshabilitar extracción de conceptos.")
-    ap.add_argument("--no-ner", action="store_true", help="Deshabilitar extracción de entidades NER biomédicas.")
     ap.add_argument("--refresh", action="store_true", help="Forzar refresh del índice tras indexar.")
     args = ap.parse_args()
 
@@ -60,22 +59,11 @@ def main() -> None:
         min_chars=args.min_chars,
     )
     
-    # Opcional: NER tagger para extracción de entidades biomédicas
-    ner_tagger = None
-    if not args.no_ner:
-        try:
-            from sri_dx.adapters.indexing.ner_tagger_adapter import BiomedicalNERTaggerAdapter
-            ner_tagger = BiomedicalNERTaggerAdapter()
-            logger.info("NER tagger biomédico habilitado.")
-        except ImportError:
-            logger.warning("BiomedicalNERTaggerAdapter no disponible. Procediendo sin NER.")
-
     uc = IndexChunksOpenSearchUseCase(
         source=source,
         sink=sink,
         chunk_cfg=chunk_cfg,
         batch_size=args.batch_size,
-        ner_tagger=ner_tagger,
     )
 
     logger.info("Iniciando indexación de chunks...")

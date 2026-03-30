@@ -72,8 +72,8 @@ def main() -> int:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=32,
-        help="Tamaño de batch para embedding (default: 32)"
+        default=128,
+        help="Tamaño de batch para embedding (default: 128)"
     )
     parser.add_argument(
         "--no-skip-existing",
@@ -91,6 +91,13 @@ def main() -> int:
         help="Filtrar por source_domain"
     )
     
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+        help="Dispositivo para inferencia (default: auto)"
+    )
+
     # Opciones
     parser.add_argument(
         "--dry-run",
@@ -120,6 +127,7 @@ def main() -> int:
         embeddings_port=args.port,
         embeddings_index=args.embeddings_index,
         batch_size=args.batch_size,
+        device=args.device,
         skip_existing=not args.no_skip_existing,
         seed_group=args.seed_group,
         source_domain=args.source_domain,

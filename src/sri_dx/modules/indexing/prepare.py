@@ -39,7 +39,6 @@ def prepare_index_document(
     doc: AcquiredDocument,
     *,
     concept_extractor=None,
-    ner_tagger=None
 ) -> IndexDocument:
     title = _safe_title(doc)
     body = doc.content.body.strip()
@@ -66,13 +65,6 @@ def prepare_index_document(
         except Exception:
             concept_ids = []
             
-    ner_entities = []
-    if ner_tagger is not None:
-        try:
-            ner_entities = ner_tagger.tag(doc_text, language=language or "en")
-        except Exception:
-            ner_entities = []
-
     return IndexDocument(
         doc_id=doc.doc_id,
         url=doc.url,
@@ -100,5 +92,5 @@ def prepare_index_document(
         section_count=len(doc.content.sections),
         
         concept_ids=concept_ids,
-        ner_entities=ner_entities,
+        ner_entities=[],
     )

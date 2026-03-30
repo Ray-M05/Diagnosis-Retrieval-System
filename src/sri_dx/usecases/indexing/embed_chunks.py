@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, Future
 from sri_dx.usecases.indexing.schemas.embed_chunks_config import EmbedChunksConfig
 from typing import List, Optional, Dict, Any
 
@@ -96,6 +97,7 @@ class EmbedChunksUseCase:
             self._embedding_generator = EmbeddingGenerator(
                 EmbeddingGeneratorConfig(
                     batch_size=self.config.batch_size,
+                    device=self.config.device,
                 )
             )
         return self._embedding_generator
@@ -121,6 +123,7 @@ class EmbedChunksUseCase:
         # Asegurar que el índice de embeddings existe
         if not dry_run:
             self.embedding_sink.ensure_index()
+            self.embedding_sink.set_refresh_interval("-1")
         
         # Construir filtros
         filters = self._build_filters()
@@ -145,47 +148,61 @@ class EmbedChunksUseCase:
             # Contar cuántos ya existen
             result.skipped_already_embedded = sum(1 for v in existing_embeddings.values() if v)
         
-        # Procesar en batches
+        # Procesar en batches con overlap I/O-compute
         processed = 0
-        for batch in self.chunk_reader.iter_chunks_batched(
-            batch_size=self.config.batch_size,
-            filters=filters
-        ):
-            # Filtrar chunks que ya tienen embedding (si skip_existing)
-            if self.config.skip_existing:
-                batch = [
-                    chunk for chunk in batch
-                    if not existing_embeddings.get(chunk.chunk_id, False)
-                ]
-            
-            if not batch:
-                continue
-            
-            try:
-                # Generar embeddings
-                embeddings = self.embedding_generator.generate_embeddings(batch)
-                result.embeddings_generated += len(embeddings)
-                
-                # Almacenar
-                if not dry_run and embeddings:
-                    stored = self.embedding_sink.store_embeddings(embeddings)
-                    result.embeddings_stored += stored
-                
-            except Exception as e:
-                error_msg = f"Error procesando batch: {e}"
-                logger.error(error_msg)
-                result.errors.append(error_msg)
-            
-            processed += len(batch)
-            
-            # Progress callback
-            if progress_callback:
-                progress_callback(processed, total_chunks)
-            
-            logger.debug(f"Procesados {processed}/{total_chunks} chunks")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending_store: Optional[Future] = None
+
+            for batch in self.chunk_reader.iter_chunks_batched(
+                batch_size=self.config.batch_size,
+                filters=filters
+            ):
+                # Filtrar chunks que ya tienen embedding (si skip_existing)
+                if self.config.skip_existing:
+                    batch = [
+                        chunk for chunk in batch
+                        if not existing_embeddings.get(chunk.chunk_id, False)
+                    ]
+
+                if not batch:
+                    continue
+
+                try:
+                    # Generar embeddings (compute)
+                    embeddings = self.embedding_generator.generate_embeddings(batch)
+                    result.embeddings_generated += len(embeddings)
+
+                    # Esperar store anterior si existe
+                    if pending_store is not None:
+                        result.embeddings_stored += pending_store.result()
+                        pending_store = None
+
+                    # Lanzar store en paralelo (I/O) mientras se genera el siguiente batch
+                    if not dry_run and embeddings:
+                        pending_store = pool.submit(self.embedding_sink.store_embeddings, embeddings)
+
+                except Exception as e:
+                    error_msg = f"Error procesando batch: {e}"
+                    logger.error(error_msg)
+                    result.errors.append(error_msg)
+
+                processed += len(batch)
+
+                # Progress callback
+                if progress_callback:
+                    progress_callback(processed, total_chunks)
+
+                logger.debug(f"Procesados {processed}/{total_chunks} chunks")
+
+            # Esperar último store pendiente
+            if pending_store is not None:
+                result.embeddings_stored += pending_store.result()
         
+        if not dry_run:
+            self.embedding_sink.set_refresh_interval("1s")
+
         result.processing_time_seconds = time.time() - start_time
-        
+
         logger.info(
             f"Proceso completado: {result.embeddings_generated} embeddings generados, "
             f"{result.embeddings_stored} almacenados, "
