@@ -201,45 +201,54 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         return results
     
     def get_by_chunk_ids(
-        self, 
+        self,
         chunk_ids: List[str]
     ) -> Dict[str, EmbeddingDocument]:
-        """Obtiene embeddings por IDs de chunk."""
+        """Obtiene embeddings por IDs de chunk (paginado para >10K ids)."""
         if not chunk_ids:
             return {}
-        
-        query = {
-            "size": len(chunk_ids),
-            "query": {
-                "terms": {"chunk_id": chunk_ids}
-            }
-        }
-        
-        response = self.client.search(index=self.cfg.index_name, body=query)
-        
+
+        PAGE = 5000  # Mantenerse bajo max_result_window (10000)
         result = {}
-        for hit in response.get("hits", {}).get("hits", []):
-            source = hit["_source"]
-            emb = EmbeddingDocument(
-                embedding_id=source.get("embedding_id", ""),
-                chunk_id=source.get("chunk_id", ""),
-                doc_id=source.get("doc_id", ""),
-                vector=source.get("vector", []),
-                model_name=source.get("model_name", ""),
-                model_version=source.get("model_version", ""),
-                embedding_dim=source.get("embedding_dim", 768),
-                similarity_metric=source.get("similarity_metric", "cosine"),
-                chunk_text_preview=source.get("chunk_text_preview"),
-                chunk_index=source.get("chunk_index", 0),
-                section_heading=source.get("section_heading"),
-                seed_group=source.get("seed_group"),
-                source_domain=source.get("source_domain"),
-                concept_ids=source.get("concept_ids"),
-                created_at=source.get("created_at", ""),
-                chunk_hash=source.get("chunk_hash"),
-            )
-            result[emb.chunk_id] = emb
-        
+
+        for offset in range(0, len(chunk_ids), PAGE):
+            batch_ids = chunk_ids[offset:offset + PAGE]
+            query = {
+                "size": len(batch_ids),
+                "query": {
+                    "terms": {"chunk_id": batch_ids}
+                },
+                "_source": ["embedding_id", "chunk_id", "doc_id", "model_name",
+                             "model_version", "embedding_dim", "similarity_metric",
+                             "chunk_text_preview", "chunk_index", "section_heading",
+                             "seed_group", "source_domain", "concept_ids",
+                             "created_at", "chunk_hash"],
+            }
+
+            response = self.client.search(index=self.cfg.index_name, body=query)
+
+            for hit in response.get("hits", {}).get("hits", []):
+                source = hit["_source"]
+                emb = EmbeddingDocument(
+                    embedding_id=source.get("embedding_id", ""),
+                    chunk_id=source.get("chunk_id", ""),
+                    doc_id=source.get("doc_id", ""),
+                    vector=source.get("vector", []),
+                    model_name=source.get("model_name", ""),
+                    model_version=source.get("model_version", ""),
+                    embedding_dim=source.get("embedding_dim", 768),
+                    similarity_metric=source.get("similarity_metric", "cosine"),
+                    chunk_text_preview=source.get("chunk_text_preview"),
+                    chunk_index=source.get("chunk_index", 0),
+                    section_heading=source.get("section_heading"),
+                    seed_group=source.get("seed_group"),
+                    source_domain=source.get("source_domain"),
+                    concept_ids=source.get("concept_ids"),
+                    created_at=source.get("created_at", ""),
+                    chunk_hash=source.get("chunk_hash"),
+                )
+                result[emb.chunk_id] = emb
+
         return result
     
     def exists_for_chunks(
