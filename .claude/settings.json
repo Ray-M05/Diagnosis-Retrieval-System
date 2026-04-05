@@ -56,7 +56,10 @@
       "Bash(curl -s http://localhost:9200/clinical_chunks_v1/_search -H 'Content-Type: application/json' -d '{:*)",
       "Bash(python -m json.tool)",
       "Bash(curl -s \"http://localhost:9200/clinical_chunks_v1/_search?size=5&_source=section_heading,chunk_text&sort=_doc\")",
-      "Bash(curl -s \"http://localhost:9200/clinical_chunks_v1/_search\" -H \"Content-Type: application/json\" -d '{ \"size\": 0, \"aggs\": { \"headings\": { \"terms\": {\"field\": \"section_heading.keyword\", \"size\": 40, \"order\": {\"_count\": \"desc\"}} } } }')"
+      "Bash(curl -s \"http://localhost:9200/clinical_chunks_v1/_search\" -H \"Content-Type: application/json\" -d '{ \"size\": 0, \"aggs\": { \"headings\": { \"terms\": {\"field\": \"section_heading.keyword\", \"size\": 40, \"order\": {\"_count\": \"desc\"}} } } }')",
+      "Bash(.venv-cuda/Scripts/python.exe -m streamlit run src/sri_dx/app/ui/ui_streamlit.py --server.headless true)",
+      "Bash(.venv-cuda/Scripts/python.exe -c \"import requests; r=requests.get\\('http://localhost:9200'\\); print\\(r.status_code, r.json\\(\\).get\\('version',{}\\).get\\('number','?'\\)\\)\")",
+      "Bash(netstat -ano)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Melissa Maureen\\Documents\\univ\\SRI\\Diagnosis-Retrieval-System\\data\\index"

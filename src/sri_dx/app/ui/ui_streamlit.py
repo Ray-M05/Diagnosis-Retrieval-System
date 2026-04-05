@@ -111,7 +111,7 @@ def main():
         index=0,
     )
 
-    if "diseases" in search_mode:
+    if "Enfermedades" in search_mode:
         st.sidebar.markdown("---")
         st.sidebar.subheader("NER / Enfermedades")
         min_ner_score = st.sidebar.slider("Confianza mínima NER", 0.1, 1.0, 0.5, step=0.05)
@@ -160,13 +160,13 @@ def main():
         pipeline = get_pipeline(fusion_method, k_candidates, k_final, rerank_model)
 
         # Override config de diseases si aplica
-        if "diseases" in search_mode:
+        if "Enfermedades" in search_mode:
             pipeline.config.min_ner_score = min_ner_score
             pipeline.config.max_diseases = max_diseases
 
         t0 = time.time()
 
-        if "diseases" in search_mode:
+        if "Enfermedades" in search_mode:
             with st.spinner(f"Búsqueda híbrida → reranking → NER → agregación..."):
                 diseases = pipeline.search_diseases(query=query)
             elapsed = time.time() - t0
@@ -233,11 +233,8 @@ def _render_diseases(diseases, query: str, elapsed: float):
         return
 
     for d in diseases:
-        score_pct = min(100, int(d.aggregated_score * 10)) if d.aggregated_score else 0
-        header = f"**#{d.rank} {d.disease_name_display}** — score={d.aggregated_score:.3f} | {d.evidence_count} chunks"
+        header = f"**#{d.rank} {d.disease_name_display}** — {d.evidence_count} chunks de evidencia"
         with st.expander(header, expanded=d.rank <= 3):
-
-            st.progress(score_pct / 100, text=f"Relevancia: {score_pct}%")
 
             col_info, col_evidence = st.columns([1, 2])
 
@@ -256,7 +253,7 @@ def _render_diseases(diseases, query: str, elapsed: float):
                     for ev in d.evidence[:2]:
                         snippet = ev.content_preview
                         st.markdown(f"> {snippet[:300]}{'...' if len(snippet) > 300 else ''}")
-                        st.caption(f"rerank={ev.rerank_score:.3f} · ner={ev.ner_score:.3f} · combined={ev.combined_score:.3f}")
+                        st.caption(f"rerank={ev.rerank_score:.3f} · ner={ev.ner_score:.3f}")
 
 
 if __name__ == "__main__":

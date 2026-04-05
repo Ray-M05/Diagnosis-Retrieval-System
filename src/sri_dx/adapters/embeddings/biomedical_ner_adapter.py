@@ -19,13 +19,15 @@ logger = logging.getLogger(__name__)
 
 # Mapa de etiquetas nativas del modelo → labels del dominio
 LABEL_MAP: Dict[str, str] = {
-    "Disease":   "PROBLEM",
-    "Chemical":  "TREATMENT",
-    "Gene":      "TEST",
-    "Species":   "ANATOMY",
-    "Mutation":  "PROBLEM",
-    "CellLine":  "ANATOMY",
-    "CellType":  "ANATOMY",
+    # Labels reales del modelo d4data/biomedical-ner-all
+    "Disease_disorder": "PROBLEM",
+    "Sign_symptom": "SYMPTOM",
+    "Medication": "TREATMENT",
+    "Therapeutic_procedure": "TREATMENT",
+    "Diagnostic_procedure": "TEST",
+    "Lab_value": "TEST",
+    "Biological_structure": "ANATOMY",
+    "Biological_attribute": "ANATOMY",
 }
 
 
@@ -85,7 +87,7 @@ class BiomedicalNERAdapter:
     def predict(self, text: str) -> List[Dict[str, Any]]:
         self._load()
         raw: List[Dict[str, Any]] = self._pipeline(text)  # type: ignore[arg-type]
-        return self._enrich(raw)
+        return self._enrich(raw, text)
 
     def predict_batch(self, texts: List[str]) -> List[List[Dict[str, Any]]]:
         self._load()
@@ -93,8 +95,8 @@ class BiomedicalNERAdapter:
         for i in range(0, len(texts), self.config.batch_size):
             batch = texts[i : i + self.config.batch_size]
             batch_output: List[List[Dict[str, Any]]] = self._pipeline(batch)  # type: ignore[arg-type]
-            for raw_list in batch_output:
-                results.append(self._enrich(raw_list))
+            for raw_list, original_text in zip(batch_output, batch):
+                results.append(self._enrich(raw_list, original_text))
         return results
 
     def map_label(self, entity_group: str) -> Optional[str]:
@@ -106,22 +108,44 @@ class BiomedicalNERAdapter:
     def get_domain_labels(self) -> List[str]:
         return sorted(set(self.config.label_map.values()))
 
-    def _enrich(self, raw_spans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        enriched = []
+    def _enrich(self, raw_spans: List[Dict[str, Any]], original_text: str = "") -> List[Dict[str, Any]]:
+        # Paso 1: convertir spans con texto del original
+        mapped = []
         for span in raw_spans:
             entity_group: str = span.get("entity_group", span.get("entity", ""))
             domain_label = self.config.label_map.get(entity_group)
             if domain_label is None:
-                logger.debug("Etiqueta sin mapeo ignorada: '%s'", entity_group)
                 continue
-            enriched.append(
-                {
-                    "entity_group": entity_group,
-                    "domain_label": domain_label,
-                    "word": span["word"],
-                    "score": float(span["score"]),
-                    "start": span["start"],
-                    "end": span["end"],
-                }
-            )
-        return enriched
+            start, end = span["start"], span["end"]
+            if original_text and start < len(original_text):
+                word = original_text[start:end].strip()
+            else:
+                word = span["word"].replace(" ##", "").replace("##", "").strip()
+            if len(word) < 2:
+                continue
+            mapped.append({
+                "entity_group": entity_group,
+                "domain_label": domain_label,
+                "word": word,
+                "score": float(span["score"]),
+                "start": start,
+                "end": end,
+            })
+
+        # Paso 2: fusionar entidades adyacentes del mismo tipo
+        # (ej: "Diabetic" + "ketoacidosis" → "Diabetic ketoacidosis")
+        merged: List[Dict[str, Any]] = []
+        for ent in mapped:
+            if merged and merged[-1]["domain_label"] == ent["domain_label"] and ent["start"] - merged[-1]["end"] <= 1:
+                prev = merged[-1]
+                if original_text:
+                    prev["word"] = original_text[prev["start"]:ent["end"]].strip()
+                else:
+                    prev["word"] = prev["word"] + " " + ent["word"]
+                prev["end"] = ent["end"]
+                prev["score"] = max(prev["score"], ent["score"])
+            else:
+                merged.append(ent.copy())
+
+        # Paso 3: filtrar entidades demasiado cortas
+        return [e for e in merged if len(e["word"]) >= 3]

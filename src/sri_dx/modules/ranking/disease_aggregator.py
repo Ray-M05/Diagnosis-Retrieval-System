@@ -9,6 +9,7 @@ rerank_score × ner_confidence.
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -16,6 +17,33 @@ from typing import Dict, List, Optional, Tuple
 from sri_dx.core.schemas.search.disease_result import DiseaseEvidence, DiseaseResult
 
 logger = logging.getLogger(__name__)
+
+# Acrónimos comunes → nombre canónico
+_ACRONYM_MAP: Dict[str, str] = {
+    "uti": "urinary tract infection",
+    "utis": "urinary tract infection",
+    "dka": "diabetic ketoacidosis",
+    "copd": "chronic obstructive pulmonary disease",
+    "chf": "congestive heart failure",
+    "cad": "coronary artery disease",
+    "ckd": "chronic kidney disease",
+    "htn": "hypertension",
+    "mi": "myocardial infarction",
+    "dvt": "deep vein thrombosis",
+    "pe": "pulmonary embolism",
+    "tb": "tuberculosis",
+    "hiv": "human immunodeficiency virus",
+    "aids": "acquired immunodeficiency syndrome",
+    "ms": "multiple sclerosis",
+    "ra": "rheumatoid arthritis",
+    "sle": "systemic lupus erythematosus",
+    "gerd": "gastroesophageal reflux disease",
+    "ibs": "irritable bowel syndrome",
+    "afib": "atrial fibrillation",
+    "t2dm": "type 2 diabetes mellitus",
+    "t1dm": "type 1 diabetes mellitus",
+}
+
 
 
 @dataclass
@@ -30,9 +58,9 @@ class DiseaseAggregatorConfig:
 class DiseaseAggregator:
     """Agrega chunks rerankeados en un ranking de enfermedades.
 
-    Fórmula de scoring:
-        disease_score = Σ (chunk_rerank_score × ner_confidence_score)
-    para todos los chunks que mencionan la enfermedad.
+    Ranking por mejor posición en el ranking del cross-encoder.
+    Cada enfermedad se rankea por la posición más alta (más temprana)
+    en la que aparece y se cuenta la cantidad de chunks donde se menciona.
     """
 
     def __init__(self, config: Optional[DiseaseAggregatorConfig] = None) -> None:
@@ -45,12 +73,12 @@ class DiseaseAggregator:
             retrieval_results: Lista de RetrievalResult del pipeline de dos etapas.
 
         Returns:
-            Lista de DiseaseResult ordenada por aggregated_score descendente.
+            Lista de DiseaseResult ordenada por mejor posición en el ranking.
         """
-        # disease_name_normalized → list of (evidence, display_name)
-        disease_map: Dict[str, List[Tuple[DiseaseEvidence, str]]] = defaultdict(list)
+        # disease_name_normalized → list of (evidence, display_name, position)
+        disease_map: Dict[str, List[Tuple[DiseaseEvidence, str, int]]] = defaultdict(list)
 
-        for result in retrieval_results:
+        for position, result in enumerate(retrieval_results):
             ner_entities = (result.metadata or {}).get("ner_entities", [])
             if not ner_entities:
                 continue
@@ -69,18 +97,17 @@ class DiseaseAggregator:
                     continue
 
                 normalized = self._normalize(disease_text)
-                combined = result.rerank_score * ner_score
 
                 evidence = DiseaseEvidence(
                     chunk_id=result.metadata.get("chunk_id", ""),
                     doc_id=result.doc_id,
                     rerank_score=result.rerank_score,
                     ner_score=ner_score,
-                    combined_score=combined,
+                    combined_score=ner_score,
                     content_preview=(result.content or "")[:200],
                     url=result.metadata.get("url", ""),
                 )
-                disease_map[normalized].append((evidence, disease_text))
+                disease_map[normalized].append((evidence, disease_text, position))
 
         # Construir DiseaseResult por cada enfermedad
         results: List[DiseaseResult] = []
@@ -88,31 +115,29 @@ class DiseaseAggregator:
             if len(entries) < self.config.min_evidence_count:
                 continue
 
-            evidence_list = [ev for ev, _ in entries]
-            evidence_list.sort(key=lambda e: e.combined_score, reverse=True)
+            # Mejor posición (más temprana) en el ranking
+            best_position = min(pos for _, _, pos in entries)
+            evidence_list = [ev for ev, _, _ in entries]
 
-            aggregated_score = sum(e.combined_score for e in evidence_list)
-
-            # Display name: usar el texto del match con mayor combined_score
-            best_display = entries[0][1]
-            best_combined = entries[0][0].combined_score
-            for ev, display in entries:
-                if ev.combined_score > best_combined:
-                    best_combined = ev.combined_score
+            # Display name: usar el del chunk con mejor posición
+            best_display = normalized_name
+            for ev, display, pos in entries:
+                if pos == best_position:
                     best_display = display
+                    break
 
             results.append(
                 DiseaseResult(
                     disease_name=normalized_name,
                     disease_name_display=best_display,
-                    aggregated_score=aggregated_score,
+                    aggregated_score=float(best_position),
                     evidence_count=len(evidence_list),
                     evidence=evidence_list,
                 )
             )
 
-        # Ordenar por score descendente y asignar rank
-        results.sort(key=lambda d: d.aggregated_score, reverse=True)
+        # Ordenar por mejor posición (menor = mejor)
+        results.sort(key=lambda d: d.aggregated_score)
         for i, r in enumerate(results[: self.config.max_diseases]):
             r.rank = i + 1
 
@@ -120,5 +145,15 @@ class DiseaseAggregator:
 
     @staticmethod
     def _normalize(text: str) -> str:
-        """Normalización mínima del nombre de enfermedad."""
-        return text.strip().lower()
+        """Normaliza nombre de enfermedad: lowercase, limpia prefijos numéricos,
+        resuelve acrónimos y aplica deduplicación por contenido."""
+        name = text.strip().lower()
+        # Quitar prefijos numéricos (ej: "1 diabetes symptoms" → "diabetes symptoms")
+        name = re.sub(r"^\d+\s+", "", name)
+        # Quitar sufijos genéricos (ej: "diabetes symptoms" → "diabetes")
+        name = re.sub(r"\s+(symptoms?|signs?|disease|disorder|syndrome)\s*$", "", name)
+        name = name.strip()
+        # Resolver acrónimos
+        if name in _ACRONYM_MAP:
+            name = _ACRONYM_MAP[name]
+        return name

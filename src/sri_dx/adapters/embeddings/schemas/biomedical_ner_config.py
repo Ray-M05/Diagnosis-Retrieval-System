@@ -6,13 +6,15 @@ logger = logging.getLogger(__name__)
 
 
 LABEL_MAP: Dict[str, str] = {
-    "Disease": "PROBLEM",
-    "Chemical": "TREATMENT",
-    "Gene": "TEST",
-    "Species": "ANATOMY",
-    "Mutation": "PROBLEM",
-    "CellLine": "ANATOMY",
-    "CellType": "ANATOMY",
+    # Labels reales del modelo d4data/biomedical-ner-all
+    "Disease_disorder": "PROBLEM",
+    "Sign_symptom": "SYMPTOM",
+    "Medication": "TREATMENT",
+    "Therapeutic_procedure": "TREATMENT",
+    "Diagnostic_procedure": "TEST",
+    "Lab_value": "TEST",
+    "Biological_structure": "ANATOMY",
+    "Biological_attribute": "ANATOMY",
 }
 
 
@@ -23,7 +25,7 @@ class BiomedicalNERConfig(BaseModel):
 
     model_name: str = "d4data/biomedical-ner-all"
     device: int = -1
-    aggregation_strategy: str = "simple"
+    aggregation_strategy: str = "first"
     batch_size: int = 32
     stride: int = 128
     label_map: Dict[str, str] = LABEL_MAP.copy()
