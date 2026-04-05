@@ -16,6 +16,12 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("Orchestrator")
 
+# Silenciar loggers ruidosos de librerías externas
+logging.getLogger("opensearch").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
 
 def run_acquisition() -> bool:
     """Fase 1: Adquisición (subprocess, es un scraper independiente)."""
@@ -27,13 +33,14 @@ def run_acquisition() -> bool:
         return False
 
 
-def run_index_docs_and_chunks(host: str, port: int) -> bool:
+def run_index_docs_and_chunks(host: str, port: int, use_semantic_chunker: bool = True) -> bool:
     """Fases 2+3 combinadas: Docs + Chunks en una sola pasada del JSONL."""
     from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
     from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink, OpenSearchConfig
     from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksSink, OpenSearchChunksConfig
     from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
     from sri_dx.usecases.indexing.index_combined import IndexCombinedUseCase
+    from sri_dx.modules.indexing.chunking import ChunkingConfig
 
     paths = [p for p in [Path("data/processed/docs_html.jsonl"), Path("data/processed/docs_pdf.jsonl")] if p.exists()]
     if not paths:
@@ -44,10 +51,13 @@ def run_index_docs_and_chunks(host: str, port: int) -> bool:
     doc_sink = OpenSearchIndexSink(OpenSearchConfig(host=host, port=port))
     chunk_sink = OpenSearchChunksSink(OpenSearchChunksConfig(host=host, port=port))
     manifest = SqliteManifestStore(Path("data/index/manifest.sqlite"))
-    uc = IndexCombinedUseCase(source=source, doc_sink=doc_sink, chunk_sink=chunk_sink, manifest=manifest)
+    chunk_cfg = ChunkingConfig(use_semantic_chunker=use_semantic_chunker)
+    uc = IndexCombinedUseCase(
+        source=source, doc_sink=doc_sink, chunk_sink=chunk_sink,
+        manifest=manifest, chunk_cfg=chunk_cfg,
+    )
     stats = uc.run(refresh=False)
-    logger.info("Fases 2+3 completadas: %s", stats)
-    return True
+    return stats.get("errors_count", 0) == 0
 
 
 def run_embeddings(host: str, port: int) -> bool:
@@ -74,29 +84,39 @@ def main() -> None:
     parser.add_argument("--skip-embeddings", action="store_true", help="Salta la Fase 4 (Embeddings)")
     parser.add_argument("--host", default="localhost", help="Host de OpenSearch")
     parser.add_argument("--port", type=int, default=9200, help="Puerto de OpenSearch")
+    parser.add_argument(
+        "--no-semantic-chunker", action="store_true",
+        help="Desactiva SemanticChunker en F3: usa ventana deslizante por párrafos (más rápido, menos preciso)"
+    )
     args = parser.parse_args()
 
+    use_semantic = not args.no_semantic_chunker
     pipeline_start = time.time()
 
     steps = [
         ("Fase 1: Adquisición", lambda: run_acquisition(), args.skip_acquisition),
-        ("Fases 2+3: Indexación Docs+Chunks", lambda: run_index_docs_and_chunks(args.host, args.port), args.skip_indexing),
+        ("Fases 2+3: Indexación Docs+Chunks", lambda: run_index_docs_and_chunks(args.host, args.port, use_semantic), args.skip_indexing),
         ("Fase 4: Embeddings", lambda: run_embeddings(args.host, args.port), args.skip_embeddings),
     ]
 
     for desc, run_fn, skip in steps:
         if skip:
-            logger.info("[*] SALTADO: %s", desc)
+            print(f"\n[SKIP] {desc}")
             continue
-        logger.info("=== INICIANDO: %s ===", desc)
+        print(f"\n{'='*60}")
+        print(f"  INICIANDO: {desc}")
+        print(f"{'='*60}")
         t0 = time.time()
         if not run_fn():
-            logger.error("Fallo en: %s", desc)
+            print(f"\n[ERROR] Fallo en: {desc}")
             sys.exit(1)
-        logger.info("=== COMPLETO: %s (%.1fs) ===", desc, time.time() - t0)
+        elapsed = time.time() - t0
+        print(f"\n  COMPLETO: {desc}  ({elapsed:.1f}s / {elapsed/60:.1f} min)")
 
     total = time.time() - pipeline_start
-    logger.info("Pipeline completado en %.1fs (%.1f min)", total, total / 60)
+    print(f"\n{'='*60}")
+    print(f"  PIPELINE COMPLETO: {total:.1f}s ({total/60:.1f} min)")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":

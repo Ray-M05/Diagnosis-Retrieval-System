@@ -57,13 +57,14 @@ dev = [
   "ruff>=0.3,<1",
 ]
 
-# ---- UV: forzar torch CPU (evita descargar paquetes NVIDIA CUDA) ----
+# ---- UV: torch con soporte CUDA 12.4 (compatible con CUDA 12.5) ----
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
 
 [[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [build-system]

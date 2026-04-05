@@ -10,29 +10,43 @@ from typing import Optional
 
 class SemanticChunkingConfig(BaseModel):
     """Configuración para `SemanticChunker` (chunking semántico).
+
+    El SemanticChunker actúa como segunda estrategia: solo se activa cuando
+    una sección supera `max_chars` en ChunkingConfig. Usa un modelo ligero
+    (all-MiniLM-L6-v2) para detectar breakpoints semánticos rápidamente,
+    sin cargar Bio_ClinicalBERT.
     """
+
+    # Modelo ligero para detección de breakpoints (no el BERT de 768 dims)
+    model_name: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        description="Modelo para embeddings de oraciones. Usar uno ligero (MiniLM) para velocidad."
+    )
 
     similarity_threshold: float = Field(
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Umbral de similitud. Debajo de este valor se crea un nuevo chunk."
+        description=(
+            "Umbral de similitud coseno entre oraciones consecutivas. "
+            "Por debajo → nuevo chunk. 0.75 es adecuado para texto médico coherente."
+        )
     )
 
     min_sentences_per_chunk: int = Field(
-        default=2,
+        default=3,
         ge=1,
-        description="Mínimo de oraciones por chunk."
+        description="Mínimo de oraciones por chunk antes de permitir un breakpoint."
     )
 
     max_sentences_per_chunk: int = Field(
-        default=15,
+        default=20,
         ge=1,
-        description="Máximo de oraciones por chunk (fuerza split si se excede)."
+        description="Máximo de oraciones por chunk (fuerza breakpoint si se excede)."
     )
 
     min_chunk_chars: int = Field(
-        default=100,
+        default=150,
         ge=0,
         description="Chunks más pequeños se fusionan con el anterior."
     )
@@ -40,22 +54,22 @@ class SemanticChunkingConfig(BaseModel):
     max_chunk_chars: int = Field(
         default=2000,
         ge=1,
-        description="Chunks más grandes se fuerzan a dividir."
+        description="Chunks más grandes se fuerzan a dividir independientemente de la similitud."
     )
 
     combine_short_sentences: bool = Field(
         default=True,
-        description="Si True, combina oraciones muy cortas antes del análisis."
+        description="Si True, combina oraciones muy cortas antes del análisis semántico."
     )
 
     short_sentence_threshold: int = Field(
-        default=20,
+        default=30,
         ge=0,
-        description="Oraciones con menos caracteres se consideran 'cortas'."
+        description="Oraciones con menos caracteres se consideran 'cortas' y se fusionan."
     )
 
     batch_size: int = Field(
-        default=32,
+        default=64,
         ge=1,
-        description="Batch size para encoding de embeddings."
+        description="Batch size para encoding de oraciones (MiniLM es mucho más ligero)."
     )

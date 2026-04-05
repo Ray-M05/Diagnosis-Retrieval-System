@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +27,25 @@ from sri_dx.modules.indexing.pipeline_version import PIPELINE_VERSION
 
 logger = logging.getLogger(__name__)
 
+_LOG_EVERY = 50  # Imprimir progreso cada N documentos
+
+
+def _print_progress(seen: int, total: int, chunks_seen: int, t0: float) -> None:
+    elapsed = time.time() - t0
+    rate = seen / elapsed if elapsed > 0 else 0
+    eta = (total - seen) / rate if rate > 0 else 0
+    pct = seen / total * 100 if total > 0 else 0
+    bar_len = 30
+    filled = int(bar_len * seen / total) if total > 0 else 0
+    bar = "█" * filled + "░" * (bar_len - filled)
+    sys.stdout.write(
+        f"\r  [{bar}] {pct:5.1f}%  doc {seen}/{total}"
+        f"  chunks={chunks_seen}"
+        f"  {rate:.1f} doc/s"
+        f"  ETA {eta/60:.1f}min"
+    )
+    sys.stdout.flush()
+
 
 @dataclass
 class IndexCombinedUseCase:
@@ -36,6 +57,7 @@ class IndexCombinedUseCase:
     manifest: ManifestStorePort
     doc_batch_size: int = 500
     chunk_batch_size: int = 500
+    chunk_cfg: ChunkingConfig = field(default_factory=ChunkingConfig)
     report_dir: Path = Path("data/index/reports")
     bad_docs_path: Path = Path("data/index/bad_docs.jsonl")
 
@@ -49,10 +71,25 @@ class IndexCombinedUseCase:
         extractor = ConceptExtractor() if with_concepts else None
 
         chunker = None
+        if self.chunk_cfg.use_semantic_chunker:
+            try:
+                from sri_dx.modules.chunking.semantic_chunker import SemanticChunker
+                chunker = SemanticChunker.get_instance()
+                _ = chunker.model  # preload para que no cuente en el primer doc
+                print(f"  Estrategia overflow: SemanticChunker ({chunker.config.model_name})")
+                print(f"  similarity_threshold={chunker.config.similarity_threshold}  max_chars={self.chunk_cfg.max_chars}")
+            except ImportError:
+                print("  SemanticChunker no disponible → ventana deslizante")
+        else:
+            print(f"  Estrategia overflow: ventana deslizante (overlap={self.chunk_cfg.overlap_chars} chars)")
+
+        # Contar total de documentos (contando líneas del JSONL, sin parsear)
+        total_docs = 0
         try:
-            from sri_dx.modules.chunking.semantic_chunker import SemanticChunker
-            chunker = SemanticChunker()
-        except ImportError:
+            for p in self.source.paths:  # type: ignore[attr-defined]
+                with open(p, "r", encoding="utf-8") as f:
+                    total_docs += sum(1 for line in f if line.strip())
+        except Exception:
             pass
 
         seen = 0
@@ -65,6 +102,9 @@ class IndexCombinedUseCase:
         doc_batch: list[IndexUpsert] = []
         chunk_batch: list = []
 
+        t0 = time.time()
+        print(f"\n  Procesando {total_docs or '?'} documentos...")
+
         for acquired in self.source.iter_documents():
             seen += 1
             try:
@@ -74,6 +114,8 @@ class IndexCombinedUseCase:
                 prev = self.manifest.get(idx_doc.doc_id)
                 if prev and prev.content_hash == idx_doc.content_hash and prev.pipeline_version == PIPELINE_VERSION:
                     skipped += 1
+                    if seen % _LOG_EVERY == 0:
+                        _print_progress(seen, total_docs, chunks_seen, t0)
                     continue
 
                 text_all = " ".join([idx_doc.title, idx_doc.sections_text, idx_doc.body])
@@ -84,10 +126,13 @@ class IndexCombinedUseCase:
                 if len(doc_batch) >= self.doc_batch_size:
                     docs_indexed += self._flush_docs(doc_batch)
                     doc_batch.clear()
+                    print(f"\n  → Flush docs: {docs_indexed} docs indexados")
 
                 # -- Fase 3: chunks --
+                doc_chunks_before = chunks_seen
                 for ch in chunk_acquired_document(
                     acquired,
+                    cfg=self.chunk_cfg,
                     concept_extractor=extractor,
                     semantic_chunker=chunker,
                 ):
@@ -96,6 +141,9 @@ class IndexCombinedUseCase:
                     if len(chunk_batch) >= self.chunk_batch_size:
                         chunks_indexed += self.chunk_sink.bulk_upsert(chunk_batch, refresh=False)
                         chunk_batch.clear()
+                        print(f"\n  → Flush chunks: {chunks_indexed} chunks indexados")
+
+                doc_chunks = chunks_seen - doc_chunks_before
 
             except Exception as e:
                 error_msg = f"Error processing {acquired.doc_id}: {e}"
@@ -103,18 +151,26 @@ class IndexCombinedUseCase:
                 errors.append(error_msg)
                 self._log_bad_doc(acquired, str(e))
 
+            if seen % _LOG_EVERY == 0 or seen == total_docs:
+                _print_progress(seen, total_docs, chunks_seen, t0)
+
         # Flush remaining
         if doc_batch:
             docs_indexed += self._flush_docs(doc_batch)
         if chunk_batch:
             chunks_indexed += self.chunk_sink.bulk_upsert(chunk_batch, refresh=False)
 
+        elapsed = time.time() - t0
+        print(f"\n\n  Fases 2+3 completadas en {elapsed:.1f}s ({elapsed/60:.1f} min)")
+        print(f"  docs vistos={seen}  skipped={skipped}  indexados={docs_indexed}  errores={len(errors)}")
+        print(f"  chunks generados={chunks_seen}  chunks indexados={chunks_indexed}")
+
         self.doc_sink.set_refresh_interval("1s")
         self.chunk_sink.set_refresh_interval("1s")
 
-        if refresh:
-            self.doc_sink.client.indices.refresh(index=self.doc_sink.cfg.index_name)
-            self.chunk_sink.client.indices.refresh(index=self.chunk_sink.cfg.index_name)
+        # Refresh siempre al final para que F4 vea los chunks inmediatamente
+        self.doc_sink.client.indices.refresh(index=self.doc_sink.cfg.index_name)
+        self.chunk_sink.client.indices.refresh(index=self.chunk_sink.cfg.index_name)
 
         report = {
             "timestamp": datetime.now().isoformat(),

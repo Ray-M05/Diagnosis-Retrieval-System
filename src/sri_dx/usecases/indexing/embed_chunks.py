@@ -128,28 +128,49 @@ class EmbedChunksUseCase:
         # Construir filtros
         filters = self._build_filters()
         
+        import sys
+
         # Obtener total de chunks
         total_chunks = self.chunk_reader.get_total_chunks(filters)
-        logger.info(f"Total de chunks a procesar: {total_chunks}")
+        print(f"  Total chunks a embedir: {total_chunks}")
         result.total_chunks = total_chunks
-        
+
         if total_chunks == 0:
+            print("  No hay chunks para procesar.")
             return result
-        
+
         # Si skip_existing, obtener hashes existentes
         existing_hashes: Dict[str, str] = {}
         if self.config.skip_existing:
-            logger.info("Obteniendo hashes de chunks existentes...")
+            print("  Verificando embeddings ya existentes...")
             chunk_id_hashes = self.chunk_reader.get_chunk_ids_and_hashes(filters)
             existing_embeddings = self.embedding_sink.exists_for_chunks(
                 list(chunk_id_hashes.keys()),
                 chunk_id_hashes
             )
-            # Contar cuántos ya existen
             result.skipped_already_embedded = sum(1 for v in existing_embeddings.values() if v)
-        
+            pending_count = total_chunks - result.skipped_already_embedded
+            print(f"  Ya embebidos: {result.skipped_already_embedded}  Pendientes: {pending_count}")
+
         # Procesar en batches con overlap I/O-compute
         processed = 0
+        t0_embed = start_time
+
+        def _print_embed_progress(done: int, total: int) -> None:
+            elapsed = time.time() - t0_embed
+            rate = done / elapsed if elapsed > 0 else 0
+            eta = (total - done) / rate if rate > 0 else 0
+            pct = done / total * 100 if total > 0 else 0
+            bar_len = 30
+            filled = int(bar_len * done / total) if total > 0 else 0
+            bar = "█" * filled + "░" * (bar_len - filled)
+            sys.stdout.write(
+                f"\r  [{bar}] {pct:5.1f}%  {done}/{total} chunks"
+                f"  {rate:.0f} ch/s"
+                f"  ETA {eta/60:.1f}min"
+            )
+            sys.stdout.flush()
+
         with ThreadPoolExecutor(max_workers=2) as pool:
             pending_store: Optional[Future] = None
 
@@ -188,28 +209,23 @@ class EmbedChunksUseCase:
 
                 processed += len(batch)
 
-                # Progress callback
+                # Progress callback y consola
                 if progress_callback:
                     progress_callback(processed, total_chunks)
-
-                logger.debug(f"Procesados {processed}/{total_chunks} chunks")
+                _print_embed_progress(processed, total_chunks)
 
             # Esperar último store pendiente
             if pending_store is not None:
                 result.embeddings_stored += pending_store.result()
-        
+
         if not dry_run:
             self.embedding_sink.set_refresh_interval("1s")
 
         result.processing_time_seconds = time.time() - start_time
-
-        logger.info(
-            f"Proceso completado: {result.embeddings_generated} embeddings generados, "
-            f"{result.embeddings_stored} almacenados, "
-            f"{result.skipped_already_embedded} saltados, "
-            f"{len(result.errors)} errores, "
-            f"{result.processing_time_seconds:.2f}s"
-        )
+        elapsed = result.processing_time_seconds
+        print(f"\n\n  F4 completada en {elapsed:.1f}s ({elapsed/60:.1f} min)")
+        print(f"  generados={result.embeddings_generated}  almacenados={result.embeddings_stored}"
+              f"  saltados={result.skipped_already_embedded}  errores={len(result.errors)}")
         
         return result
     
