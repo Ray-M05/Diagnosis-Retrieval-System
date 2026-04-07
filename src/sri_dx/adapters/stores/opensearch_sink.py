@@ -1,5 +1,6 @@
 # src/sri_dx/adapters/stores/opensearch_sink.py
 from __future__ import annotations
+import logging
 
 from dataclasses import dataclass
 from typing import Iterable, Optional
@@ -9,6 +10,9 @@ from opensearchpy import OpenSearch, helpers
 from sri_dx.core.schemas.indexing.index_document import IndexDocument
 from sri_dx.modules.indexing.index_upsert import IndexUpsert
 from sri_dx.modules.indexing.opensearch_schema import build_index_body
+
+
+logger = logging.getLogger(__name__)
 
 
 def _drop_none(d: dict) -> dict:

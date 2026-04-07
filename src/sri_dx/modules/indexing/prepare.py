@@ -1,14 +1,33 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Optional
+from dateutil import parser
 
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 from sri_dx.core.schemas.indexing.index_document import IndexDocument
 from sri_dx.modules.indexing.text.text_pipeline import TextAnalyzer
 
+logger = logging.getLogger(__name__)
 
 _analyzer = TextAnalyzer()
+
+
+def _normalize_date(date_str: Optional[str]) -> Optional[str]:
+    """
+    Normaliza una cadena de fecha a formato ISO 8601 (YYYY-MM-DDTHH:MM:SS) 
+    para que OpenSearch pueda indexarla sin errores de mapeo.
+    """
+    if not date_str or not date_str.strip():
+        return None
+    try:
+        # fuzzy=True permite ignorar texto extra alrededor de la fecha
+        dt = parser.parse(date_str, fuzzy=True)
+        return dt.isoformat()
+    except (ValueError, OverflowError, TypeError) as e:
+        logger.warning(f"No se pudo parsear la fecha '{date_str}': {e}")
+        return None
 
 
 def _flatten_sections(doc: AcquiredDocument) -> str:
@@ -48,8 +67,8 @@ def prepare_index_document(
     content_hash = doc.content_hash or _compute_hash(body)
 
     language: Optional[str] = doc.page_meta.language if doc.page_meta else None
-    published_at: Optional[str] = doc.page_meta.published_at if doc.page_meta else None
-    updated_at: Optional[str] = doc.page_meta.updated_at if doc.page_meta else None
+    published_at: Optional[str] = _normalize_date(doc.page_meta.published_at) if doc.page_meta else None
+    updated_at: Optional[str] = _normalize_date(doc.page_meta.updated_at) if doc.page_meta else None
     author: Optional[str] = doc.page_meta.author if doc.page_meta else None
 
     # Stats simples: útiles para debugging + features futuras

@@ -82,6 +82,10 @@ def main() -> None:
     parser.add_argument("--skip-acquisition", action="store_true", help="Salta la Fase 1 (Scraping)")
     parser.add_argument("--skip-indexing", action="store_true", help="Salta Fases 2+3 (Docs+Chunks OpenSearch)")
     parser.add_argument("--skip-embeddings", action="store_true", help="Salta la Fase 4 (Embeddings)")
+    parser.add_argument(
+        "--only-indexing", action="store_true",
+        help="Solo ejecuta Fases 2+3 (Docs+Chunks). Equivale a --skip-acquisition --skip-embeddings"
+    )
     parser.add_argument("--host", default="localhost", help="Host de OpenSearch")
     parser.add_argument("--port", type=int, default=9200, help="Puerto de OpenSearch")
     parser.add_argument(
@@ -89,6 +93,10 @@ def main() -> None:
         help="Desactiva SemanticChunker en F3: usa ventana deslizante por párrafos (más rápido, menos preciso)"
     )
     args = parser.parse_args()
+    
+    if args.only_indexing:
+        args.skip_acquisition = True
+        args.skip_embeddings = True
 
     use_semantic = not args.no_semantic_chunker
     pipeline_start = time.time()

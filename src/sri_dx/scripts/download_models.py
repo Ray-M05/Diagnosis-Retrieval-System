@@ -14,7 +14,9 @@ logger = logging.getLogger("ModelDownloader")
 
 MODELS = {
     "embeddings": "emilyalsentzer/Bio_ClinicalBERT",
-    "reranking": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "reranking_fast": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "reranking_precise": "cross-encoder/ms-marco-MiniLM-L-12-v2",
+    "semantic_chunking": "sentence-transformers/all-MiniLM-L6-v2",
     "ner": "d4data/biomedical-ner-all"
 }
 
@@ -26,11 +28,16 @@ def main():
     AutoTokenizer.from_pretrained(MODELS["embeddings"])
     AutoModel.from_pretrained(MODELS["embeddings"])
 
-    # 2. Modelo de Re-ranking (Cross-Encoder)
-    logger.info(f"Descargando Cross-Encoder: {MODELS['reranking']}...")
-    CrossEncoder(MODELS["reranking"])
+    # 2. Modelos de Re-ranking (Cross-Encoders)
+    logger.info(f"Descargando Cross-Encoders...")
+    CrossEncoder(MODELS["reranking_fast"])
+    CrossEncoder(MODELS["reranking_precise"])
 
-    # 3. Modelo de NER (Entidades Clínicas)
+    # 3. Modelo de Semantic Chunking
+    logger.info(f"Descargando Semantic Chunking: {MODELS['semantic_chunking']}...")
+    SentenceTransformer(MODELS["semantic_chunking"])
+
+    # 4. Modelo de NER (Entidades Clínicas)
     logger.info(f"Descargando Pipeline NER: {MODELS['ner']}...")
     pipeline("ner", model=MODELS["ner"])
 
