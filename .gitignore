@@ -1,0 +1,99 @@
+# Environments
+.env
+.env.local
+.env.*.local
+.env.production
+.venv
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.tox/
+.nox/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.DS_Store
+Thumbs.db
+*.bak
+
+# Distribution / packaging
+dist/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Typings
+.mypy_cache/
+.pyre/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Documentation
+docs/_build/
+
+# Data & Artifacts
+data/raw/
+data/processed/
+data/artifacts/*.bin
+data/artifacts/*.pkl
+data/artifacts/*.index
+*.csv
+*.parquet
+!data/.gitkeep
+/data/
+
+# Logs
+*.log
+logs/
+
+# UV
+.uv/
+uv.lock
+
+# Docker
+.dockerignore
+
+# OpenSearch data (mounted volumes)
+opensearch-data/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+node_modules

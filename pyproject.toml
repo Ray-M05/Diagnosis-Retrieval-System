@@ -11,24 +11,28 @@ dependencies = [
   "python-dotenv>=1.0,<2",
   "requests>=2.31,<3",
   "beautifulsoup4>=4.12,<5",
-]
-
-[project.optional-dependencies]
-# UI (Corte 3)
-ui = [
-  "streamlit>=1.31,<2",
-]
-
-# Neural IR (Corte 1/2 cuando toque embeddings)
-# OJO: esto trae torch; lo forzamos a CPU abajo
-neural = [
+  "httpx>=0.28.1",
+  "lxml>=6.0.2",
+  "pypdf>=6.7.5",
+  "pyyaml>=6.0.3",
+  "certifi>=2026.2.25",
+  "opensearch-py>=2.0.0",
+  "pyahocorasick>=2.0.0",
+  "numpy>=2.0.0",
   "sentence-transformers>=2.2,<3",
+  "transformers>=4.35,<5",
   "torch",
 ]
 
-# Vector store / ANN
-vector = [
-  "hnswlib>=0.7,<1",
+[project.optional-dependencies]
+# Aceleración CPU para embeddings (2-4x más rápido sin GPU)
+onnx = [
+  "onnxruntime>=1.17,<2",
+]
+
+# UI (Corte 3)
+ui = [
+  "streamlit>=1.31,<2",
 ]
 
 # API opcional (solo si de verdad la van a usar)
@@ -43,7 +47,8 @@ data = [
 ]
 
 [project.scripts]
-sri-dx = "sri_dx.app.cli:main"
+sri-dx = "sri_dx.app.cli.cli:main"
+download-models = "sri_dx.scripts.download_models:main"
 
 # Dev deps estándar (PEP 735)
 [dependency-groups]
@@ -52,13 +57,14 @@ dev = [
   "ruff>=0.3,<1",
 ]
 
-# ---- UV: forzar torch CPU (evita descargar paquetes NVIDIA CUDA) ----
+# ---- UV: torch con soporte CUDA 12.4 (compatible con CUDA 12.5) ----
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
 
 [[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [build-system]
