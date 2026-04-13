@@ -1,3 +1,97 @@
+export interface EvidenceChunk {
+  id: string;
+  snippet: string;
+  rerankScore: number;
+  nerScore: number;
+}
+
+export interface DiseaseResult {
+  rank: number;
+  name: string;
+  evidenceChunks: EvidenceChunk[];
+}
+
+export interface HybridResult {
+  docId: string;
+  score: number;
+  sourceUrl: string;
+  crossEncoderScore: number;
+  semanticScore: number;
+  snippet: string;
+}
+
+export const hybridMockResults: HybridResult[] = [
+  {
+    docId: "DOC-2024-001",
+    score: 0.942,
+    sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/324123",
+    crossEncoderScore: 0.98,
+    semanticScore: 0.89,
+    snippet: "The presence of dry cough and fever in patients with respiratory distress often correlates with several viral pathogens, including Influenza A and B. High titers of viral RNA are detectable in upper respiratory secretions."
+  },
+  {
+    docId: "DOC-2024-005",
+    score: 0.885,
+    sourceUrl: "https://mayoclinic.org/respiratory-conditions",
+    crossEncoderScore: 0.91,
+    semanticScore: 0.84,
+    snippet: "Clinical evaluation of patients reporting sudden onset of chills and muscle aches should include screening for seasonal flu variants. Differential diagnosis involves checking for secondary bacterial pneumonia."
+  },
+  {
+    docId: "DOC-2024-012",
+    score: 0.812,
+    sourceUrl: "https://cdc.gov/flu/clinical-guidelines",
+    crossEncoderScore: 0.85,
+    semanticScore: 0.76,
+    snippet: "Viral shedding typically occurs for 5-7 days after symptom onset. Primary symptoms include high fever, fatigue, and persistent dry cough, which may lead to dehydration in elderly patients."
+  }
+];
+
+export const diagnosticMockResults: DiseaseResult[] = [
+  {
+    rank: 1,
+    name: "Influenza (Flu)",
+    evidenceChunks: [
+      {
+        id: "chunk-1",
+        snippet: "Patient presents with persistent dry cough and high-grade fever. Muscle aches are reported as severe in the extremities.",
+        rerankScore: 0.985,
+        nerScore: 0.92
+      },
+      {
+        id: "chunk-2",
+        snippet: "Symptoms such as chills and fatigue are classic indicators of viral respiratory infections, specifically influenza-like illnesses.",
+        rerankScore: 0.942,
+        nerScore: 0.88
+      },
+      {
+        id: "chunk-3",
+        snippet: "Secondary indicators observed: sudden onset of lethargy and mild headache during the first 24 hours of symptom onset.",
+        rerankScore: 0.812,
+        nerScore: 0.75
+      }
+    ]
+  },
+  {
+    rank: 2,
+    name: "Pneumonia",
+    evidenceChunks: [
+      {
+        id: "chunk-4",
+        snippet: "Severe chest pain associated with deep breathing or coughing suggests alveolar inflammation. Shortness of breath is also prevalent.",
+        rerankScore: 0.854,
+        nerScore: 0.79
+      },
+      {
+        id: "chunk-5",
+        snippet: "High fever exceeding 101°F and production of thick phlegm indicate possible bacterial or viral infection of the lung tissue.",
+        rerankScore: 0.789,
+        nerScore: 0.72
+      }
+    ]
+  }
+];
+
 export interface Disease {
   id: string;
   name: string;
@@ -73,7 +167,3 @@ export const diseases: Disease[] = [
     sourceUrl: "https://www.nei.nih.gov/learn-about-eye-health/eye-conditions-and-diseases/pink-eye"
   }
 ];
-
-export const commonSymptoms = Array.from(
-  new Set(diseases.flatMap((d) => d.symptoms))
-).sort();
