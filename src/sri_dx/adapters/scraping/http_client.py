@@ -15,13 +15,13 @@ class HttpxClient(HttpClientPort):
     """
 
     def __init__(self, user_agent: str, verify_ssl: bool = True) -> None:
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             headers={"User-Agent": user_agent},
-            follow_redirects=True, verify=(certifi.where() if verify_ssl else False), #verify=certifi.where(),
+            follow_redirects=True, verify=(certifi.where() if verify_ssl else False),
         )
 
-    def get(self, url: str, *, timeout_s: float) -> FetchResult:
-        r = self._client.get(url, timeout=timeout_s)
+    async def get(self, url: str, *, timeout_s: float) -> FetchResult:
+        r = await self._client.get(url, timeout=timeout_s)
         content_type = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
 
         return FetchResult(

@@ -19,7 +19,7 @@ class RunAcquisitionUseCase:
     sink_html: JsonlSinkPort
     sink_pdf: JsonlSinkPort
 
-    def execute(self) -> dict:
+    async def execute(self) -> dict:
         svc = AcquisitionService(
             cfg=self.cfg,
             http=self.http,
@@ -29,4 +29,4 @@ class RunAcquisitionUseCase:
             sink_html=self.sink_html,
             sink_pdf=self.sink_pdf,
         )
-        return svc.run()
+        return await svc.run()
