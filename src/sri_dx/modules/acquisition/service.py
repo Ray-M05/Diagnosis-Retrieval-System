@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from typing import Optional
 import json
 from pathlib import Path
@@ -90,21 +90,20 @@ class AcquisitionService:
             except Exception:
                 pass
 
-    def _process_task(
+    async def _process_task(
         self, task: CrawlTask
     ) -> tuple[list[CrawlTask], dict | None, str | None, int]:
         """
         Fetch + extract + build for one URL.
         No sleeping here — rate limiting is done by the scheduler in run().
-        Thread-safe: reads only immutable config and stateless adapters.
         """
         url = url_utils.normalize_url(task.url)
 
-        if not self.robots.allowed(url, self.cfg.user_agent):
+        if not await self.robots.allowed(url, self.cfg.user_agent):
             return [], None, None, 0
 
         try:
-            fr = self.http.get(url, timeout_s=self.cfg.timeout_s)
+            fr = await self.http.get(url, timeout_s=self.cfg.timeout_s)
         except Exception:
             return [], None, None, 0
 
@@ -169,7 +168,7 @@ class AcquisitionService:
 
         return candidate_tasks, doc, mime, len(out_links)
 
-    def run(self) -> dict:
+    async def run(self) -> dict:
         frontier: deque[CrawlTask] = deque(self._seed_tasks())
         written_html = 0
         written_pdf = 0
@@ -181,120 +180,110 @@ class AcquisitionService:
         # Tracks earliest time (monotonic) the next request to each domain may be sent.
         domain_next_time: dict[str, float] = {}
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            pending: dict = {}
+        pending: set[asyncio.Task] = set()
 
-            def _submit_from_frontier() -> None:
-                """
-                Pull tasks from frontier, apply cheap filters + non-blocking
-                per-domain rate limit, then submit to the thread pool.
+        def _get_batch_from_frontier() -> list[CrawlTask]:
+            """
+            Extract a batch of tasks from the frontier that are ready to be processed.
+            """
+            nonlocal visited_total
+            to_submit: list[CrawlTask] = []
+            deferred: list[CrawlTask] = []
 
-                Tasks for domains that are still cooling down are deferred back
-                to the front of the frontier so they are retried on the next
-                scheduling cycle without blocking any worker thread.
-                """
-                nonlocal visited_total
-                deferred: list[CrawlTask] = []
+            while frontier and (len(pending) + len(to_submit)) < max_workers:
+                task = frontier.popleft()
+                url = url_utils.normalize_url(task.url)
 
-                while frontier and len(pending) < max_workers * 2:
-                    task = frontier.popleft()
-                    url = url_utils.normalize_url(task.url)
+                if url in self._visited:
+                    continue
+                if url_utils.is_denied(url):
+                    continue
+                if not url_utils.within_whitelist(url, self.cfg.whitelist_domains):
+                    continue
 
-                    if url in self._visited:
+                # Non-blocking domain rate limit
+                if cfg_delay > 0:
+                    domain = url_utils.get_domain(url)
+                    now = time.monotonic()
+                    if now < domain_next_time.get(domain, 0.0):
+                        deferred.append(task)
                         continue
-                    if url_utils.is_denied(url):
-                        continue
-                    if not url_utils.within_whitelist(url, self.cfg.whitelist_domains):
-                        continue
+                    domain_next_time[domain] = now + cfg_delay
 
-                    # Non-blocking domain rate limit
-                    if cfg_delay > 0:
-                        domain = url_utils.get_domain(url)
-                        now = time.monotonic()
-                        if now < domain_next_time.get(domain, 0.0):
-                            # Domain cooling down — defer and try next task
-                            deferred.append(task)
-                            continue
-                        # Claim this slot for the domain immediately
-                        domain_next_time[domain] = now + cfg_delay
+                self._visited.add(url)
+                visited_total += 1
+                to_submit.append(task)
 
-                    self._visited.add(url)
-                    visited_total += 1
-                    f = executor.submit(self._process_task, task)
-                    pending[f] = task
+            # Re-queue deferred tasks
+            for t in reversed(deferred):
+                frontier.appendleft(t)
+            
+            return to_submit
 
-                # Re-queue deferred tasks at the front so they are tried first
-                for t in reversed(deferred):
-                    frontier.appendleft(t)
+        while pending or frontier:
+            # 1. Fill pending tasks up to limit
+            batch = _get_batch_from_frontier()
+            for task in batch:
+                t = asyncio.create_task(self._process_task(task))
+                pending.add(t)
 
-            _submit_from_frontier()
+            if not pending:
+                # All remaining frontier tasks are domain-throttled
+                await asyncio.sleep(0.1)
+                continue
 
-            # Keep going until both the pool AND the frontier are drained.
-            # Using only `while pending` would cause premature exit when all
-            # workers finish but the frontier still has tasks waiting for a
-            # domain cooldown to expire.
-            while pending or frontier:
-                if pending:
-                    done_set, _ = wait(
-                        list(pending.keys()), timeout=1.0, return_when=FIRST_COMPLETED
+            # 2. Wait for at least one task to complete
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            for f in done:
+                try:
+                    candidate_tasks, doc, mime, out_links_count = f.result()
+                except Exception:
+                    continue
+
+                if doc is None:
+                    continue
+
+                try:
+                    persist = should_persist(
+                        url=doc["url"],
+                        mime_type=mime,
+                        body=doc["content"]["body"],
+                        out_links_count=out_links_count if mime.startswith("text/html") else 0,
+                        cfg=self.cfg,
                     )
-                else:
-                    # No active workers: all frontier tasks are domain-throttled.
-                    # Sleep briefly then let _submit_from_frontier retry.
-                    time.sleep(0.5)
-                    done_set = set()
+                except Exception:
+                    persist = True
 
-                for f in done_set:
-                    pending.pop(f, None)
-                    try:
-                        candidate_tasks, doc, mime, out_links_count = f.result()
-                    except Exception:
-                        continue
-
-                    if doc is None:
-                        continue
-
-                    try:
-                        persist = should_persist(
-                            url=doc["url"],
-                            mime_type=mime,
-                            body=doc["content"]["body"],
-                            out_links_count=out_links_count if mime.startswith("text/html") else 0,
-                            cfg=self.cfg,
-                        )
-                    except Exception:
-                        persist = True
-
-                    if persist:
-                        ch = doc.get("content_hash")
-                        if isinstance(ch, str) and ch in self._seen_hashes:
-                            skipped_duplicates += 1
-                        else:
-                            if isinstance(ch, str) and ch:
-                                self._seen_hashes.add(ch)
-                            if mime.startswith("text/html"):
-                                self.sink_html.write(doc)
-                                written_html += 1
-                            else:
-                                self.sink_pdf.write(doc)
-                                written_pdf += 1
+                if persist:
+                    ch = doc.get("content_hash")
+                    if isinstance(ch, str) and ch in self._seen_hashes:
+                        skipped_duplicates += 1
                     else:
-                        skipped_not_persisted += 1
+                        if isinstance(ch, str) and ch:
+                            self._seen_hashes.add(ch)
+                        if mime.startswith("text/html"):
+                            await self.sink_html.write(doc)
+                            written_html += 1
+                        else:
+                            await self.sink_pdf.write(doc)
+                            written_pdf += 1
+                else:
+                    skipped_not_persisted += 1
 
-                    if (written_html + written_pdf) >= self.cfg.max_docs:
-                        # Cancel remaining pending tasks and stop expanding frontier
-                        for remaining in list(pending.keys()):
-                            remaining.cancel()
-                        pending.clear()
-                        frontier.clear()
-                        break
+                if (written_html + written_pdf) >= self.cfg.max_docs:
+                    # Cancel remaining and exit
+                    for remaining in pending:
+                        remaining.cancel()
+                    pending.clear()
+                    frontier.clear()
+                    break
 
-                    for t in candidate_tasks:
-                        if url_utils.normalize_url(t.url) not in self._visited:
-                            frontier.append(t)
-
-                if (written_html + written_pdf) < self.cfg.max_docs:
-                    _submit_from_frontier()
+                for t in candidate_tasks:
+                    if url_utils.normalize_url(t.url) not in self._visited:
+                        frontier.append(t)
 
         return {
             "written_html": written_html,

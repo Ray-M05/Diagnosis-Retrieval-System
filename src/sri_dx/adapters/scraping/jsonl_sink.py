@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-import threading
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +14,10 @@ class JsonlFileSink(JsonlSinkPort):
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def write(self, doc: dict[str, Any]) -> None:
+    async def write(self, doc: dict[str, Any]) -> None:
         line = json.dumps(doc, ensure_ascii=False)
-        with self._lock:
+        async with self._lock:
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import threading
+import asyncio
+import httpx
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -12,11 +13,12 @@ class RobotsTxtPolicy(RobotsPolicyPort):
     Política robots.txt con caché por dominio. Thread-safe.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, user_agent: str) -> None:
+        self.user_agent = user_agent
         self._cache: dict[str, RobotFileParser] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def allowed(self, url: str, user_agent: str) -> bool:
+    async def allowed(self, url: str, user_agent: str) -> bool:
         p = urlparse(url)
         domain = p.netloc.lower()
         if not domain:
@@ -30,18 +32,26 @@ class RobotsTxtPolicy(RobotsPolicyPort):
                 return True
 
         # Slow path: fetch robots.txt under lock to avoid duplicate fetches
-        with self._lock:
-            rp = self._cache.get(domain)  # double-check
-            if rp is None:
-                rp = RobotFileParser()
-                scheme = p.scheme or "https"
-                rp.set_url(f"{scheme}://{domain}/robots.txt")
-                try:
-                    rp.read()
-                except Exception:
-                    self._cache[domain] = rp
-                    return True
+        async with self._lock:
+            # Slow path: fetch robots.txt
+            rp = RobotFileParser()
+            scheme = p.scheme or "https"
+            robots_url = f"{scheme}://{domain}/robots.txt"
+            
+            try:
+                async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}, follow_redirects=True) as client:
+                    resp = await client.get(robots_url, timeout=10)
+                    if resp.status_code == 404:
+                        rp.parse([])
+                    elif resp.status_code >= 400:
+                        return True
+                    else:
+                        rp.parse(resp.text.splitlines())
+            except Exception:
                 self._cache[domain] = rp
+                return True
+            
+            self._cache[domain] = rp
 
         try:
             return rp.can_fetch(user_agent, url)
