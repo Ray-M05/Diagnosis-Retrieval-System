@@ -26,7 +26,7 @@ def _build_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: st
     from sri_dx.adapters.stores import OpenSearchEmbeddingSink, OpenSearchEmbeddingConfig
     from sri_dx.usecases.search.search_hybrid import SearchHybridUseCase
     from sri_dx.usecases.search.schemas.hybrid_search_config import HybridSearchConfig
-    from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
+    from sri_dx.usecases.search.two_stage_retrieval_pipeline import (
         TwoStageRetrievalPipeline, TwoStageRetrievalConfig,
     )
 

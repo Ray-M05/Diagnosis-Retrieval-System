@@ -8,7 +8,7 @@ Etapas:
 2. Cross-encoder reranking → top-10 resultados finales
 
 Uso:
-    python -m sri_dx.usecases.search.tow_stage_retrieval_pipeline
+    python -m sri_dx.usecases.search.two_stage_retrieval_pipeline
 """
 
 from __future__ import annotations
