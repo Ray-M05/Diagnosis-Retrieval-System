@@ -8,6 +8,12 @@ verify_certs = false
 index_name = "clinical_docs_v1"
 alias_name = "clinical_docs"
 
+[umls]
+# Vocabularios consultados en orden de prioridad
+sabs = "SNOMEDCT_US,MSH,OMIM,ICD10CM"
+# Timeout por request en segundos
+timeout_s = 5.0
+
 [indexing]
 html_source = "data/processed/docs_html.jsonl"
 pdf_source = "data/processed/docs_pdf.jsonl"
