@@ -11,14 +11,17 @@ from __future__ import annotations
 import logging
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+from sri_dx.core.ports.search.disease_normalizer_port import DiseaseNormalizerPort
 from sri_dx.core.schemas.search.disease_result import DiseaseEvidence, DiseaseResult
+
+__all__ = ["DiseaseAggregator", "DiseaseAggregatorConfig", "DiseaseNormalizerPort"]
 
 logger = logging.getLogger(__name__)
 
-# Acrónimos comunes → nombre canónico
+# Acrónimos comunes → nombre canónico (expansión local, sin red)
 _ACRONYM_MAP: Dict[str, str] = {
     "uti": "urinary tract infection",
     "utis": "urinary tract infection",
@@ -63,8 +66,13 @@ class DiseaseAggregator:
     en la que aparece y se cuenta la cantidad de chunks donde se menciona.
     """
 
-    def __init__(self, config: Optional[DiseaseAggregatorConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[DiseaseAggregatorConfig] = None,
+        normalizer: Optional[DiseaseNormalizerPort] = None,
+    ) -> None:
         self.config = config or DiseaseAggregatorConfig()
+        self._normalizer = normalizer
 
     def aggregate(self, retrieval_results: list) -> List[DiseaseResult]:
         """Agrega resultados de chunks en un ranking de enfermedades.
@@ -96,7 +104,7 @@ class DiseaseAggregator:
                 if not disease_text:
                     continue
 
-                normalized = self._normalize(disease_text)
+                normalized = self._normalize(disease_text, self._normalizer)
 
                 evidence = DiseaseEvidence(
                     chunk_id=result.metadata.get("chunk_id", ""),
@@ -144,16 +152,13 @@ class DiseaseAggregator:
         return results[: self.config.max_diseases]
 
     @staticmethod
-    def _normalize(text: str) -> str:
-        """Normaliza nombre de enfermedad: lowercase, limpia prefijos numéricos,
-        resuelve acrónimos y aplica deduplicación por contenido."""
+    def _normalize(text: str, normalizer: Optional[DiseaseNormalizerPort] = None) -> str:
         name = text.strip().lower()
-        # Quitar prefijos numéricos (ej: "1 diabetes symptoms" → "diabetes symptoms")
         name = re.sub(r"^\d+\s+", "", name)
-        # Quitar sufijos genéricos (ej: "diabetes symptoms" → "diabetes")
         name = re.sub(r"\s+(symptoms?|signs?|disease|disorder|syndrome)\s*$", "", name)
         name = name.strip()
-        # Resolver acrónimos
         if name in _ACRONYM_MAP:
             name = _ACRONYM_MAP[name]
+        if normalizer is not None:
+            name = normalizer.normalize(name)
         return name
