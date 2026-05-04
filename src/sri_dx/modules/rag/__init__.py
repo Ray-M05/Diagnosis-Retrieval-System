@@ -1,11 +1,9 @@
 """RAG (Retrieval-Augmented Generation) Module
 
-Módulo para integración con LLMs usando contexto recuperado.
-
-Componentes por implementar:
-- PromptBuilder: Construcción de prompts con contexto médico
-- LLMAdapter: Integración con modelos de lenguaje
-- ResponseFormatter: Formateo de respuestas generadas
-
-Estado: ❌ POR IMPLEMENTAR
+Clinical RAG pipeline for SRI-DX.
+Components are assembled by ClinicalRAGUseCase (usecases/rag/clinical_rag.py).
 """
+
+from .chart_file_parser import ChartFileParser, ParseResult
+
+__all__ = ["ChartFileParser", "ParseResult"]
