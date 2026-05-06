@@ -60,13 +60,15 @@ def run_index_docs_and_chunks(host: str, port: int, use_semantic_chunker: bool =
     return stats.get("errors_count", 0) == 0
 
 
-def run_embeddings(host: str, port: int) -> bool:
+def run_embeddings(host: str, port: int, batch_size: int, device: str) -> bool:
     """Fase 4: Generación de embeddings (in-process, reutiliza modelo BERT si ya cargado)."""
     from sri_dx.usecases.indexing.embed_chunks import EmbedChunksUseCase, EmbedChunksConfig
 
     config = EmbedChunksConfig(
         chunks_host=host, chunks_port=port,
         embeddings_host=host, embeddings_port=port,
+        batch_size=batch_size,
+        device=device,
     )
     uc = EmbedChunksUseCase(config)
     result = uc.run()
@@ -92,6 +94,18 @@ def main() -> None:
         "--no-semantic-chunker", action="store_true",
         help="Desactiva SemanticChunker en F3: usa ventana deslizante por párrafos (más rápido, menos preciso)"
     )
+    parser.add_argument(
+        "--embedding-device",
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Dispositivo para Fase 4 embeddings. Usa 'cpu' si tu GPU tiene poca VRAM.",
+    )
+    parser.add_argument(
+        "--embedding-batch-size",
+        type=int,
+        default=64,
+        help="Tamaño de batch para Fase 4 embeddings. Baja a 16/32 si hay CUDA OOM.",
+    )
     args = parser.parse_args()
     
     if args.only_indexing:
@@ -104,7 +118,7 @@ def main() -> None:
     steps = [
         ("Fase 1: Adquisición", lambda: run_acquisition(), args.skip_acquisition),
         ("Fases 2+3: Indexación Docs+Chunks", lambda: run_index_docs_and_chunks(args.host, args.port, use_semantic), args.skip_indexing),
-        ("Fase 4: Embeddings", lambda: run_embeddings(args.host, args.port), args.skip_embeddings),
+        ("Fase 4: Embeddings", lambda: run_embeddings(args.host, args.port, args.embedding_batch_size, args.embedding_device), args.skip_embeddings),
     ]
 
     for desc, run_fn, skip in steps:

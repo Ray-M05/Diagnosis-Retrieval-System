@@ -24,6 +24,17 @@ def _resolve_device(device: str) -> str:
         return "cpu"
 
 
+def _cuda_memory_gb() -> float | None:
+    """Devuelve VRAM CUDA total en GB, si está disponible."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+    except ImportError:
+        return None
+    return None
+
+
 class ClinicalBERTConfig(BaseModel):
     """Pydantic config for the Bio_ClinicalBERT adapter."""
 
@@ -43,9 +54,13 @@ class ClinicalBERTConfig(BaseModel):
         resolved = _resolve_device(self.device)
         object.__setattr__(self, "device", resolved)
         if resolved == "cuda" and self.batch_size <= 64:
-            # Con max_length=256 y FP16, la GTX 1650 (4GB) puede manejar batches grandes
-            object.__setattr__(self, "batch_size", 256)
-            logger.info("Batch size auto-escalado a 256 para GPU (max_length=%d)", self.max_length)
+            gpu_mem = _cuda_memory_gb()
+            if gpu_mem is not None and gpu_mem >= 4.0:
+                # Con max_length=256 y FP16, GPUs de 4GB+ pueden manejar batches grandes.
+                object.__setattr__(self, "batch_size", 256)
+                logger.info("Batch size auto-escalado a 256 para GPU (%.1f GB VRAM)", gpu_mem)
+            elif gpu_mem is not None:
+                logger.info("GPU con %.1f GB VRAM: manteniendo batch_size=%d", gpu_mem, self.batch_size)
         logger.info("ClinicalBERT config: device=%s, batch_size=%d, max_length=%d, fp16=%s",
                      resolved, self.batch_size, self.max_length, self.use_fp16)
         return self
