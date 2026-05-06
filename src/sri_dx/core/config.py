@@ -24,9 +24,34 @@ class IndexingConfig:
     batch_size: int = 500
 
 @dataclass(frozen=True)
+class WebSearchSufficiencyConfig:
+    """Thresholds used by LocalSufficiencyEvaluator."""
+    theta_rank_confidence: float = 0.55
+    theta_useful_doc_score: float = 0.50
+    min_useful_docs: int = 3
+    theta_symptom_coverage: float = 0.60
+    min_source_diversity: int = 2
+    theta_insufficiency: float = 0.45
+
+
+@dataclass(frozen=True)
+class WebSearchConfig:
+    """Configuration for the web search & enrich module."""
+    enabled: bool = True
+    retmax_medlineplus: int = 8
+    retmax_europe_pmc: int = 8
+    retmax_pubmed: int = 5          # kept low — no NCBI API key
+    delta_dir: Path = Path("data/processed/api_deltas")
+    report_dir: Path = Path("data/web_search/reports")
+    http_timeout: float = 20.0
+    sufficiency: WebSearchSufficiencyConfig = field(default_factory=WebSearchSufficiencyConfig)
+
+
+@dataclass(frozen=True)
 class SRIConfig:
     opensearch: OpenSearchConfig = field(default_factory=OpenSearchConfig)
     indexing: IndexingConfig = field(default_factory=IndexingConfig)
+    web_search: WebSearchConfig = field(default_factory=WebSearchConfig)
 
 def load_config(config_path: Optional[Path] = None) -> SRIConfig:
     """Loads configuration from a TOML file and environment variables."""
@@ -60,4 +85,26 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         batch_size=int(os.environ.get("SRI_BATCH_SIZE", idx_data.get("batch_size", 500))),
     )
     
-    return SRIConfig(opensearch=opensearch, indexing=indexing)
+    # Web search setup
+    ws_data = data.get("web_search", {})
+    suf_data = ws_data.get("sufficiency", {})
+    sufficiency_cfg = WebSearchSufficiencyConfig(
+        theta_rank_confidence=float(suf_data.get("theta_rank_confidence", 0.55)),
+        theta_useful_doc_score=float(suf_data.get("theta_useful_doc_score", 0.50)),
+        min_useful_docs=int(suf_data.get("min_useful_docs", 3)),
+        theta_symptom_coverage=float(suf_data.get("theta_symptom_coverage", 0.60)),
+        min_source_diversity=int(suf_data.get("min_source_diversity", 2)),
+        theta_insufficiency=float(suf_data.get("theta_insufficiency", 0.45)),
+    )
+    web_search_cfg = WebSearchConfig(
+        enabled=ws_data.get("enabled", True),
+        retmax_medlineplus=int(ws_data.get("retmax_medlineplus", 8)),
+        retmax_europe_pmc=int(ws_data.get("retmax_europe_pmc", 8)),
+        retmax_pubmed=int(ws_data.get("retmax_pubmed", 5)),
+        delta_dir=Path(ws_data.get("delta_dir", "data/processed/api_deltas")),
+        report_dir=Path(ws_data.get("report_dir", "data/web_search/reports")),
+        http_timeout=float(ws_data.get("http_timeout", 20.0)),
+        sufficiency=sufficiency_cfg,
+    )
+
+    return SRIConfig(opensearch=opensearch, indexing=indexing, web_search=web_search_cfg)
