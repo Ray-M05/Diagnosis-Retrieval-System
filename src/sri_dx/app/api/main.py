@@ -33,6 +33,13 @@ class DiagnoseRequest(BaseModel):
     min_ner_score: float = 0.5
     hybrid_candidates: int = 100
 
+class PositioningRequest(BaseModel):
+    query: str
+    k: int = 10
+    min_ner_score: float = 0.5
+    hybrid_candidates: int = 100
+    final_results: int = 10
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
@@ -67,6 +74,24 @@ def diagnose(
     pipeline.config.hybrid_candidates = request.hybrid_candidates
     
     results = pipeline.search_diseases(query=request.query)
+    return results
+
+@app.post("/api/positioned")
+def positioned_search(
+    request: PositioningRequest,
+    pipeline: TwoStageRetrievalPipeline = Depends(get_retrieval_pipeline)
+):
+    pipeline.config.min_ner_score = request.min_ner_score
+    pipeline.config.hybrid_candidates = request.hybrid_candidates
+    pipeline.config.final_results = request.final_results
+    pipeline.config.positioned_results = request.k
+
+    results = pipeline.search_positioned(
+        query=request.query,
+        hybrid_candidates=request.hybrid_candidates,
+        final_results=request.final_results,
+        positioned_results=request.k,
+    )
     return results
 
 if __name__ == "__main__":

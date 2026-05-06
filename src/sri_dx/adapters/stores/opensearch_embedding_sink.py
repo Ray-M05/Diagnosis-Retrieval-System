@@ -157,7 +157,8 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
             "_source": [
                 "embedding_id", "chunk_id", "doc_id", 
                 "chunk_text_preview", "section_heading",
-                "seed_group", "source_domain", "chunk_index"
+                "seed_group", "source_domain", "chunk_index",
+                "concept_ids"
             ]
         }
         
@@ -195,6 +196,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
                         "seed_group": source.get("seed_group"),
                         "source_domain": source.get("source_domain"),
                         "chunk_index": source.get("chunk_index"),
+                        "concept_ids": source.get("concept_ids") or [],
                     }
                 ))
         

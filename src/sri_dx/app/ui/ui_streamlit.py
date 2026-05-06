@@ -92,8 +92,8 @@ def main():
 
     search_mode = st.sidebar.radio(
         "Modo de búsqueda",
-        ["🔬 Híbrido + Reranking", "🦠 Diagnóstico por Enfermedades"],
-        help="Híbrido: chunks rankeados. Enfermedades: agrega chunks por diagnóstico con NER.",
+        ["🔬 Híbrido + Reranking", "🦠 Diagnóstico por Enfermedades", "📌 Condiciones posicionadas"],
+        help="Híbrido: chunks rankeados. Enfermedades: agregación simple. Posicionadas: ranking clínico multicriterio.",
     )
 
     st.sidebar.markdown("---")
@@ -111,14 +111,19 @@ def main():
         index=0,
     )
 
-    if "Enfermedades" in search_mode:
+    if "Enfermedades" in search_mode or "Condiciones" in search_mode:
         st.sidebar.markdown("---")
-        st.sidebar.subheader("NER / Enfermedades")
+        st.sidebar.subheader("NER / Condiciones")
         min_ner_score = st.sidebar.slider("Confianza mínima NER", 0.1, 1.0, 0.5, step=0.05)
         max_diseases = st.sidebar.slider("Máx. enfermedades", 3, 20, 10)
     else:
         min_ner_score = 0.5
         max_diseases = 10
+
+    if "Condiciones" in search_mode:
+        positioned_results = st.sidebar.slider("Máx. condiciones posicionadas", 3, 20, 10)
+    else:
+        positioned_results = 10
 
     st.sidebar.markdown("---")
     st.sidebar.info(
@@ -160,9 +165,10 @@ def main():
         pipeline = get_pipeline(fusion_method, k_candidates, k_final, rerank_model)
 
         # Override config de diseases si aplica
-        if "Enfermedades" in search_mode:
+        if "Enfermedades" in search_mode or "Condiciones" in search_mode:
             pipeline.config.min_ner_score = min_ner_score
             pipeline.config.max_diseases = max_diseases
+            pipeline.config.positioned_results = positioned_results
 
         t0 = time.time()
 
@@ -171,6 +177,14 @@ def main():
                 diseases = pipeline.search_diseases(query=query)
             elapsed = time.time() - t0
             _render_diseases(diseases, query, elapsed)
+        elif "Condiciones" in search_mode:
+            with st.spinner(f"Búsqueda híbrida → reranking → NER → posicionamiento..."):
+                positioned = pipeline.search_positioned(
+                    query=query,
+                    positioned_results=positioned_results,
+                )
+            elapsed = time.time() - t0
+            _render_positioned(positioned, query, elapsed)
         else:
             with st.spinner(f"Búsqueda híbrida ({fusion_method}) → reranking..."):
                 results = pipeline.search(query=query)
@@ -254,6 +268,56 @@ def _render_diseases(diseases, query: str, elapsed: float):
                         snippet = ev.content_preview
                         st.markdown(f"> {snippet[:300]}{'...' if len(snippet) > 300 else ''}")
                         st.caption(f"rerank={ev.rerank_score:.3f} · ner={ev.ner_score:.3f}")
+
+
+def _render_positioned(positioned, query: str, elapsed: float):
+    """Muestra condiciones clinicas posicionadas."""
+    st.success(f"✅ {len(positioned)} condiciones posicionadas en {elapsed:.2f}s")
+
+    if not positioned:
+        st.info("No se identificaron condiciones clínicas asociadas para esta consulta.")
+        return
+
+    for result in positioned:
+        header = (
+            f"**#{result.rank} {result.disease_name_display}** — "
+            f"{result.relevance_label} · score={result.final_score:.3f}"
+        )
+        with st.expander(header, expanded=result.rank <= 3):
+            col_info, col_evidence = st.columns([1, 2])
+
+            with col_info:
+                if result.matched_symptoms:
+                    st.markdown("**Coincidencias:**")
+                    st.write(", ".join(result.matched_symptoms))
+
+                if result.source_domains:
+                    st.markdown("**Fuentes:**")
+                    for domain in result.source_domains[:5]:
+                        st.markdown(f"- `{domain}`")
+
+                with st.expander("Scores por componente"):
+                    st.json(result.component_scores)
+
+            with col_evidence:
+                if result.explanation:
+                    st.markdown("**Explicación:**")
+                    for reason in result.explanation:
+                        st.markdown(f"- {reason}")
+
+                if result.evidences:
+                    st.markdown("**Evidencias principales:**")
+                    for ev in result.evidences[:3]:
+                        snippet = ev.content_preview or ev.text
+                        st.markdown(f"> {snippet[:300]}{'...' if len(snippet) > 300 else ''}")
+                        caption = f"chunk={ev.chunk_id}"
+                        if ev.cross_encoder_score is not None:
+                            caption += f" · ce={ev.cross_encoder_score:.3f}"
+                        if ev.source_domain:
+                            caption += f" · {ev.source_domain}"
+                        st.caption(caption)
+                        if ev.url:
+                            st.markdown(f"[Fuente]({ev.url})")
 
 
 if __name__ == "__main__":

@@ -49,8 +49,11 @@ def main() -> None:
 
     # Opciones de diagnóstico por enfermedades
     ap.add_argument("--diseases", action="store_true", help="Agregar chunks por enfermedad (requiere --type hybrid --rerank)")
+    ap.add_argument("--positioned", action="store_true", help="Posicionar condiciones clínicas con ClinicalPositioningService")
     ap.add_argument("--max-diseases", type=int, default=10, help="Máximo de enfermedades a retornar")
     ap.add_argument("--min-ner-score", type=float, default=0.5, help="Confianza mínima de NER para enfermedades")
+    ap.add_argument("--positioned-results", type=int, default=10, help="Máximo de condiciones posicionadas a retornar")
+    ap.add_argument("--show-component-scores", action="store_true", help="Mostrar scores por componente en resultados posicionados")
 
     args = ap.parse_args()
 
@@ -121,7 +124,7 @@ def main() -> None:
         config = HybridSearchConfig(
             fusion_method=args.fusion,
             min_semantic_score=args.min_score,
-            use_reranking=args.rerank or args.diseases,
+            use_reranking=args.rerank or args.diseases or args.positioned,
             rerank_model_name=args.rerank_model,
             rerank_score_threshold=args.rerank_threshold,
             rerank_top_k=args.k
@@ -129,7 +132,7 @@ def main() -> None:
 
         uc = SearchHybridUseCase(lexical_backend=backend, embedding_store=store, config=config)
 
-        if args.diseases:
+        if args.diseases or args.positioned:
             from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
                 TwoStageRetrievalPipeline, TwoStageRetrievalConfig,
             )
@@ -140,13 +143,43 @@ def main() -> None:
                 score_threshold=args.rerank_threshold,
                 min_ner_score=args.min_ner_score,
                 max_diseases=args.max_diseases,
+                positioned_results=args.positioned_results,
             )
             pipeline = TwoStageRetrievalPipeline(
                 hybrid_search=uc,
                 config=pipeline_config,
             )
-            diseases = pipeline.search_diseases(query=args.q)
-            pipeline.print_disease_results(diseases)
+
+            if args.positioned:
+                positioned = pipeline.search_positioned(
+                    query=args.q,
+                    positioned_results=args.positioned_results,
+                )
+                print(f"\nTOP {len(positioned)} CONDICIONES POSICIONADAS")
+                for result in positioned:
+                    print("-" * 80)
+                    print(
+                        f"#{result.rank}) {result.disease_name_display} "
+                        f"[{result.relevance_label}] score={result.final_score:.4f}"
+                    )
+                    if result.matched_symptoms:
+                        print(f"   coincidencias={', '.join(result.matched_symptoms)}")
+                    if result.source_domains:
+                        print(f"   fuentes={', '.join(result.source_domains[:5])}")
+                    if args.show_component_scores:
+                        print(f"   component_scores={result.component_scores}")
+                    for explanation in result.explanation:
+                        print(f"   - {explanation}")
+                    for evidence in result.evidences[:3]:
+                        print(
+                            f"   evidencia chunk={evidence.chunk_id} "
+                            f"ce={evidence.cross_encoder_score} url={evidence.url}"
+                        )
+                        if evidence.content_preview:
+                            print(f"      {evidence.content_preview[:220]}...")
+            else:
+                diseases = pipeline.search_diseases(query=args.q)
+                pipeline.print_disease_results(diseases)
         else:
             res = uc.search(
                 query=args.q, k=args.k, filters=filters, metadata_filters=metadata_filters if metadata_filters else None
