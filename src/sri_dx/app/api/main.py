@@ -96,17 +96,17 @@ def _build_pipeline():
 def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
     """Returns (use_case, status). status is 'ready' or 'unreachable'."""
     import os
-    from sri_dx.adapters.llm.ollama_adapter import OllamaAdapter, OllamaAdapterConfig
+    from sri_dx.adapters.llm.gemini_adapter import GeminiAdapter, GeminiAdapterConfig
 
-    model = os.environ.get("SRI_RAG_MODEL", "llama3.1:8b-instruct")
-    host = os.environ.get("SRI_OLLAMA_HOST", "http://localhost:11434")
+    model = os.environ.get("SRI_RAG_MODEL", "gemini-1.5-flash")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
 
     try:
-        llm = OllamaAdapter(OllamaAdapterConfig(model=model, host=host))
+        llm = GeminiAdapter(GeminiAdapterConfig(model=model, api_key=api_key))
         uc = ClinicalRAGUseCase(pipeline=pipeline, llm=llm, config=ClinicalRAGConfig())
         return uc, "ready"
     except RuntimeError as exc:
-        logger.warning("Ollama not available at startup: %s", exc)
+        logger.warning("Gemini not available at startup: %s", exc)
         return None, "unreachable"
 
 
@@ -242,7 +242,7 @@ async def clinical_rag(req: ClinicalRAGRequest):
         if _llm_status == "unreachable":
             raise HTTPException(
                 503,
-                detail="LLM not available. Verify Ollama is running with the expected model.",
+                detail="LLM not available. Verify GEMINI_API_KEY is set and valid.",
             )
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 

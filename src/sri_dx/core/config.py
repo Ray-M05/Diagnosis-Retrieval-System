@@ -25,12 +25,11 @@ class IndexingConfig:
 
 @dataclass(frozen=True)
 class RAGConfig:
-    default_model: str = "llama3.1:8b-instruct"
-    ollama_host: str = "http://localhost:11434"
+    default_model: str = "gemini-1.5-flash"
+    gemini_api_key: str = ""
     max_context_chunks: int = 10
     max_output_tokens: int = 1500
     temperature: float = 0.2
-    num_ctx: int = 8192
     include_disease_hints: bool = True
 
 @dataclass(frozen=True)
@@ -81,12 +80,11 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
     # RAG setup
     rag_data = data.get("rag", {})
     rag = RAGConfig(
-        default_model=os.environ.get("SRI_RAG_MODEL", rag_data.get("default_model", "llama3.1:8b-instruct")),
-        ollama_host=os.environ.get("SRI_OLLAMA_HOST", rag_data.get("ollama_host", "http://localhost:11434")),
+        default_model=os.environ.get("SRI_RAG_MODEL", rag_data.get("default_model", "gemini-1.5-flash")),
+        gemini_api_key=os.environ.get("GEMINI_API_KEY", rag_data.get("gemini_api_key", "")),
         max_context_chunks=int(os.environ.get("SRI_RAG_MAX_CHUNKS", rag_data.get("max_context_chunks", 10))),
         max_output_tokens=int(os.environ.get("SRI_RAG_MAX_TOKENS", rag_data.get("max_output_tokens", 1500))),
         temperature=float(os.environ.get("SRI_RAG_TEMPERATURE", rag_data.get("temperature", 0.2))),
-        num_ctx=int(os.environ.get("SRI_RAG_NUM_CTX", rag_data.get("num_ctx", 8192))),
         include_disease_hints=os.environ.get(
             "SRI_RAG_DISEASE_HINTS", str(rag_data.get("include_disease_hints", True))
         ).lower() != "false",

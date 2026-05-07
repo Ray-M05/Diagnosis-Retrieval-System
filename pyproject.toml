@@ -42,8 +42,10 @@ api = [
   "python-multipart>=0.0.9,<1",
 ]
 
-# RAG local con Ollama (httpx ya está en base deps)
-rag = []
+# RAG con Google Gemini API
+rag = [
+  "google-generativeai>=0.7,<1",
+]
 
 # Utilidades de datos (si las necesitan)
 data = [
