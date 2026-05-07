@@ -84,6 +84,7 @@ def _retrieval_results_to_chunks(
                 vector_score=r.vector_score,
                 rerank_score=r.rerank_score,
                 section_heading=meta.get("section_heading"),
+                concept_ids=meta.get("concept_ids", []),
             )
         )
     return chunks
@@ -109,7 +110,12 @@ def _extract_symptoms(query: str) -> list[str]:
 
     # Fallback: split on commas / 'and'
     import re
-    parts = re.split(r",\s*|\s+and\s+", query, flags=re.IGNORECASE)
+    if "," in query or re.search(r"\band\b", query, flags=re.IGNORECASE):
+        parts = re.split(r",\s*|\s+and\s+", query, flags=re.IGNORECASE)
+    else:
+        # If it's just space-separated keywords, split by space, ignoring small stop words
+        parts = [w for w in query.split() if len(w) > 3]
+        
     return [p.strip() for p in parts if p.strip()]
 
 
@@ -220,6 +226,7 @@ class SearchWebAndEnrichUseCase:
                 web_search_triggered=False,
                 sufficiency=decision,
                 results=_results_to_response(local_raw),
+                local_results=_results_to_response(local_raw),
             )
             self._save_report(report)
             return report
@@ -270,6 +277,7 @@ class SearchWebAndEnrichUseCase:
                 api_retrieval=api_stats,
                 deduplication=dedup_stats,
                 results=_results_to_response(final_raw),
+                local_results=_results_to_response(local_raw),
             )
             self._save_report(report)
             return report
@@ -323,6 +331,7 @@ class SearchWebAndEnrichUseCase:
             deduplication=dedup_stats,
             indexing=idx_stats,
             results=_results_to_response(final_raw),
+            local_results=_results_to_response(local_raw),
         )
         self._save_report(report)
         logger.info(

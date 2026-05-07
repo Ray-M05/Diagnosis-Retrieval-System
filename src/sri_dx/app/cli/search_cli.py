@@ -52,6 +52,9 @@ def main() -> None:
     ap.add_argument("--max-diseases", type=int, default=10, help="Máximo de enfermedades a retornar")
     ap.add_argument("--min-ner-score", type=float, default=0.5, help="Confianza mínima de NER para enfermedades")
 
+    # Opciones de Web Search
+    ap.add_argument("--web-search", action="store_true", help="Ejecutar orquestador de web search con evaluación de suficiencia")
+
     args = ap.parse_args()
 
     filters = SearchFilters(
@@ -64,6 +67,57 @@ def main() -> None:
     metadata_filters = {}
     if args.domain: metadata_filters["source_domain"] = args.domain[0]
     if args.seed_group: metadata_filters["seed_group"] = args.seed_group[0]
+
+    if args.web_search:
+        import logging
+        # Suppress excessive logging from the orchestrator
+        logging.getLogger().setLevel(logging.WARNING)
+        from sri_dx.scripts.orchestrators.run_web_search import _build_use_case
+        
+        print(f"\n[INFO] Construyendo Web Search Orchestrator...")
+        use_case = _build_use_case()
+        use_case.pipeline.config.final_results = args.k
+
+        print(f"[INFO] Ejecutando orquestador para query: '{args.q}'\n")
+        report = use_case.run(args.q)
+        
+        print(f"TOP {len(report.local_results)} RESULTADOS LOCALES (Pre-Web Search)")
+        for h in report.local_results:
+            print("-" * 80)
+            print(f"{h['rank']}) score={h['rerank_score']:.4f} doc_id={h['doc_id']} ({h['source_domain']})")
+            print(f"   title={h['title']}")
+            print(f"   chunk='{h['chunk_text']}'")
+            print(f"   url={h['url']}")
+        
+        print("\n" + "=" * 80)
+        print("EVALUACIÓN DE SUFICIENCIA")
+        print("=" * 80)
+        s = report.sufficiency
+        print(f"  Suficiente: {s.sufficient}")
+        print(f"  Score de insuficiencia: {s.insufficiency_score:.3f}")
+        print(f"  Rank confidence: {s.rank_confidence:.3f}")
+        print(f"  Symptom coverage: {s.symptom_coverage:.3f}")
+        if s.failed_criteria:
+            print(f"  Criterios fallidos: {', '.join(s.failed_criteria)}")
+        
+        if report.web_search_triggered:
+            print("\n" + "=" * 80)
+            print("BÚSQUEDA WEB ACTIVADA")
+            print("=" * 80)
+            print(f"  APIs: {report.api_retrieval.total} (MedlinePlus={report.api_retrieval.medlineplus}, EuropePMC={report.api_retrieval.europe_pmc}, PubMed={report.api_retrieval.pubmed})")
+            print(f"  Indexados: docs={report.indexing.docs_indexed}")
+            
+            print(f"\nTOP {len(report.results)} RESULTADOS FINALES (Post-Web Search)")
+            for h in report.results:
+                print("-" * 80)
+                print(f"{h['rank']}) score={h['rerank_score']:.4f} doc_id={h['doc_id']}  ({h['source_domain']})")
+                print(f"   title={h['title']}")
+                print(f"   chunk='{h['chunk_text']}'")
+                print(f"   url={h['url']}")
+        else:
+            print("\n[INFO] No se requirió búsqueda web. Se utilizaron los resultados locales.")
+            
+        return
 
     if args.type == "lexical":
         backend = OpenSearchSearchBackend(OpenSearchSearchConfig(

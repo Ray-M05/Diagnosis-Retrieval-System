@@ -28,19 +28,20 @@ class OpenSearchSearchBackend(SearchBackendPort):
     Backend de búsqueda léxica BM25 sobre OpenSearch.
     Usa el alias (p.ej. clinical_docs) para desacoplar versiones de índice.
     """
-    def __init__(self, cfg: OpenSearchSearchConfig) -> None:
+    def __init__(self, cfg: Any) -> None:
         self.cfg = cfg
         self.client = OpenSearch(
             hosts=[{"host": cfg.host, "port": cfg.port}],
-            use_ssl=cfg.use_ssl,
-            verify_certs=cfg.verify_certs,
+            use_ssl=getattr(cfg, "use_ssl", False),
+            verify_certs=getattr(cfg, "verify_certs", False),
             http_compress=True,
-            timeout=cfg.request_timeout,
+            timeout=getattr(cfg, "request_timeout", 30),
         )
 
     def search(self, req: SearchRequest) -> SearchResponse:
         body = self._build_query(req)
-        raw = self.client.search(index=self.cfg.index_alias, body=body)
+        index = getattr(self.cfg, "index_alias", getattr(self.cfg, "alias_name", "clinical_docs"))
+        raw = self.client.search(index=index, body=body)
 
         took = raw.get("took")
         hits_block = raw.get("hits", {})
@@ -125,7 +126,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
                         {
                             "multi_match": {
                                 "query": q,
-                                "fields": self.cfg.search_fields,
+                                "fields": getattr(self.cfg, "search_fields", ["title", "body"]),
                                 "type": "best_fields",
                                 "operator": req.operator,
                                 "boost": 1.0
@@ -145,7 +146,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
             main_clause = {
                 "multi_match": {
                     "query": q,
-                    "fields": self.cfg.search_fields,
+                    "fields": getattr(self.cfg, "search_fields", ["title", "body"]),
                     "type": "best_fields",
                     "operator": req.operator,
                 }

@@ -13,6 +13,11 @@ class OpenSearchConfig:
     index_name: str = "clinical_docs_v1"
     alias_name: str = "clinical_docs"
     request_timeout: int = 30
+    # Added for compatibility with SearchBackend and Sink
+    index_alias: str = "clinical_docs"
+    search_fields: list[str] = field(default_factory=lambda: ["title^3", "sections_text^2", "body"])
+    shards: int = 1
+    replicas: int = 0
 
 @dataclass(frozen=True)
 class IndexingConfig:
@@ -72,6 +77,10 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         verify_certs=os.environ.get("SRI_OS_VERIFY", str(os_data.get("verify_certs", "false"))).lower() == "true",
         index_name=os.environ.get("SRI_OS_INDEX", os_data.get("index_name", "clinical_docs_v1")),
         alias_name=os.environ.get("SRI_OS_ALIAS", os_data.get("alias_name", "clinical_docs")),
+        index_alias=os.environ.get("SRI_OS_ALIAS", os_data.get("alias_name", "clinical_docs")),
+        search_fields=os_data.get("search_fields", ["title^3", "sections_text^2", "body"]),
+        shards=int(os_data.get("shards", 1)),
+        replicas=int(os_data.get("replicas", 0)),
     )
     
     # Indexing setup

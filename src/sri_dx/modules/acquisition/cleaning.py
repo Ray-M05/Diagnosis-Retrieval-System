@@ -6,7 +6,7 @@ from sri_dx.core.schemas.acquisition.acquired_document import Section
 
 _ws = re.compile(r"[ \t]+")
 _nl = re.compile(r"\n{3,}")
-
+_html = re.compile(r"<[^>]+>")
 
 def clean_text(text: str) -> str:
     """
@@ -20,6 +20,7 @@ def clean_text(text: str) -> str:
         return ""
 
     t = unicodedata.normalize("NFKC", text)
+    t = _html.sub(" ", t)
     t = t.replace("\r\n", "\n").replace("\r", "\n")
     t = _ws.sub(" ", t)
     t = _nl.sub("\n\n", t)

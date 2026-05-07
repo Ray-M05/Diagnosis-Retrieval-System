@@ -82,12 +82,29 @@ def _symptom_coverage(
     if not symptoms:
         return 1.0
 
-    evidence = "\n".join(r.chunk_text for r in results[:top_k]).lower()
+    top_results = results[:top_k]
+    evidence_text = "\n".join(r.chunk_text for r in top_results).lower()
+    
+    # Pre-collect all concept IDs from the top-K results
+    all_concepts = set()
+    for r in top_results:
+        for cid in r.concept_ids:
+            all_concepts.add(cid.upper())
 
-    covered = sum(
-        1 for symptom in symptoms
-        if symptom.lower() in evidence
-    )
+    covered = 0
+    for symptom in symptoms:
+        s_upper = symptom.upper()
+        # Option 1: Match against extracted concept IDs
+        if s_upper in all_concepts:
+            covered += 1
+            continue
+            
+        # Option 2: Match against text (normalised: replace _ with space)
+        s_text = symptom.lower().replace("_", " ")
+        if s_text in evidence_text:
+            covered += 1
+            continue
+
     return covered / len(symptoms)
 
 

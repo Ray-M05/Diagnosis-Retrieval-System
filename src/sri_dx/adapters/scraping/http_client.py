@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+import asyncio
 import httpx
 import certifi
 
@@ -21,7 +22,41 @@ class HttpxClient(HttpClientPort):
         )
 
     async def get(self, url: str, *, timeout_s: float) -> FetchResult:
-        r = await self._client.get(url, timeout=timeout_s)
+        max_retries = 3
+        backoff_factor = 2
+
+        last_exc: Exception | None = None
+        
+        for attempt in range(max_retries):
+            try:
+                r = await self._client.get(url, timeout=timeout_s)
+                
+                # Success or non-retryable error
+                if r.status_code < 400 or r.status_code in (404, 401, 403):
+                    break
+                
+                # Retryable errors
+                if r.status_code == 429 or r.status_code >= 500:
+                    wait_time = backoff_factor ** attempt
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                # Other 4xx errors
+                break
+
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                last_exc = e
+                wait_time = backoff_factor ** attempt
+                await asyncio.sleep(wait_time)
+                continue
+            except Exception as e:
+                # Unexpected error, don't retry
+                raise e
+        else:
+            # If we exhausted retries and have an exception, re-raise it
+            if last_exc:
+                raise last_exc
+
         content_type = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
 
         return FetchResult(

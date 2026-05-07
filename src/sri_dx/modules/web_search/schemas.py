@@ -74,6 +74,7 @@ class RetrievedChunkResult:
     fusion_score: float | None = None
     rerank_score: float | None = None
     section_heading: str | None = None
+    concept_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -159,4 +160,5 @@ class WebSearchRunReport:
     deduplication: DeduplicationStats = field(default_factory=DeduplicationStats)
     indexing: IndexingStats = field(default_factory=IndexingStats)
     results: list[dict] = field(default_factory=list)
+    local_results: list[dict] = field(default_factory=list)
     error: str | None = None

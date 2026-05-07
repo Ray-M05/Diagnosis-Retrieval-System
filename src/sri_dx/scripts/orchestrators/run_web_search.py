@@ -100,8 +100,19 @@ def _build_use_case():  # noqa: ANN201
     # ---- Retrieval pipeline ----
     lexical_backend = OpenSearchSearchBackend(cfg=os_cfg)
     bert_adapter = ClinicalBERTAdapter.get_instance()
-    from sri_dx.adapters.stores.opensearch_embedding_sink import OpenSearchEmbeddingSink
-    embedding_store = OpenSearchEmbeddingSink(cfg=os_cfg)
+    from sri_dx.adapters.stores.opensearch_embedding_sink import (
+        OpenSearchEmbeddingSink,
+        OpenSearchEmbeddingConfig,
+    )
+    # Ensure we use the correct embedding index config, not the doc index config
+    emb_cfg = OpenSearchEmbeddingConfig(
+        host=os_cfg.host,
+        port=os_cfg.port,
+        use_ssl=os_cfg.use_ssl,
+        verify_certs=os_cfg.verify_certs,
+        request_timeout=os_cfg.request_timeout,
+    )
+    embedding_store = OpenSearchEmbeddingSink(cfg=emb_cfg)
 
     hybrid_cfg = HybridSearchConfig(
         fusion_method="rrf",
