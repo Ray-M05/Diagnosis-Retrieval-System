@@ -23,7 +23,7 @@ bad_docs_path = "data/index/bad_docs.jsonl"
 batch_size = 500
 
 [rag]
-default_model = "gemini-1.5-flash"
+default_model = "gemini-2.0-flash-lite"
 # gemini_api_key = ""   # preferir variable de entorno GEMINI_API_KEY
 max_context_chunks = 10
 max_output_tokens = 1500

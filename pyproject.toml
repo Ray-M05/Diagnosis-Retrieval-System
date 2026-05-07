@@ -44,7 +44,7 @@ api = [
 
 # RAG con Google Gemini API
 rag = [
-  "google-generativeai>=0.7,<1",
+  "google-genai>=1.0",
 ]
 
 # Utilidades de datos (si las necesitan)

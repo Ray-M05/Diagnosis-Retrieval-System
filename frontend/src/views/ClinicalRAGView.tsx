@@ -17,16 +17,43 @@ import { emptyChart } from '../types';
 // Small helpers
 // ---------------------------------------------------------------------------
 
-function splitLines(raw: string): string[] {
+function splitCSV(raw: string): string[] {
   return raw
-    .split(/[\n,;]+/)
+    .split(/[,;]+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
-function joinLines(arr: string[]): string {
-  return arr.join('\n');
+function joinCSV(arr: string[]): string {
+  return arr.join(', ');
 }
+
+// Input that lets the user type freely (including commas) and only converts
+// to array on blur — avoids losing the cursor mid-word on every keystroke.
+const CSVInput: React.FC<{
+  value: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+  className?: string;
+}> = ({ value, onChange, placeholder, className }) => {
+  const [raw, setRaw] = React.useState(() => joinCSV(value));
+
+  // Keep local state in sync when the parent resets the chart (e.g. file upload)
+  React.useEffect(() => {
+    setRaw(joinCSV(value));
+  }, [value.join(',')]);
+
+  return (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={raw}
+      onChange={(e) => setRaw(e.target.value)}
+      onBlur={() => onChange(splitCSV(raw))}
+      className={className}
+    />
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -173,7 +200,11 @@ export const ClinicalRAGView: React.FC = () => {
       query,
       (delta) => setStreamedText((prev) => prev + delta),
       (response) => {
-        setRagResponse(response);
+        if (response.error && !response.answer_markdown) {
+          setError(response.error);
+        } else {
+          setRagResponse(response);
+        }
         setIsGenerating(false);
       },
       (msg) => {
@@ -258,38 +289,25 @@ export const ClinicalRAGView: React.FC = () => {
           </div>
           <div className="col-span-2">
             <label className="text-xs text-gray-500 font-medium">Comorbidities (comma-separated)</label>
-            <input
-              type="text"
+            <CSVInput
+              value={chart.demographics.comorbidities}
+              onChange={(v) => setDemoField('comorbidities', v)}
               placeholder="DM2, HTN, CKD..."
-              value={joinLines(chart.demographics.comorbidities)}
-              onChange={(e) => setDemoField('comorbidities', splitLines(e.target.value))}
               className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
         </div>
 
-        {/* Chief complaint + symptoms */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-gray-500 font-medium">Chief Complaint</label>
-            <input
-              type="text"
-              placeholder="e.g. Chest pain for 2 hours"
-              value={chart.chief_complaint}
-              onChange={(e) => setField('chief_complaint', e.target.value)}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 font-medium">Symptoms (comma-separated)</label>
-            <input
-              type="text"
-              placeholder="dyspnea, diaphoresis, nausea..."
-              value={joinLines(chart.symptoms)}
-              onChange={(e) => setField('symptoms', splitLines(e.target.value))}
-              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
-          </div>
+        {/* Chief complaint — full width, symptoms embedded in query */}
+        <div>
+          <label className="text-xs text-gray-500 font-medium">Chief Complaint</label>
+          <input
+            type="text"
+            placeholder="e.g. Frequent urination and excessive thirst for 6 weeks"
+            value={chart.chief_complaint}
+            onChange={(e) => setField('chief_complaint', e.target.value)}
+            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
         </div>
 
         {/* Vitals row */}
@@ -347,22 +365,44 @@ export const ClinicalRAGView: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-gray-500 font-medium">Current Medications (comma-separated)</label>
-            <input
-              type="text"
+            <CSVInput
+              value={chart.current_medications}
+              onChange={(v) => setField('current_medications', v)}
               placeholder="metformin 1g BID, lisinopril 20mg..."
-              value={joinLines(chart.current_medications)}
-              onChange={(e) => setField('current_medications', splitLines(e.target.value))}
               className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
           <div>
             <label className="text-xs text-gray-500 font-medium">Allergies (comma-separated)</label>
-            <input
-              type="text"
+            <CSVInput
+              value={chart.allergies}
+              onChange={(v) => setField('allergies', v)}
               placeholder="NKDA or penicillin..."
-              value={joinLines(chart.allergies)}
-              onChange={(e) => setField('allergies', splitLines(e.target.value))}
               className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+          </div>
+        </div>
+
+        {/* Social History + Family History */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500 font-medium">Social History</label>
+            <textarea
+              rows={3}
+              placeholder="Smoking, alcohol, occupation, diet, physical activity..."
+              value={chart.social_history}
+              onChange={(e) => setField('social_history', e.target.value)}
+              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 font-medium">Family History</label>
+            <textarea
+              rows={3}
+              placeholder="Father: MI at 58. Mother: HTN, stroke. Uncle: kidney disease..."
+              value={chart.family_history}
+              onChange={(e) => setField('family_history', e.target.value)}
+              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
             />
           </div>
         </div>

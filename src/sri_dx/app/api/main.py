@@ -25,6 +25,9 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -248,12 +251,17 @@ async def clinical_rag(req: ClinicalRAGRequest):
 
     def generate():
         try:
+            logger.info("RAG streaming started")
+            count = 0
             for item in _rag_uc.run_streaming(req.chart, req.query):
                 if isinstance(item, RAGResponse):
+                    logger.info("RAG streaming done — %d deltas, error=%s", count, item.error)
                     payload = item.model_dump_json()
                     yield f"event: response\ndata: {payload}\n\n"
                 else:
-                    # Escape newlines in delta so SSE framing is not broken
+                    count += 1
+                    if count <= 3:
+                        logger.info("RAG delta #%d: %r", count, str(item)[:60])
                     safe = str(item).replace("\n", "\\n")
                     yield f"data: {safe}\n\n"
         except Exception as exc:
@@ -267,4 +275,14 @@ async def clinical_rag(req: ClinicalRAGRequest):
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",   # disable nginx buffering if behind proxy
         },
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "sri_dx.app.api.main:app",
+        host=os.environ.get("SRI_API_HOST", "127.0.0.1"),
+        port=int(os.environ.get("SRI_API_PORT", "8000")),
+        reload=False,
     )

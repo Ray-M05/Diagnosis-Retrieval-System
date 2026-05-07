@@ -1,11 +1,8 @@
-"""GeminiAdapter — calls Google Gemini API via the official SDK.
+"""GeminiAdapter — calls Google Gemini API via the google-genai SDK.
 
-Requires: google-generativeai>=0.7
+Requires: google-genai>=1.0
 API key:  set GEMINI_API_KEY environment variable.
 Free tier: gemini-1.5-flash supports ~15 RPM / 1M tokens/day at no cost.
-
-Streaming: uses stream=True on generate_content; yields text deltas as they arrive.
-Health check: lists available models — verifies API key is valid and network reachable.
 """
 
 from __future__ import annotations
@@ -15,8 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Iterator
 
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
+from google import genai
+from google.genai import types
 
 from sri_dx.core.ports.generation.llm_port import (
     GenerationRequest,
@@ -29,15 +26,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GeminiAdapterConfig:
-    model: str = "gemini-1.5-flash"
+    model: str = "gemini-2.0-flash-lite"
     api_key: str = ""
     default_max_tokens: int = 1500
     default_temperature: float = 0.2
-    timeout_s: float = 120.0
 
 
 class GeminiAdapter(LLMPort):
-    """LLMPort implementation backed by Google Gemini API."""
+    """LLMPort implementation backed by Google Gemini API (google-genai SDK)."""
 
     def __init__(self, config: GeminiAdapterConfig | None = None) -> None:
         self.cfg = config or GeminiAdapterConfig()
@@ -47,7 +43,7 @@ class GeminiAdapter(LLMPort):
                 "GEMINI_API_KEY is not set. Get a free key at https://aistudio.google.com/app/apikey"
             )
 
-        genai.configure(api_key=self.cfg.api_key)
+        self._client = genai.Client(api_key=self.cfg.api_key)
 
         if not self.health_check():
             raise RuntimeError(
@@ -60,13 +56,14 @@ class GeminiAdapter(LLMPort):
 
     def generate(self, req: GenerationRequest) -> GenerationResult:
         """Blocking call — returns the full generated text."""
-        model = self._model_with_system(req.system)
-        contents = self._build_contents(req)
-        gen_cfg = self._build_gen_config(req)
         t0 = time.monotonic()
 
         try:
-            response = model.generate_content(contents, generation_config=gen_cfg)
+            response = self._client.models.generate_content(
+                model=self.cfg.model,
+                contents=self._build_contents(req),
+                config=self._build_config(req),
+            )
         except Exception as exc:
             raise RuntimeError(f"Gemini request failed: {exc}") from exc
 
@@ -85,17 +82,12 @@ class GeminiAdapter(LLMPort):
 
     def stream(self, req: GenerationRequest) -> Iterator[str]:
         """Streaming call — yields text deltas as they arrive."""
-        model = self._model_with_system(req.system)
-        contents = self._build_contents(req)
-        gen_cfg = self._build_gen_config(req)
-
         try:
-            response = model.generate_content(
-                contents,
-                generation_config=gen_cfg,
-                stream=True,
-            )
-            for chunk in response:
+            for chunk in self._client.models.generate_content_stream(
+                model=self.cfg.model,
+                contents=self._build_contents(req),
+                config=self._build_config(req),
+            ):
                 delta = chunk.text or ""
                 if delta:
                     yield delta
@@ -105,7 +97,7 @@ class GeminiAdapter(LLMPort):
     def health_check(self) -> bool:
         """Return True if the API key is valid and Gemini is reachable."""
         try:
-            models = list(genai.list_models())
+            models = list(self._client.models.list())
             return len(models) > 0
         except Exception:
             return False
@@ -114,29 +106,28 @@ class GeminiAdapter(LLMPort):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _model_with_system(self, system: str) -> genai.GenerativeModel:
-        """Instantiate a GenerativeModel with system_instruction per request.
-
-        gemini-1.5-flash supports system_instruction natively; this is the
-        recommended way to pass a system prompt rather than embedding it in
-        the user turn.
-        """
-        return genai.GenerativeModel(
-            self.cfg.model,
-            system_instruction=system,
-        )
-
-    @staticmethod
-    def _build_contents(req: GenerationRequest) -> list[dict]:
+    def _build_contents(self, req: GenerationRequest) -> list:
+        """Build contents list with system prompt prepended as first user turn."""
         contents = []
+        # System instruction as first user message, model acknowledges
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part(text=req.system)],
+        ))
+        contents.append(types.Content(
+            role="model",
+            parts=[types.Part(text="Understood. I will follow these instructions.")],
+        ))
         for msg in req.messages:
             role = "user" if msg.role == "user" else "model"
-            contents.append({"role": role, "parts": [msg.content]})
+            contents.append(types.Content(
+                role=role,
+                parts=[types.Part(text=msg.content)],
+            ))
         return contents
 
-    @staticmethod
-    def _build_gen_config(req: GenerationRequest) -> GenerationConfig:
-        return GenerationConfig(
+    def _build_config(self, req: GenerationRequest) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
             temperature=req.temperature,
             max_output_tokens=req.max_tokens,
         )

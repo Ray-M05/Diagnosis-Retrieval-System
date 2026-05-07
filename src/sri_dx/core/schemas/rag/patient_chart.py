@@ -33,6 +33,8 @@ class PatientChart(BaseModel):
     imaging: str = ""
     current_medications: list[str] = Field(default_factory=list)
     allergies: list[str] = Field(default_factory=list)
+    social_history: str = ""
+    family_history: str = ""
     additional_notes: str = ""
     language: Literal["en", "es"] = "en"
 
@@ -105,6 +107,16 @@ class PatientChart(BaseModel):
         if self.allergies:
             lines.append("## Allergies")
             lines.append(", ".join(self.allergies))
+
+        # Social History
+        if self.social_history:
+            lines.append("## Social History")
+            lines.append(self.social_history)
+
+        # Family History
+        if self.family_history:
+            lines.append("## Family History")
+            lines.append(self.family_history)
 
         # Additional notes
         if self.additional_notes:

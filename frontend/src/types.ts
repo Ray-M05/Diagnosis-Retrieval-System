@@ -27,6 +27,8 @@ export interface PatientChart {
   imaging: string;
   current_medications: string[];
   allergies: string[];
+  social_history: string;
+  family_history: string;
   additional_notes: string;
   language: 'en' | 'es';
 }
@@ -101,6 +103,8 @@ export const emptyChart = (): PatientChart => ({
   imaging: '',
   current_medications: [],
   allergies: [],
+  social_history: '',
+  family_history: '',
   additional_notes: '',
   language: 'en',
 });
