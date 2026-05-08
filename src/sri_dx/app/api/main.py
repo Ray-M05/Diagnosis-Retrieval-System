@@ -7,6 +7,9 @@ from sri_dx.app.api.deps import get_hybrid_search_use_case, get_retrieval_pipeli
 from sri_dx.usecases.search.search_hybrid import SearchHybridUseCase
 from sri_dx.usecases.search.tow_stage_retrieval_pipeline import TwoStageRetrievalPipeline
 from sri_dx.usecases.search.schemas.hybrid_search_config import HybridSearchConfig
+from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
+from sri_dx.modules.web_search.schemas import LocalRetrievalResult, RetrievedChunkResult
+from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor
 
 app = FastAPI(title="SRI-DX API", description="API para el motor de búsqueda y diagnóstico clínico")
 
@@ -54,7 +57,44 @@ def search(
         use_case.__post_init__()
 
     results = use_case.search(query=request.query, k=request.k)
-    return results
+    
+    # ---------------------------------------------------------
+    # Evaluación de Suficiencia (UI Integration)
+    # ---------------------------------------------------------
+    extractor = ConceptExtractor()
+    symptoms = extractor.extract(request.query)
+    
+    evaluator = LocalSufficiencyEvaluator()
+    
+    chunk_results = []
+    for r in results:
+        chunk_results.append(RetrievedChunkResult(
+            chunk_id=r.chunk_id,
+            doc_id=r.doc_id,
+            title=r.metadata.get("title", ""),
+            url=r.metadata.get("url", ""),
+            source_domain=r.metadata.get("source_domain", ""),
+            chunk_text=r.metadata.get("chunk_text", ""),
+            final_score=r.score,
+            bm25_score=r.lexical_score,
+            vector_score=r.vector_score,
+            concept_ids=r.metadata.get("concept_ids", []),
+            section_heading=r.metadata.get("section_heading", "")
+        ))
+        
+    local_retrieval_result = LocalRetrievalResult(
+        query=request.query,
+        extracted_symptoms=symptoms,
+        results=chunk_results
+    )
+    
+    sufficiency = evaluator.evaluate(local_retrieval_result)
+    
+    return {
+        "query": request.query,
+        "results": results,
+        "sufficiency": sufficiency
+    }
 
 @app.post("/api/diagnose")
 def diagnose(
