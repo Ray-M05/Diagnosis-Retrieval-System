@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
+  ChevronDown,
   ExternalLink,
   FileText,
   Loader2,
@@ -139,6 +140,7 @@ const MarkdownAnswer: React.FC<{ text: string }> = ({ text }) => {
 export const ClinicalRAGView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [chartOpen, setChartOpen] = useState(false);
   const [chart, setChart] = useState<PatientChart>(emptyChart());
   const [query, setQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -220,12 +222,33 @@ export const ClinicalRAGView: React.FC = () => {
     <div className="flex flex-col gap-8">
 
       {/* Upload + form */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <FileText className="w-5 h-5 text-indigo-500" />
-          <h2 className="font-bold text-gray-900">Patient Chart</h2>
-          <span className="text-xs text-gray-400">Fill manually or upload a PDF/TXT</span>
-        </div>
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Accordion header */}
+        <button
+          type="button"
+          onClick={() => setChartOpen((v) => !v)}
+          className="w-full flex items-center gap-3 p-6 text-left hover:bg-gray-50/50 transition-colors cursor-pointer"
+        >
+          <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
+          <h2 className="font-bold text-gray-900 flex-1">Patient Chart</h2>
+          <span className="text-xs text-gray-400 hidden sm:block">
+            {chartOpen ? 'Ocultar ficha' : 'Mostrar ficha del paciente'}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${chartOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        <AnimatePresence initial={false}>
+          {chartOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+        <div className="px-6 pb-6 flex flex-col gap-6 border-t border-gray-50">
 
         {/* Upload button */}
         <div>
@@ -418,16 +441,26 @@ export const ClinicalRAGView: React.FC = () => {
             className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
           />
         </div>
+        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Query + generate */}
-      <form onSubmit={handleGenerate} className="flex gap-3">
-        <input
-          type="text"
+      <form onSubmit={handleGenerate} className="flex gap-3 items-start">
+        <textarea
+          rows={1}
           placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 border border-gray-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleGenerate(e as unknown as React.FormEvent);
+            }
+          }}
+          className="flex-1 border border-gray-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm resize-none overflow-y-auto max-h-32 leading-tight"
         />
         <button
           type="submit"

@@ -43,14 +43,20 @@ export const SymptomSearchView: React.FC = () => {
           <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none transition-transform group-focus-within:scale-110">
             <Search className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500" />
           </div>
-          <input
-            type="text"
-            className="w-full pl-14 pr-32 py-5 bg-white border border-gray-200 rounded-3xl shadow-xl shadow-gray-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-lg placeholder:text-gray-400"
+          <textarea
+            rows={1}
+            className="w-full pl-14 pr-32 py-5 bg-white border border-gray-200 rounded-3xl shadow-xl shadow-gray-200/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-lg placeholder:text-gray-400 resize-none overflow-y-auto max-h-36 leading-tight"
             placeholder="Enter symptoms (e.g. fever, cough...)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSearch(e as unknown as React.FormEvent);
+              }
+            }}
           />
-          <div className="absolute inset-y-0 right-3 flex items-center gap-2">
+          <div className="absolute top-4 right-3 flex items-center gap-2">
             {searchTerm && (
               <button
                 type="button"

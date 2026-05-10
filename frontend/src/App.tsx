@@ -1,12 +1,32 @@
 import React, { useState } from 'react';
-import { HeartPulse, Info, Search, Stethoscope } from 'lucide-react';
+import { HeartPulse, Info, Search, Stethoscope, FlaskConical } from 'lucide-react';
 import { SymptomSearchView } from './views/SymptomSearchView';
 import { ClinicalRAGView } from './views/ClinicalRAGView';
+import { ResearchView } from './views/ResearchView';
 
-type Tab = 'search' | 'rag';
+type Tab = 'search' | 'rag' | 'research';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('search');
+
+  // La vista Research ocupa toda la pantalla con su propio layout
+  const isResearch = (tab as string) === 'research';
+
+  if (isResearch) {
+    return (
+      <div className="relative">
+        <div className="fixed top-3 right-4 z-50">
+          <button
+            onClick={() => setTab('search')}
+            className="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl shadow-md hover:bg-gray-50 transition-all"
+          >
+            ← Volver
+          </button>
+        </div>
+        <ResearchView />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col items-center px-4 py-12 md:py-24">
@@ -30,7 +50,7 @@ export default function App() {
         </header>
 
         {/* Tab switcher */}
-        <div className="flex gap-2 max-w-sm mx-auto bg-gray-100 p-1 rounded-2xl w-full">
+        <div className="flex gap-2 max-w-lg mx-auto bg-gray-100 p-1 rounded-2xl w-full">
           <button
             onClick={() => setTab('search')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${
@@ -52,6 +72,17 @@ export default function App() {
           >
             <Stethoscope className="w-4 h-4" />
             Clinical RAG
+          </button>
+          <button
+            onClick={() => setTab('research')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              tab === ('research' as Tab)
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <FlaskConical className="w-4 h-4" />
+            Testing
           </button>
         </div>
 
