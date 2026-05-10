@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Activity, Database, FlaskConical, MapPin } from 'lucide-react';
+import { Settings, Activity, Database, FlaskConical, MapPin, Globe } from 'lucide-react';
 import type { SearchMode } from './research.types';
 
 interface ResearchSidebarProps {
@@ -79,6 +79,20 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
                 <span className="text-sm font-bold">Posicionamiento Clínico</span>
               </div>
               {(searchMode as string) === 'positioned' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+            </button>
+            <button
+              onClick={() => setSearchMode('web' as SearchMode)}
+              className={`w-full px-4 py-3 rounded-xl text-left transition-all border flex items-center justify-between cursor-pointer ${
+                (searchMode as string) === 'web'
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
+                  : 'bg-white border-gray-100 text-gray-600 hover:border-indigo-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Globe className={`w-4 h-4 ${(searchMode as string) === 'web' ? 'text-indigo-200' : 'text-gray-400'}`} />
+                <span className="text-sm font-bold">Búsqueda Web</span>
+              </div>
+              {(searchMode as string) === 'web' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
           </div>
         </div>

@@ -54,4 +54,20 @@ export interface PositionedResult {
   evidences: PositionedEvidence[];
 }
 
-export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned';
+export interface WebSearchResult {
+  disease_name: string;
+  disease_name_display: string;
+  aggregated_score: number;
+  evidence_count: number;
+  rank: number;
+  evidence: DiseaseEvidence[];
+}
+
+export interface WebSearchResponse {
+  diseases: WebSearchResult[];
+  web_enriched: boolean;
+  docs_added: number;
+  elapsed_seconds: number;
+}
+
+export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned' | 'web';

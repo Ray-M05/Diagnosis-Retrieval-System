@@ -1,11 +1,21 @@
-"""Web Search Module - Búsqueda Web Externa
+from sri_dx.modules.web_search.deduplicator import ApiDocumentDeduplicator
+from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
+from sri_dx.modules.web_search.schemas import (
+    ExternalApiDocument,
+    LocalRetrievalResult,
+    RetrievedChunkResult,
+    SufficiencyDecision,
+    WebSearchRunReport,
+)
+from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
 
-Módulo para integrar resultados de motores de búsqueda externos.
-
-Componentes por implementar:
-- SerperAdapter: Integración con Serper API
-- MedicalSourceFilter: Filtrado de fuentes médicas confiables
-- ResultAggregator: Agregación de resultados web + locales
-
-Estado: ❌ POR IMPLEMENTAR
-"""
+__all__ = [
+    "ExternalApiDocument",
+    "LocalRetrievalResult",
+    "RetrievedChunkResult",
+    "SufficiencyDecision",
+    "WebSearchRunReport",
+    "LocalSufficiencyEvaluator",
+    "ApiDocumentDeduplicator",
+    "JsonlDeltaWriter",
+]

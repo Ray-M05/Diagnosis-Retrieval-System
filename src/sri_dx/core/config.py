@@ -39,23 +39,44 @@ class APIConfig:
     cors_origins: List[str] = field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
 
 @dataclass(frozen=True)
+class WebSearchSufficiencyConfig:
+    """Thresholds used by LocalSufficiencyEvaluator."""
+    theta_rank_confidence: float = 0.55
+    theta_useful_doc_score: float = 0.50
+    min_useful_docs: int = 3
+    theta_symptom_coverage: float = 0.60
+    min_source_diversity: int = 2
+    theta_insufficiency: float = 0.45
+
+@dataclass(frozen=True)
+class WebSearchConfig:
+    """Configuration for the web search & enrich module."""
+    enabled: bool = True
+    retmax_medlineplus: int = 8
+    retmax_europe_pmc: int = 8
+    retmax_pubmed: int = 5
+    delta_dir: Path = Path("data/processed/api_deltas")
+    report_dir: Path = Path("data/web_search/reports")
+    http_timeout: float = 20.0
+    sufficiency: WebSearchSufficiencyConfig = field(default_factory=WebSearchSufficiencyConfig)
+
+@dataclass(frozen=True)
 class SRIConfig:
     opensearch: OpenSearchConfig = field(default_factory=OpenSearchConfig)
     indexing: IndexingConfig = field(default_factory=IndexingConfig)
     rag: RAGConfig = field(default_factory=RAGConfig)
     api: APIConfig = field(default_factory=APIConfig)
+    web_search: WebSearchConfig = field(default_factory=WebSearchConfig)
 
 def load_config(config_path: Optional[Path] = None) -> SRIConfig:
     """Loads configuration from a TOML file and environment variables."""
     data: dict[str, Any] = {}
-    
-    # Load from file if exists
+
     path = config_path or Path("config.toml")
     if path.exists():
         with open(path, "rb") as f:
             data = tomllib.load(f)
-            
-    # OpenSearch setup
+
     os_data = data.get("opensearch", {})
     opensearch = OpenSearchConfig(
         host=os.environ.get("SRI_OS_HOST", os_data.get("host", "localhost")),
@@ -65,8 +86,7 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         index_name=os.environ.get("SRI_OS_INDEX", os_data.get("index_name", "clinical_docs_v1")),
         alias_name=os.environ.get("SRI_OS_ALIAS", os_data.get("alias_name", "clinical_docs")),
     )
-    
-    # Indexing setup
+
     idx_data = data.get("indexing", {})
     indexing = IndexingConfig(
         html_source=Path(os.environ.get("SRI_HTML_SRC", idx_data.get("html_source", "data/processed/docs_html.jsonl"))),
@@ -76,8 +96,7 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         bad_docs_path=Path(os.environ.get("SRI_BAD_DOCS", idx_data.get("bad_docs_path", "data/index/bad_docs.jsonl"))),
         batch_size=int(os.environ.get("SRI_BATCH_SIZE", idx_data.get("batch_size", 500))),
     )
-    
-    # RAG setup
+
     rag_data = data.get("rag", {})
     rag = RAGConfig(
         default_model=os.environ.get("SRI_RAG_MODEL", rag_data.get("default_model", "llama-3.1-8b-instant")),
@@ -90,7 +109,6 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         ).lower() != "false",
     )
 
-    # API setup
     api_data = data.get("api", {})
     cors_raw = os.environ.get("SRI_CORS_ORIGINS", "")
     cors_origins = (
@@ -104,4 +122,25 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         cors_origins=cors_origins,
     )
 
-    return SRIConfig(opensearch=opensearch, indexing=indexing, rag=rag, api=api)
+    ws_data = data.get("web_search", {})
+    suf_data = ws_data.get("sufficiency", {})
+    sufficiency_cfg = WebSearchSufficiencyConfig(
+        theta_rank_confidence=float(suf_data.get("theta_rank_confidence", 0.55)),
+        theta_useful_doc_score=float(suf_data.get("theta_useful_doc_score", 0.50)),
+        min_useful_docs=int(suf_data.get("min_useful_docs", 3)),
+        theta_symptom_coverage=float(suf_data.get("theta_symptom_coverage", 0.60)),
+        min_source_diversity=int(suf_data.get("min_source_diversity", 2)),
+        theta_insufficiency=float(suf_data.get("theta_insufficiency", 0.45)),
+    )
+    web_search_cfg = WebSearchConfig(
+        enabled=ws_data.get("enabled", True),
+        retmax_medlineplus=int(ws_data.get("retmax_medlineplus", 8)),
+        retmax_europe_pmc=int(ws_data.get("retmax_europe_pmc", 8)),
+        retmax_pubmed=int(ws_data.get("retmax_pubmed", 5)),
+        delta_dir=Path(ws_data.get("delta_dir", "data/processed/api_deltas")),
+        report_dir=Path(ws_data.get("report_dir", "data/web_search/reports")),
+        http_timeout=float(ws_data.get("http_timeout", 20.0)),
+        sufficiency=sufficiency_cfg,
+    )
+
+    return SRIConfig(opensearch=opensearch, indexing=indexing, rag=rag, api=api, web_search=web_search_cfg)

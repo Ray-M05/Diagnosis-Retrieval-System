@@ -309,6 +309,66 @@ async def positioned_search(req: PositioningRequest):
         raise HTTPException(500, detail=str(exc)) from exc
 
 
+class WebSearchRequest(_BaseModel):
+    query: str
+    k: int = 10
+    hybrid_candidates: int = 100
+    final_results: int = 10
+    min_ner_score: float = 0.5
+
+
+@app.post("/search/web")
+async def web_search(req: WebSearchRequest):
+    """
+    Hybrid search with automatic web enrichment.
+    If the local index results are insufficient, queries PubMed/EuropePMC/MedlinePlus,
+    indexes the delta, and re-runs the retrieval.
+    Returns results plus a 'web_enriched' flag.
+    """
+    if _pipeline is None:
+        raise HTTPException(503, detail="Retrieval pipeline not available.")
+
+    try:
+        from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
+        from sri_dx.core.config import load_config
+
+        cfg = load_config()
+        use_case = SearchWebAndEnrichUseCase(pipeline=_pipeline, config=cfg.web_search)
+        report = use_case.run(query=req.query)
+
+        diseases = [
+            {
+                "disease_name": d.disease_name,
+                "disease_name_display": d.disease_name_display,
+                "aggregated_score": d.aggregated_score,
+                "evidence_count": d.evidence_count,
+                "rank": d.rank,
+                "evidence": [
+                    {
+                        "chunk_id": e.chunk_id,
+                        "rerank_score": e.rerank_score,
+                        "ner_score": e.ner_score,
+                        "content_preview": e.content_preview,
+                        "url": e.url,
+                    }
+                    for e in d.evidence
+                ],
+            }
+            for d in report.final_results
+        ]
+        return {
+            "diseases": diseases,
+            "web_enriched": report.web_search_triggered,
+            "docs_added": report.docs_added,
+            "elapsed_seconds": report.elapsed_seconds,
+        }
+    except ImportError:
+        raise HTTPException(501, detail="Web search module not available in this build.")
+    except Exception as exc:
+        logger.exception("web_search failed")
+        raise HTTPException(500, detail=str(exc)) from exc
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
