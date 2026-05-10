@@ -1,4 +1,4 @@
-import type { HybridResult, DiseaseResult } from './research.types';
+import type { HybridResult, DiseaseResult, PositionedResult } from './research.types';
 
 const API_BASE = 'http://localhost:8000/api';
 
@@ -34,5 +34,23 @@ export async function researchSearchDiseases(params: DiagnoseParams): Promise<Di
     body: JSON.stringify(params),
   });
   if (!res.ok) throw new Error(`Error en diagnóstico: ${res.statusText}`);
+  return res.json();
+}
+
+export interface PositioningParams {
+  query: string;
+  k: number;
+  hybrid_candidates: number;
+  final_results: number;
+  min_ner_score: number;
+}
+
+export async function researchSearchPositioned(params: PositioningParams): Promise<PositionedResult[]> {
+  const res = await fetch(`http://localhost:8000/search/positioned`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error(`Error en posicionamiento: ${res.statusText}`);
   return res.json();
 }

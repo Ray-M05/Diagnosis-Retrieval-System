@@ -23,6 +23,9 @@ class SearchHit:
     content: str = ""
 
     chunk_id: Optional[str] = None
+    section_heading: str = ""
+    section_index: Optional[int] = None
+    chunk_index: Optional[int] = None
     highlights: dict[str, list[str]] = field(default_factory=dict)
     concept_ids: list[str] = field(default_factory=list)
     ner_entities: list[dict] = field(default_factory=list)

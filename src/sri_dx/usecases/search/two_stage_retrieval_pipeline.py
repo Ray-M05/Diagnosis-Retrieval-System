@@ -52,6 +52,7 @@ class TwoStageRetrievalConfig:
     # Disease aggregation
     min_ner_score: float = 0.5  # Confianza mínima de NER
     max_diseases: int = 10  # Máximo de enfermedades a retornar
+    positioned_results: int = 10  # Máximo de condiciones posicionadas a retornar
 
 
 @dataclass
@@ -120,6 +121,7 @@ class TwoStageRetrievalPipeline:
     config: TwoStageRetrievalConfig = field(default_factory=TwoStageRetrievalConfig)
     cross_encoder: Optional[SentenceTransformersCrossEncoderAdapter] = None
     disease_aggregator: Optional[DiseaseAggregator] = None
+    positioning_service: Optional[Any] = None
     
     def __post_init__(self):
         """Inicializa el cross-encoder si no fue proporcionado."""
@@ -266,6 +268,46 @@ class TwoStageRetrievalPipeline:
         logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
         return diseases
 
+    def search_positioned(
+        self,
+        query: str,
+        hybrid_candidates: Optional[int] = None,
+        final_results: Optional[int] = None,
+        positioned_results: Optional[int] = None,
+    ) -> list:
+        """
+        Búsqueda posicionada: híbrida → reranking → NER on-demand → posicionamiento clínico.
+
+        No modifica el comportamiento de search() ni search_diseases().
+        """
+        chunk_results = self.search(query, hybrid_candidates, final_results)
+
+        if not chunk_results:
+            logger.warning("No hay chunks para posicionamiento clínico")
+            return []
+
+        self._apply_ner_to_results(chunk_results)
+
+        top_k = positioned_results or self.config.positioned_results
+        positioning_service = self.positioning_service
+        if positioning_service is None:
+            from sri_dx.modules.positioning import ClinicalPositioningService, PositioningConfig
+
+            positioning_service = ClinicalPositioningService(
+                PositioningConfig(
+                    top_k=top_k,
+                    min_ner_score=self.config.min_ner_score,
+                )
+            )
+
+        positioned = positioning_service.position(
+            query=query,
+            retrieval_results=chunk_results,
+            top_k=top_k,
+        )
+        logger.info("Posicionamiento completado: %d condiciones", len(positioned))
+        return positioned
+
     def _apply_ner_to_results(self, results: List[RetrievalResult]) -> None:
         """Aplica NER en batch sobre los chunks rerankeados e inyecta ner_entities en metadata."""
         try:
@@ -309,6 +351,31 @@ class TwoStageRetrievalPipeline:
 
         for disease in diseases:
             print("\n" + str(disease))
+
+        print("\n" + "=" * 80)
+
+    def print_positioned_results(self, positioned: list) -> None:
+        """Imprime ranking de condiciones posicionadas de forma legible."""
+        print("\n" + "=" * 80)
+        print(f"CONDICIONES POSICIONADAS: {len(positioned)}")
+        print("=" * 80)
+
+        for result in positioned:
+            print(
+                f"\n#{result.rank} - {result.disease_name_display} "
+                f"({result.relevance_label}, score={result.final_score:.4f})"
+            )
+            if result.matched_symptoms:
+                print(f"  Coincidencias: {', '.join(result.matched_symptoms)}")
+            if result.source_domains:
+                print(f"  Fuentes: {', '.join(result.source_domains[:3])}")
+            for explanation in result.explanation:
+                print(f"  - {explanation}")
+            for evidence in result.evidences[:3]:
+                print(
+                    f"    Evidencia chunk={evidence.chunk_id}, "
+                    f"ce={evidence.cross_encoder_score}, url={evidence.url}"
+                )
 
         print("\n" + "=" * 80)
 

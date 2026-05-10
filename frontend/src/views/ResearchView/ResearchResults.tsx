@@ -1,12 +1,12 @@
 import React from 'react';
 import { CheckCircle2, AlertCircle, Search, HeartPulse } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HybridCard, DiagnosticCard } from './ResearchCards';
-import type { HybridResult, DiseaseResult, SearchMode } from './research.types';
+import { HybridCard, DiagnosticCard, PositionedCard } from './ResearchCards';
+import type { HybridResult, DiseaseResult, PositionedResult, SearchMode } from './research.types';
 
 interface ResearchResultsProps {
   isSearching: boolean;
-  results: { hybrid: HybridResult[] | null; diagnostic: DiseaseResult[] | null };
+  results: { hybrid: HybridResult[] | null; diagnostic: DiseaseResult[] | null; positioned: PositionedResult[] | null };
   searchMode: SearchMode;
   searchTerm: string;
 }
@@ -18,7 +18,11 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
   searchTerm,
 }) => {
   const count =
-    searchMode === 'hybrid' ? (results.hybrid?.length ?? 0) : (results.diagnostic?.length ?? 0);
+    searchMode === 'hybrid'
+      ? (results.hybrid?.length ?? 0)
+      : (searchMode as string) === 'positioned'
+      ? (results.positioned?.length ?? 0)
+      : (results.diagnostic?.length ?? 0);
 
   return (
     <main className="flex-1 overflow-y-auto bg-gray-50/30 p-6 md:p-10 space-y-8">
@@ -84,6 +88,10 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
             {searchMode === 'diagnostic' &&
               results.diagnostic?.map((r) => (
                 <DiagnosticCard key={r.disease_name} result={r} />
+              ))}
+            {(searchMode as string) === 'positioned' &&
+              results.positioned?.map((r) => (
+                <PositionedCard key={r.rank} result={r} />
               ))}
           </motion.div>
         ) : searchTerm && !isSearching ? (
