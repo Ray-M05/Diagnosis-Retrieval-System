@@ -8,8 +8,8 @@ Endpoints:
 
 Startup (lifespan):
   - Builds TwoStageRetrievalPipeline (OpenSearch + ClinicalBERT + cross-encoder)
-  - Builds ClinicalRAGUseCase (includes OllamaAdapter health check)
-  - Logs warnings without crashing if Ollama is unreachable at startup
+  - Builds ClinicalRAGUseCase (includes GroqAdapter health check)
+  - Logs warnings without crashing if Groq is unreachable at startup
 
 SSE format for /rag/clinical:
   data: <text delta>\n\n          (while streaming)
@@ -99,17 +99,17 @@ def _build_pipeline():
 def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
     """Returns (use_case, status). status is 'ready' or 'unreachable'."""
     import os
-    from sri_dx.adapters.llm.gemini_adapter import GeminiAdapter, GeminiAdapterConfig
+    from sri_dx.adapters.llm.groq_adapter import GroqAdapter, GroqAdapterConfig
 
-    model = os.environ.get("SRI_RAG_MODEL", "gemini-1.5-flash")
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    model = os.environ.get("SRI_RAG_MODEL", "llama-3.1-8b-instant")
+    api_key = os.environ.get("GROQ_API_KEY", "")
 
     try:
-        llm = GeminiAdapter(GeminiAdapterConfig(model=model, api_key=api_key))
+        llm = GroqAdapter(GroqAdapterConfig(model=model, api_key=api_key))
         uc = ClinicalRAGUseCase(pipeline=pipeline, llm=llm, config=ClinicalRAGConfig())
         return uc, "ready"
     except RuntimeError as exc:
-        logger.warning("Gemini not available at startup: %s", exc)
+        logger.warning("Groq not available at startup: %s", exc)
         return None, "unreachable"
 
 
@@ -245,7 +245,7 @@ async def clinical_rag(req: ClinicalRAGRequest):
         if _llm_status == "unreachable":
             raise HTTPException(
                 503,
-                detail="LLM not available. Verify GEMINI_API_KEY is set and valid.",
+                detail="LLM not available. Verify GROQ_API_KEY is set and valid.",
             )
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 

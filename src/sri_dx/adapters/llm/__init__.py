@@ -1,3 +1,3 @@
-from .ollama_adapter import OllamaAdapter, OllamaAdapterConfig
+from .groq_adapter import GroqAdapter, GroqAdapterConfig
 
-__all__ = ["OllamaAdapter", "OllamaAdapterConfig"]
+__all__ = ["GroqAdapter", "GroqAdapterConfig"]

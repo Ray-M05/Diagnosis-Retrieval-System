@@ -42,9 +42,9 @@ api = [
   "python-multipart>=0.0.9,<1",
 ]
 
-# RAG con Google Gemini API
+# RAG con Groq Cloud API (httpx ya está en base deps, no requiere SDK adicional)
 rag = [
-  "google-genai>=1.0",
+  "groq>=0.11,<1",
 ]
 
 # Utilidades de datos (si las necesitan)

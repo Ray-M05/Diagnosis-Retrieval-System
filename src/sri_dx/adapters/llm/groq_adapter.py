@@ -1,14 +1,10 @@
-"""OllamaAdapter — calls a local Ollama instance via its HTTP API.
+"""GroqAdapter — calls Groq Cloud API via its OpenAI-compatible HTTP endpoint.
 
 Uses httpx (already in base deps) — no additional SDK required.
-Endpoint: POST /api/chat  (Ollama ≥ 0.1.14)
+Endpoint: POST https://api.groq.com/openai/v1/chat/completions
 
-Streaming: POST /api/chat with stream=true returns NDJSON; each line is a JSON
-object with {"message": {"content": "<delta>"}, "done": false|true}.
-The final line has "done": true and carries token usage stats.
-
-Health check: GET /api/tags — lists available models. Raises RuntimeError on
-startup if Ollama is unreachable (other endpoints stay available).
+Free tier (as of 2026): llama-3.1-8b-instant — 30 RPM / 1M tokens/day.
+Set GROQ_API_KEY environment variable.
 """
 
 from __future__ import annotations
@@ -29,29 +25,38 @@ from sri_dx.core.ports.generation.llm_port import (
 
 logger = logging.getLogger(__name__)
 
+_GROQ_BASE = "https://api.groq.com/openai/v1"
+
 
 @dataclass
-class OllamaAdapterConfig:
-    model: str = "llama3.1:8b-instruct"
-    host: str = "http://localhost:11434"
+class GroqAdapterConfig:
+    model: str = "llama-3.1-8b-instant"
+    api_key: str = ""
     default_max_tokens: int = 1500
     default_temperature: float = 0.2
-    timeout_s: float = 120.0
-    num_ctx: int = 8192          # context window for the model
+    timeout_s: float = 60.0
 
 
-class OllamaAdapter(LLMPort):
-    """LLMPort implementation backed by a local Ollama server."""
+class GroqAdapter(LLMPort):
+    """LLMPort implementation backed by Groq Cloud (OpenAI-compatible API)."""
 
-    def __init__(self, config: OllamaAdapterConfig | None = None) -> None:
-        self.cfg = config or OllamaAdapterConfig()
-        self._chat_url = f"{self.cfg.host.rstrip('/')}/api/chat"
-        self._tags_url = f"{self.cfg.host.rstrip('/')}/api/tags"
+    def __init__(self, config: GroqAdapterConfig | None = None) -> None:
+        self.cfg = config or GroqAdapterConfig()
+
+        if not self.cfg.api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set. Get a free key at https://console.groq.com"
+            )
+
+        self._headers = {
+            "Authorization": f"Bearer {self.cfg.api_key}",
+            "Content-Type": "application/json",
+        }
+        self._chat_url = f"{_GROQ_BASE}/chat/completions"
 
         if not self.health_check():
             raise RuntimeError(
-                f"Ollama not reachable at {self.cfg.host}. "
-                f"Verify it is running. Model expected: {self.cfg.model}"
+                f"Groq API not reachable or API key invalid. Model: {self.cfg.model}"
             )
 
     # ------------------------------------------------------------------
@@ -59,59 +64,59 @@ class OllamaAdapter(LLMPort):
     # ------------------------------------------------------------------
 
     def generate(self, req: GenerationRequest) -> GenerationResult:
-        """Blocking call — collects the full response before returning."""
         payload = self._build_payload(req, stream=False)
         t0 = time.monotonic()
 
         try:
             with httpx.Client(timeout=self.cfg.timeout_s) as client:
-                resp = client.post(self._chat_url, json=payload)
+                resp = client.post(self._chat_url, headers=self._headers, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPError as exc:
-            raise RuntimeError(f"Ollama request failed: {exc}") from exc
+            raise RuntimeError(f"Groq request failed: {exc}") from exc
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        text = data.get("message", {}).get("content", "")
+        text = data["choices"][0]["message"]["content"]
+        usage = data.get("usage", {})
+
         return GenerationResult(
             text=text,
             model=data.get("model", self.cfg.model),
-            input_tokens=data.get("prompt_eval_count", 0),
-            output_tokens=data.get("eval_count", 0),
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
             eval_duration_ms=elapsed_ms,
-            stop_reason=data.get("done_reason"),
+            stop_reason=data["choices"][0].get("finish_reason"),
         )
 
     def stream(self, req: GenerationRequest) -> Iterator[str]:
-        """Streaming call — yields text deltas as they arrive from Ollama."""
         payload = self._build_payload(req, stream=True)
 
         try:
             with httpx.Client(timeout=self.cfg.timeout_s) as client:
-                with client.stream("POST", self._chat_url, json=payload) as resp:
+                with client.stream("POST", self._chat_url, headers=self._headers, json=payload) as resp:
                     resp.raise_for_status()
                     for raw_line in resp.iter_lines():
-                        if not raw_line:
+                        if not raw_line or raw_line == "data: [DONE]":
                             continue
+                        if raw_line.startswith("data: "):
+                            raw_line = raw_line[6:]
                         try:
                             chunk = json.loads(raw_line)
                         except json.JSONDecodeError:
                             continue
-
-                        delta = chunk.get("message", {}).get("content", "")
+                        delta = chunk["choices"][0].get("delta", {}).get("content", "")
                         if delta:
                             yield delta
-
-                        if chunk.get("done"):
-                            break
         except httpx.HTTPError as exc:
-            raise RuntimeError(f"Ollama streaming failed: {exc}") from exc
+            raise RuntimeError(f"Groq streaming failed: {exc}") from exc
 
     def health_check(self) -> bool:
-        """Return True if Ollama is reachable (model availability not checked)."""
         try:
-            with httpx.Client(timeout=5.0) as client:
-                resp = client.get(self._tags_url)
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(
+                    f"{_GROQ_BASE}/models",
+                    headers=self._headers,
+                )
                 return resp.status_code == 200
         except Exception:
             return False
@@ -129,9 +134,6 @@ class OllamaAdapter(LLMPort):
             "model": self.cfg.model,
             "messages": messages,
             "stream": stream,
-            "options": {
-                "num_ctx": self.cfg.num_ctx,
-                "temperature": req.temperature,
-                "num_predict": req.max_tokens,
-            },
+            "temperature": req.temperature,
+            "max_tokens": req.max_tokens,
         }
