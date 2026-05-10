@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Link2, ChevronDown, Activity, ShieldCheck, Target, Zap } from 'lucide-react';
+import { Link2, ChevronDown, Activity, ShieldCheck, Target, Zap, MapPin, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { HybridResult, DiseaseResult, DiseaseEvidence } from './research.types';
+import type { HybridResult, DiseaseResult, DiseaseEvidence, PositionedResult } from './research.types';
 
 export const HybridCard: React.FC<{ result: HybridResult }> = ({ result }) => {
   const title = result.metadata?.title || result.metadata?.section_heading || 'Sin título';
@@ -165,3 +165,105 @@ const EvidenceItem: React.FC<{ evidence: DiseaseEvidence; index: number }> = ({ 
     <p className="text-sm text-gray-600 leading-relaxed font-medium">"{evidence.content_preview}"</p>
   </div>
 );
+
+// --- Positioned Card (Mode 3: Posicionamiento Clínico) ---
+export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const labelColor =
+    result.relevance_label === 'high'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+      : result.relevance_label === 'medium'
+      ? 'bg-amber-50 text-amber-700 border-amber-100'
+      : 'bg-gray-50 text-gray-500 border-gray-100';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow w-full"
+    >
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full text-left p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 shrink-0">
+            {result.rank}
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-gray-900 leading-tight flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-indigo-400 shrink-0" />
+              {result.disease_name_display}
+            </h3>
+            {result.matched_symptoms.length > 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Síntomas: {result.matched_symptoms.join(', ')}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 self-end md:self-auto">
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${labelColor}`}>
+            {result.relevance_label.toUpperCase()}
+          </span>
+          <div className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100/50">
+            <Target className="w-3 h-3" />
+            <span className="text-xs font-bold">{result.final_score.toFixed(4)}</span>
+          </div>
+          <div className={`p-1.5 rounded-full transition-transform ${isOpen ? 'rotate-180 text-indigo-600' : 'text-gray-400'}`}>
+            <ChevronDown className="w-4 h-4" />
+          </div>
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-gray-50"
+          >
+            <div className="p-6 bg-gray-50/30 space-y-4">
+              {result.explanation.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Explicación</p>
+                  {result.explanation.map((line, i) => (
+                    <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                      <AlertCircle className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" /> {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {result.evidences.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Evidencias</p>
+                  {result.evidences.slice(0, 3).map((ev) => (
+                    <div key={ev.chunk_id} className="bg-white rounded-xl border border-gray-100 p-3 text-xs space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono text-indigo-400">{ev.chunk_id}</span>
+                        {ev.cross_encoder_score !== undefined && (
+                          <span className="text-gray-400">CE: {ev.cross_encoder_score.toFixed(3)}</span>
+                        )}
+                      </div>
+                      {ev.content_preview && (
+                        <p className="text-gray-600 italic">"{ev.content_preview.slice(0, 200)}"</p>
+                      )}
+                      {ev.url && (
+                        <a href={ev.url} target="_blank" rel="noopener noreferrer"
+                          className="text-indigo-400 hover:text-indigo-600 flex items-center gap-1">
+                          <Link2 className="w-3 h-3" /> {ev.url.slice(0, 60)}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};

@@ -3,8 +3,8 @@ import { ShieldCheck } from 'lucide-react';
 import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchHeader } from './ResearchHeader';
 import { ResearchResults } from './ResearchResults';
-import { researchSearchHybrid, researchSearchDiseases } from './research.api';
-import type { HybridResult, DiseaseResult, SearchMode } from './research.types';
+import { researchSearchHybrid, researchSearchDiseases, researchSearchPositioned } from './research.api';
+import type { HybridResult, DiseaseResult, PositionedResult, SearchMode } from './research.types';
 
 export const ResearchView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -12,7 +12,8 @@ export const ResearchView: React.FC = () => {
   const [results, setResults] = useState<{
     hybrid: HybridResult[] | null;
     diagnostic: DiseaseResult[] | null;
-  }>({ hybrid: null, diagnostic: null });
+    positioned: PositionedResult[] | null;
+  }>({ hybrid: null, diagnostic: null, positioned: null });
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
   const [hybridFusion, setHybridFusion] = useState('weighted_sum');
@@ -33,7 +34,16 @@ export const ResearchView: React.FC = () => {
           use_reranking: true,
           hybrid_candidates: hybridCandidates,
         });
-        setResults({ hybrid: data, diagnostic: null });
+        setResults({ hybrid: data, diagnostic: null, positioned: null });
+      } else if ((searchMode as string) === 'positioned') {
+        const data = await researchSearchPositioned({
+          query: searchTerm,
+          k: finalResultsCount,
+          hybrid_candidates: hybridCandidates,
+          final_results: finalResultsCount,
+          min_ner_score: 0.5,
+        });
+        setResults({ hybrid: null, diagnostic: null, positioned: data });
       } else {
         const data = await researchSearchDiseases({
           query: searchTerm,
@@ -41,7 +51,7 @@ export const ResearchView: React.FC = () => {
           hybrid_candidates: hybridCandidates,
           min_ner_score: 0.5,
         });
-        setResults({ hybrid: null, diagnostic: data });
+        setResults({ hybrid: null, diagnostic: data, positioned: null });
       }
     } catch (err) {
       console.error('Research search failed:', err);
@@ -52,7 +62,7 @@ export const ResearchView: React.FC = () => {
 
   const handleClear = () => {
     setSearchTerm('');
-    setResults({ hybrid: null, diagnostic: null });
+    setResults({ hybrid: null, diagnostic: null, positioned: null });
   };
 
   return (

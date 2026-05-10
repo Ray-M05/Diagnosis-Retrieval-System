@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim
 
 # Copy uv to the image
@@ -5,28 +6,29 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install build dependencies for packages like hnswlib
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Enable bytecode compilation and make the project venv the default runtime.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-
-# Install dependencies in a separate layer
-COPY pyproject.toml uv.lock* ./
-RUN if [ -f uv.lock ]; then \
-    uv sync --frozen --no-install-project --all-extras; \
-    else \
-    uv sync --no-install-project --all-extras; \
-    fi
+# Runtime dependencies for Docker are CPU-only. The project lock currently
+# targets CUDA wheels for local GPU workflows, which pulls several GB of
+# nvidia-* packages during image builds.
+COPY requirements-docker.txt ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv /app/.venv && \
+    uv pip install --python /app/.venv/bin/python \
+        --index-url https://download.pytorch.org/whl/cpu \
+        "torch==2.6.0+cpu" && \
+    uv pip install --python /app/.venv/bin/python -r requirements-docker.txt
 
 # Copy the rest of the application
 COPY . .
 
-# Install the project
-RUN uv sync --frozen --all-extras
+# Install the local package without re-resolving dependencies.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /app/.venv/bin/python --no-deps -e .
 
 EXPOSE 8501
 

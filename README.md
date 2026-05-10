@@ -1,353 +1,405 @@
-# SRI-DX: Diagnosis Retrieval System
+# SRI-DX
 
-Este proyecto es un Sistema de Recuperación de Información (SRI) especializado en búsquedas clínicas y diagnósticas. Utiliza una arquitectura hexagonal para separar el dominio de las implementaciones tecnológicas y emplea `uv` para garantizar la reproducibilidad.
+Sistema de Recuperacion de Informacion clinica para apoyo al analisis diferencial.
 
-## 🏗️ Arquitectura
+Este proyecto usa **OpenSearch** como motor de busqueda e indexacion.
 
-La estructura sigue un patrón hexagonal distribuido en módulos:
+El README esta enfocado solo en:
 
-- **Core**: Modelos de datos (`schemas`) e interfaces (`ports`).
-- **Use Cases**: Orquestación del flujo de negocio.
-- **Modules**: Implementaciones específicas de los componentes del SRI (Indexación, Vector Store, RAG, etc.).
-- **Adapters**: Controladores para servicios externos y persistencia.
-- **App**: Puntos de entrada (CLI y Streamlit).
+- montar el proyecto localmente;
+- preparar indices;
+- ejecutar el orquestador;
+- probar busquedas desde CLI.
 
-📖 **[Ver Documentación Completa de Arquitectura](ARQUITECTURA.md)**
+## Requisitos
 
-## 🚀 Inicio Rápido
+- Docker y Docker Compose.
+- Python 3.11+ si vas a ejecutar comandos fuera de Docker.
+- `uv` recomendado para entorno local.
 
-### ✅ Requisitos Previos
+La primera ejecucion puede descargar modelos de HuggingFace para embeddings, NER y reranking. Esa parte puede tardar.
 
-**Solo necesitas:**
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+## Servicios del proyecto
 
-**¡Eso es todo!** No necesitas Python, Elasticsearch, ni ninguna otra dependencia local.
+El `docker-compose.yml` levanta:
 
-### 🐳 Ejecución con Docker (Recomendado)
-
-Este es el método más simple y garantiza que todo funcione sin configuración adicional:
-
-```bash
-# 1. Clonar el repositorio
-git clone <repository-url>
-cd Diagnosis-Retrieval-System
-
-# 2. Levantar todos los servicios
-docker compose up --build
+```text
+opensearch     -> http://localhost:9200
+sri-dx         -> Streamlit en http://localhost:8501
+sri-dx-api     -> FastAPI en http://localhost:8000
 ```
 
-Esto iniciará:
-- ✅ Elasticsearch (base de datos e índice de búsqueda)
-- ✅ Aplicación SRI-DX con interfaz web
+## Montaje rapido con Docker
 
-**Acceder a la aplicación:**
-- Interfaz web Streamlit: http://localhost:8501
-- Elasticsearch API: http://localhost:9200
+Desde la raiz del repo:
 
-**Detener los servicios:**
+```bash
+docker compose up -d --build
+```
+
+Verifica OpenSearch:
+
+```bash
+curl http://localhost:9200/_cluster/health
+```
+
+Ver indices:
+
+```bash
+curl http://localhost:9200/_cat/indices?v
+```
+
+Ver logs:
+
+```bash
+docker compose logs -f
+```
+
+Detener servicios:
+
 ```bash
 docker compose down
+```
 
-# Para eliminar también los datos persistentes:
+Detener y borrar volumenes de OpenSearch:
+
+```bash
 docker compose down -v
 ```
 
-### 💻 Instalación Local (Desarrollo)
+## Ruta automatizada recomendada para reindexar y probar
 
-Si prefieres ejecutar la aplicación localmente (útil para desarrollo):
+Esta es la via recomendada para probar el proyecto con los datos existentes en:
 
-#### Requisitos
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) (Gestor de paquetes rápido)
-
-#### Instalación de UV
-```bash
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# O con pip
-pip install uv
+```text
+data/processed/docs_html.jsonl
+data/processed/docs_pdf.jsonl
 ```
 
-#### Configurar Entorno
+La ruta hace:
 
-```bash
-# 1. Sincronizar entorno virtual e instalar dependencias
-uv sync
-
-# 2. Copiar archivo de configuración (si no existe)
-# El archivo .env ya está creado con valores por defecto
-
-# 3. Levantar solo Elasticsearch con Docker
-docker compose up -d elasticsearch
-
-# 4. Ejecutar la interfaz Streamlit
-uv run streamlit run src/sri_dx/app/ui_streamlit.py
+```text
+1. Levantar contenedores
+2. Borrar manifest local
+3. Ejecutar orquestador
+4. Probar consultas por CLI
 ```
 
-### 🔧 Comandos Útiles
+### 1. Levantar OpenSearch
 
-#### Con Docker Compose
-```bash
-# Ver logs en tiempo real
-docker compose logs -f
-
-# Solo logs de la aplicación
-docker compose logs -f sri-dx
-
-# Solo logs de Elasticsearch
-docker compose logs -f elasticsearch
-
-# Reiniciar un servicio específico
-docker compose restart sri-dx
-
-# Reconstruir contenedores
-docker compose up --build --force-recreate
-```
-
-#### Con UV (Desarrollo Local)
-```bash
-# Ejecutar CLI
-uv run python -m sri_dx.app.cli --help
-
-# Ejecutar script de indexación
-uv run python scripts/build_indexes.py
-
-# Ejecutar pruebas
-uv run pytest
-
-# Formatear código
-uv run ruff format .
-
-# Verificar calidad de código
-uv run ruff check .
-```
-
-## 📂 Estructura del Proyecto
-
-```
-Diagnosis-Retrieval-System/
-├── .env                    # Variables de entorno (créalo desde .env.example)
-├── .env.example            # Plantilla de configuración
-├── docker-compose.yml      # Orquestación de servicios
-├── Dockerfile              # Imagen de la aplicación
-├── pyproject.toml          # Configuración de dependencias
-├── uv.lock                 # Lock file para reproducibilidad
-├── ARQUITECTURA.md         # Documentación detallada de arquitectura
-│
-├── doc/
-│   ├── dev/
-│   │   ├── architecture.md # Arquitectura hexagonal
-│   │   └── uv_workflow.md  # Guía de UV
-│   └── prod/
-│       └── deployment.md   # Guía de deployment
-│
-├── scripts/
-│   ├── build_indexes.py    # Script de indexación
-│   └── smoke_test.py       # Pruebas básicas
-│
-└── src/sri_dx/
-    ├── core/               # Dominio (schemas, ports)
-    ├── usecases/           # Lógica de aplicación
-    ├── modules/            # Implementaciones SRI
-    ├── adapters/           # Infraestructura
-    └── app/                # Interfaces (UI, CLI)
-```
-
-## 🔧 Configuración
-
-### Variables de Entorno
-
-El archivo `.env` ya está configurado con valores por defecto. Si necesitas personalizarlo:
-
-```dotenv
-# Elasticsearch
-ELASTICSEARCH_HOST=http://elasticsearch:9200
-ELASTICSEARCH_INDEX=sri_dx_diagnoses
-
-# Modelo de embeddings
-EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-
-# Rutas de datos
-DATA_DIR=./data
-INDEX_PATH=./data/artifacts/index.bin
-
-# Configuración de aplicación
-APP_NAME=SRI-DX
-DEBUG=true
-```
-
-## 🧪 Testing
+Si solo vas a preparar indices y probar por CLI local:
 
 ```bash
-# Con UV
-uv run pytest
-
-# Con Docker
-docker compose run --rm sri-dx uv run pytest
+docker compose up -d opensearch
 ```
 
-## 🛠️ Gestión de Dependencias
-
-### Añadir Nueva Dependencia
+Si quieres dejar tambien Streamlit y API arriba:
 
 ```bash
-# Dependencia principal
-uv add nombre-paquete
-
-# Dependencia de desarrollo
-uv add --dev pytest-cov
-
-# Dependencia opcional (grupo)
-uv add --optional ui streamlit
+docker compose up -d --build
 ```
 
-### Actualizar Dependencias
+Espera a que OpenSearch este saludable:
 
 ```bash
-# Actualizar todas las dependencias
-uv lock --upgrade
-
-# Actualizar paquete específico
-uv lock --upgrade-package nombre-paquete
-```
-
-> **⚠️ Importante**: Siempre commitea `uv.lock` en Git para garantizar reproducibilidad.
-
-## 📊 Monitoreo
-
-### Verificar Estado de Elasticsearch
-
-```bash
-# Salud del cluster
 curl http://localhost:9200/_cluster/health
-
-# Listar índices
-curl http://localhost:9200/_cat/indices?v
-
-# Ver documentos indexados
-curl http://localhost:9200/sri_dx_diagnoses/_count
 ```
 
-## 🚨 Solución de Problemas
+### 2. Borrar manifest para forzar reindexado
 
-### El contenedor de Elasticsearch no inicia
+El manifest incremental evita reindexar documentos que no cambiaron. Para forzar un reindexado, borralo:
+
 ```bash
-# Verificar logs
-docker compose logs elasticsearch
-
-# Aumentar memoria disponible para Docker Desktop
-# Settings → Resources → Memory (mínimo 4GB recomendado)
+mkdir -p data/index
+rm -f data/index/manifest.sqlite \
+      data/index/manifest.sqlite-journal \
+      data/index/manifest.sqlite-shm \
+      data/index/manifest.sqlite-wal
 ```
 
-### Error: "Elasticsearch connection refused"
+Si tambien quieres borrar indices y datos persistidos en OpenSearch:
+
 ```bash
-# Verificar que Elasticsearch esté corriendo
-docker compose ps
-
-# Esperar a que pase el healthcheck
-docker compose logs -f elasticsearch | grep "started"
-```
-
-### Cambios en el código no se reflejan
-```bash
-# Para cambios en dependencias, rebuild
-docker compose up --build
-
-# Para cambios en código Python, ya tiene hot-reload automático
-# Solo guarda el archivo y recarga la página de Streamlit
-```
-
-### Limpiar todo y empezar de cero
-```bash
-# Detener y eliminar contenedores + volúmenes
 docker compose down -v
-
-# Eliminar imágenes
-docker rmi sri-dx-app
-
-# Reconstruir desde cero
-docker compose up --build
+docker compose up -d opensearch
 ```
 
-## 📚 Documentación Adicional
-
-- **[ARQUITECTURA.md](ARQUITECTURA.md)**: Documentación técnica completa
-  - Flujo de datos
-  - Componentes y tecnologías
-  - Guías de extensión
-  - Mejores prácticas
-
-- **[doc/dev/PLAN_IMPLEMENTACION_VECTORIAL.md](doc/dev/PLAN_IMPLEMENTACION_VECTORIAL.md)**: Plan detallado del sistema vectorial ⭐
-  - Chunking inteligente de documentos médicos
-  - Generación de embeddings (BioBERT, PubMedBERT)
-  - Indexación vectorial (ANN/KNN con HNSW)
-  - Búsqueda híbrida (vectorial + léxica)
-  - Operaciones de conjuntos (AND, OR, NOT)
-  - Sistema de metadatos médicos
-  - Cronograma de 12 semanas
-
-- **[doc/dev/RESUMEN_PLAN_VECTORIAL.md](doc/dev/RESUMEN_PLAN_VECTORIAL.md)**: Resumen ejecutivo del plan vectorial
-
-- **[doc/dev/architecture.md](doc/dev/architecture.md)**: Patrón hexagonal
-- **[doc/dev/uv_workflow.md](doc/dev/uv_workflow.md)**: Guía de desarrollo con UV
-- **[doc/prod/deployment.md](doc/prod/deployment.md)**: Deployment en producción
-
-## 🤝 Contribuir
-
-1. Fork el repositorio
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commitea tus cambios (`git commit -m 'Add: AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-### Convenciones de Código
+Despues de esto, vuelve a esperar salud del cluster:
 
 ```bash
-# Antes de hacer commit
-uv run ruff format .  # Formatear código
-uv run ruff check .   # Verificar linting
-uv run pytest         # Ejecutar tests
+curl http://localhost:9200/_cluster/health
 ```
 
-## 📄 Licencia
+### 3. Ejecutar el orquestador
 
-Este proyecto es parte de un trabajo académico.
+El orquestador real esta en:
 
-## 🙋 Soporte
+```text
+src/sri_dx/app/cli/orchestrator.py
+```
 
-Si tienes problemas:
-1. Revisa la sección [Solución de Problemas](#-solución-de-problemas)
-2. Consulta la [documentación de arquitectura](ARQUITECTURA.md)
-3. Abre un issue en el repositorio
+Ejecuta automaticamente:
 
-## 🎯 Roadmap
+```text
+Fases 2+3: indexacion de documentos y chunks
+Fase 4: generacion de embeddings
+```
 
-- [x] Arquitectura hexagonal base
-- [x] Integración con Elasticsearch
-- [x] Docker Compose completo
-- [x] Interfaz Streamlit
-- [x] Pipeline de embeddings
-- [ ] Implementación RAG completa
-- [ ] API REST con FastAPI
-- [ ] Métricas de evaluación (NDCG, MAP)
-- [ ] CI/CD pipeline
+Como el repo ya tiene JSONL en `data/processed/`, normalmente se salta adquisicion:
 
----
-
-**¿Primera vez clonando el proyecto?** Solo ejecuta:
-
-Para inicializar el sistema completo (incluyendo OpenSearch):
 ```bash
-# 1. Configurar variables de entorno
-cp .env.example .env
-
-# 2. Levantar los contenedores
-docker compose -f docker-compose.yml -f docker-compose.opensearch.yml up --build -d
+uv run python src/sri_dx/app/cli/orchestrator.py \
+  --skip-acquisition \
+  --host localhost \
+  --port 9200 \
+  --embedding-device cpu \
+  --embedding-batch-size 32
 ```
 
-¡Y ya está! 🎉
+Si `uv` no funciona en tu maquina, usa el Python del entorno virtual:
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/orchestrator.py \
+  --skip-acquisition \
+  --host localhost \
+  --port 9200 \
+  --embedding-device cpu \
+  --embedding-batch-size 32
+```
+
+Para una prueba mas rapida, desactiva el chunker semantico:
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/orchestrator.py \
+  --skip-acquisition \
+  --no-semantic-chunker \
+  --embedding-device cpu \
+  --embedding-batch-size 32
+```
+
+Para ejecutar solo indexacion de documentos y chunks, sin embeddings:
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/orchestrator.py \
+  --skip-acquisition \
+  --skip-embeddings
+```
+
+Al terminar, deberias ver indices parecidos a:
+
+```text
+clinical_docs_v1
+clinical_chunks_v1
+clinical_embeddings_v1
+```
+
+Compruebalo:
+
+```bash
+curl http://localhost:9200/_cat/indices?v
+```
+
+## Ejecutar el orquestador dentro del contenedor
+
+Tambien puedes correr el orquestador dentro del contenedor `sri-dx`.
+
+En ese caso el host de OpenSearch es el nombre del servicio Docker:
+
+```bash
+docker compose exec sri-dx /app/.venv/bin/python \
+  src/sri_dx/app/cli/orchestrator.py \
+  --skip-acquisition \
+  --host opensearch \
+  --port 9200 \
+  --embedding-device cpu \
+  --embedding-batch-size 32
+```
+
+## Probar busquedas por CLI
+
+El CLI principal es:
+
+```text
+src/sri_dx/app/cli/search_cli.py
+```
+
+### Busqueda lexica
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type lexical \
+  --q "diabetes mellitus insulin treatment" \
+  --k 5
+```
+
+### Busqueda semantica
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type semantic \
+  --q "high blood pressure treatment" \
+  --k 5
+```
+
+### Busqueda hibrida
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type hybrid \
+  --q "fever cough shortness of breath" \
+  --k 10
+```
+
+### Busqueda hibrida con reranking
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type hybrid \
+  --q "chest pain shortness of breath fatigue" \
+  --k 10 \
+  --rerank
+```
+
+### Agregacion por enfermedades
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type hybrid \
+  --q "fever cough shortness of breath" \
+  --k 10 \
+  --diseases \
+  --max-diseases 5 \
+  --min-ner-score 0.5
+```
+
+### Condiciones posicionadas
+
+Este modo prueba el modulo de posicionamiento clinico:
+
+```bash
+.venv/bin/python src/sri_dx/app/cli/search_cli.py \
+  --type hybrid \
+  --q "fever cough shortness of breath" \
+  --k 10 \
+  --positioned \
+  --positioned-results 5 \
+  --show-component-scores
+```
+
+La salida debe incluir:
+
+```text
+rank
+condicion clinica
+etiqueta de relevancia
+score final
+sintomas o conceptos coincidentes
+fuentes
+explicacion
+evidencias principales
+scores por componente
+```
+
+## Probar CLI dentro del contenedor
+
+Si estas ejecutando todo en Docker, puedes lanzar el CLI dentro de `sri-dx`.
+
+Importante: dentro de Docker usa `--host opensearch`.
+
+```bash
+docker compose exec sri-dx /app/.venv/bin/python \
+  src/sri_dx/app/cli/search_cli.py \
+  --host opensearch \
+  --type hybrid \
+  --q "fever cough shortness of breath" \
+  --k 10 \
+  --positioned \
+  --positioned-results 5 \
+  --show-component-scores
+```
+
+## Consultas sugeridas
+
+```text
+fever cough shortness of breath
+```
+
+```text
+chest pain shortness of breath fatigue
+```
+
+```text
+diabetes mellitus insulin treatment hyperglycemia
+```
+
+```text
+seizures epilepsy anticonvulsant medication
+```
+
+```text
+multiple sclerosis neurological symptoms
+```
+
+## Pruebas unitarias rapidas
+
+Suite del modulo de posicionamiento:
+
+```bash
+.venv/bin/python -m pytest tests/unit/modules/positioning
+```
+
+Suite enfocada usada para validar posicionamiento y use cases existentes:
+
+```bash
+.venv/bin/python -m pytest \
+  tests/unit/modules/positioning \
+  tests/unit/modules/indexing/test_concept_extractor.py \
+  tests/unit/usecases
+```
+
+## Problemas comunes
+
+### OpenSearch no esta listo
+
+Revisa logs:
+
+```bash
+docker compose logs -f opensearch
+```
+
+Verifica salud:
+
+```bash
+curl http://localhost:9200/_cluster/health
+```
+
+### El indexador salta documentos
+
+Borra el manifest:
+
+```bash
+rm -f data/index/manifest.sqlite \
+      data/index/manifest.sqlite-journal \
+      data/index/manifest.sqlite-shm \
+      data/index/manifest.sqlite-wal
+```
+
+### Quieres empezar totalmente de cero
+
+```bash
+docker compose down -v
+rm -f data/index/manifest.sqlite \
+      data/index/manifest.sqlite-journal \
+      data/index/manifest.sqlite-shm \
+      data/index/manifest.sqlite-wal
+docker compose up -d --build
+```
+
+### Memoria insuficiente
+
+OpenSearch y los modelos pueden consumir bastante RAM. Si el proceso se cae:
+
+- baja `--embedding-batch-size` a `16`;
+- usa `--embedding-device cpu`;
+- prueba `--no-semantic-chunker`;
+- asigna mas memoria a Docker.

@@ -166,6 +166,10 @@ class SearchHybridUseCase:
                 "title": hit.title,
                 "source_domain": hit.source_domain,
                 "mime_type": hit.mime_type,
+                "fetched_at": hit.fetched_at,
+                "section_heading": hit.section_heading,
+                "section_index": hit.section_index,
+                "chunk_index": hit.chunk_index,
                 "concept_ids": hit.concept_ids or [],
                 "ner_entities": hit.ner_entities or [],
                 "chunk_text": hit.content,
@@ -209,6 +213,8 @@ class SearchHybridUseCase:
                 "section_heading": chunk_result.section_heading,
                 "source_domain": chunk_result.metadata.get("source_domain") if chunk_result.metadata else None,
                 "seed_group": chunk_result.metadata.get("seed_group") if chunk_result.metadata else None,
+                "chunk_index": chunk_result.metadata.get("chunk_index") if chunk_result.metadata else None,
+                "concept_ids": chunk_result.metadata.get("concept_ids", []) if chunk_result.metadata else [],
             }
             results.append((chunk_result.chunk_id, chunk_result.score, metadata))
         

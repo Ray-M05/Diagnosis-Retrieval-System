@@ -278,6 +278,37 @@ async def clinical_rag(req: ClinicalRAGRequest):
     )
 
 
+from pydantic import BaseModel as _BaseModel
+
+class PositioningRequest(_BaseModel):
+    query: str
+    k: int = 10
+    min_ner_score: float = 0.5
+    hybrid_candidates: int = 100
+    final_results: int = 10
+
+
+@app.post("/search/positioned")
+async def positioned_search(req: PositioningRequest):
+    """Positioned clinical search — returns ranked clinical groups with explanations."""
+    if _pipeline is None:
+        raise HTTPException(503, detail="Retrieval pipeline not available.")
+
+    try:
+        results = _pipeline.search_positioned(
+            query=req.query,
+            hybrid_candidates=req.hybrid_candidates,
+            final_results=req.final_results,
+            positioned_results=req.k,
+        )
+        return results
+    except AttributeError:
+        raise HTTPException(501, detail="Positioning module not available in this pipeline build.")
+    except Exception as exc:
+        logger.exception("positioned_search failed")
+        raise HTTPException(500, detail=str(exc)) from exc
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
