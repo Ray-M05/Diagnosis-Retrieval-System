@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Globe } from 'lucide-react';
 import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchHeader } from './ResearchHeader';
 import { ResearchResults } from './ResearchResults';
-import { researchSearchHybrid, researchSearchDiseases, researchSearchPositioned } from './research.api';
-import type { HybridResult, DiseaseResult, PositionedResult, SearchMode } from './research.types';
+import {
+  researchSearchHybrid,
+  researchSearchDiseases,
+  researchSearchPositioned,
+  researchWebSearch,
+} from './research.api';
+import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
 
 export const ResearchView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -13,7 +18,11 @@ export const ResearchView: React.FC = () => {
     hybrid: HybridResult[] | null;
     diagnostic: DiseaseResult[] | null;
     positioned: PositionedResult[] | null;
-  }>({ hybrid: null, diagnostic: null, positioned: null });
+    web: WebSearchResult[] | null;
+  }>({ hybrid: null, diagnostic: null, positioned: null, web: null });
+
+  const [webEnriched, setWebEnriched] = useState(false);
+  const [webDocsAdded, setWebDocsAdded] = useState(0);
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
   const [hybridFusion, setHybridFusion] = useState('weighted_sum');
@@ -25,6 +34,8 @@ export const ResearchView: React.FC = () => {
     if (!searchTerm.trim()) return;
 
     setIsSearching(true);
+    setWebEnriched(false);
+    setWebDocsAdded(0);
     try {
       if (searchMode === 'hybrid') {
         const data = await researchSearchHybrid({
@@ -34,7 +45,7 @@ export const ResearchView: React.FC = () => {
           use_reranking: true,
           hybrid_candidates: hybridCandidates,
         });
-        setResults({ hybrid: data, diagnostic: null, positioned: null });
+        setResults({ hybrid: data, diagnostic: null, positioned: null, web: null });
       } else if ((searchMode as string) === 'positioned') {
         const data = await researchSearchPositioned({
           query: searchTerm,
@@ -43,7 +54,18 @@ export const ResearchView: React.FC = () => {
           final_results: finalResultsCount,
           min_ner_score: 0.5,
         });
-        setResults({ hybrid: null, diagnostic: null, positioned: data });
+        setResults({ hybrid: null, diagnostic: null, positioned: data, web: null });
+      } else if ((searchMode as string) === 'web') {
+        const data = await researchWebSearch({
+          query: searchTerm,
+          k: finalResultsCount,
+          hybrid_candidates: hybridCandidates,
+          final_results: finalResultsCount,
+          min_ner_score: 0.5,
+        });
+        setResults({ hybrid: null, diagnostic: null, positioned: null, web: data.diseases });
+        setWebEnriched(data.web_enriched);
+        setWebDocsAdded(data.docs_added);
       } else {
         const data = await researchSearchDiseases({
           query: searchTerm,
@@ -51,7 +73,7 @@ export const ResearchView: React.FC = () => {
           hybrid_candidates: hybridCandidates,
           min_ner_score: 0.5,
         });
-        setResults({ hybrid: null, diagnostic: data, positioned: null });
+        setResults({ hybrid: null, diagnostic: data, positioned: null, web: null });
       }
     } catch (err) {
       console.error('Research search failed:', err);
@@ -62,7 +84,9 @@ export const ResearchView: React.FC = () => {
 
   const handleClear = () => {
     setSearchTerm('');
-    setResults({ hybrid: null, diagnostic: null, positioned: null });
+    setResults({ hybrid: null, diagnostic: null, positioned: null, web: null });
+    setWebEnriched(false);
+    setWebDocsAdded(0);
   };
 
   return (
@@ -86,6 +110,14 @@ export const ResearchView: React.FC = () => {
           handleClear={handleClear}
           isSearching={isSearching}
         />
+
+        {/* Web enrichment indicator */}
+        {(searchMode as string) === 'web' && webEnriched && (
+          <div className="mx-6 mt-4 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2.5 text-xs text-blue-800 font-medium">
+            <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            Búsqueda web activada — {webDocsAdded} documento{webDocsAdded !== 1 ? 's' : ''} nuevos indexados desde PubMed / EuropePMC / MedlinePlus
+          </div>
+        )}
 
         <ResearchResults
           isSearching={isSearching}
