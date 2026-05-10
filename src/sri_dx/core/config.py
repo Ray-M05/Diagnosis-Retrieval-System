@@ -2,7 +2,7 @@ import os
 import tomllib
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 @dataclass(frozen=True)
 class OpenSearchConfig:
@@ -24,9 +24,26 @@ class IndexingConfig:
     batch_size: int = 500
 
 @dataclass(frozen=True)
+class RAGConfig:
+    default_model: str = "llama-3.1-8b-instant"
+    groq_api_key: str = ""
+    max_context_chunks: int = 10
+    max_output_tokens: int = 1500
+    temperature: float = 0.2
+    include_disease_hints: bool = True
+
+@dataclass(frozen=True)
+class APIConfig:
+    host: str = "127.0.0.1"
+    port: int = 8000
+    cors_origins: List[str] = field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+
+@dataclass(frozen=True)
 class SRIConfig:
     opensearch: OpenSearchConfig = field(default_factory=OpenSearchConfig)
     indexing: IndexingConfig = field(default_factory=IndexingConfig)
+    rag: RAGConfig = field(default_factory=RAGConfig)
+    api: APIConfig = field(default_factory=APIConfig)
 
 def load_config(config_path: Optional[Path] = None) -> SRIConfig:
     """Loads configuration from a TOML file and environment variables."""
@@ -60,4 +77,31 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
         batch_size=int(os.environ.get("SRI_BATCH_SIZE", idx_data.get("batch_size", 500))),
     )
     
-    return SRIConfig(opensearch=opensearch, indexing=indexing)
+    # RAG setup
+    rag_data = data.get("rag", {})
+    rag = RAGConfig(
+        default_model=os.environ.get("SRI_RAG_MODEL", rag_data.get("default_model", "llama-3.1-8b-instant")),
+        groq_api_key=os.environ.get("GROQ_API_KEY", rag_data.get("groq_api_key", "")),
+        max_context_chunks=int(os.environ.get("SRI_RAG_MAX_CHUNKS", rag_data.get("max_context_chunks", 10))),
+        max_output_tokens=int(os.environ.get("SRI_RAG_MAX_TOKENS", rag_data.get("max_output_tokens", 1500))),
+        temperature=float(os.environ.get("SRI_RAG_TEMPERATURE", rag_data.get("temperature", 0.2))),
+        include_disease_hints=os.environ.get(
+            "SRI_RAG_DISEASE_HINTS", str(rag_data.get("include_disease_hints", True))
+        ).lower() != "false",
+    )
+
+    # API setup
+    api_data = data.get("api", {})
+    cors_raw = os.environ.get("SRI_CORS_ORIGINS", "")
+    cors_origins = (
+        [o.strip() for o in cors_raw.split(",") if o.strip()]
+        if cors_raw
+        else api_data.get("cors_origins", ["http://localhost:5173", "http://localhost:3000"])
+    )
+    api = APIConfig(
+        host=os.environ.get("SRI_API_HOST", api_data.get("host", "127.0.0.1")),
+        port=int(os.environ.get("SRI_API_PORT", api_data.get("port", 8000))),
+        cors_origins=cors_origins,
+    )
+
+    return SRIConfig(opensearch=opensearch, indexing=indexing, rag=rag, api=api)

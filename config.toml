@@ -21,3 +21,16 @@ manifest_path = "data/index/manifest.sqlite"
 report_dir = "data/index/reports"
 bad_docs_path = "data/index/bad_docs.jsonl"
 batch_size = 500
+
+[rag]
+default_model = "gemini-2.0-flash-lite"
+# gemini_api_key = ""   # preferir variable de entorno GEMINI_API_KEY
+max_context_chunks = 10
+max_output_tokens = 1500
+temperature = 0.2
+include_disease_hints = true
+
+[api]
+host = "127.0.0.1"
+port = 8000
+cors_origins = ["http://localhost:5173", "http://localhost:3000"]
