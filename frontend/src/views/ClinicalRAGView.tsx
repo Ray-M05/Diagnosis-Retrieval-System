@@ -5,13 +5,19 @@ import {
   ChevronDown,
   ExternalLink,
   FileText,
+  Globe,
   Loader2,
+  MapPin,
+  Sparkles,
   Stethoscope,
   Upload,
 } from 'lucide-react';
+import { SearchBar } from '../components/SearchBar';
 import { motion, AnimatePresence } from 'motion/react';
-import { parseChart, streamClinicalRAG } from '../api/client';
-import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse } from '../types';
+import { parseChart, streamPipeline } from '../api/client';
+import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse, Disease } from '../types';
+import type { PositionedResult, WebEnrichmentSummary } from '../api/client';
+import type { SearchBarMode } from '../components/SearchBar';
 import { emptyChart } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -143,11 +149,16 @@ export const ClinicalRAGView: React.FC = () => {
   const [chartOpen, setChartOpen] = useState(false);
   const [chart, setChart] = useState<PatientChart>(emptyChart());
   const [query, setQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<SearchBarMode>('standard');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamedText, setStreamedText] = useState('');
   const [ragResponse, setRagResponse] = useState<RAGResponse | null>(null);
+  const [positionedResults, setPositionedResults] = useState<PositionedResult[] | null>(null);
+  const [hybridResults, setHybridResults] = useState<Disease[] | null>(null);
+  const [webEnrichment, setWebEnrichment] = useState<WebEnrichmentSummary | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // -- helpers to update nested chart fields --
@@ -187,31 +198,59 @@ export const ClinicalRAGView: React.FC = () => {
     }
   };
 
+  const clearResults = () => {
+    setStreamedText('');
+    setRagResponse(null);
+    setPositionedResults(null);
+    setHybridResults(null);
+    setWebEnrichment(null);
+    setEvidenceOpen(false);
+    setError(null);
+  };
+
+  const handleModeToggle = (m: SearchBarMode) => {
+    setSearchMode((prev) => (prev === m ? 'standard' : m));
+    clearResults();
+  };
+
   // -- generate --
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
     setIsGenerating(true);
-    setStreamedText('');
-    setRagResponse(null);
-    setError(null);
+    clearResults();
 
-    await streamClinicalRAG(
-      chart,
-      query,
-      (delta) => setStreamedText((prev) => prev + delta),
-      (response) => {
-        if (response.error && !response.answer_markdown) {
-          setError(response.error);
-        } else {
-          setRagResponse(response);
-        }
-        setIsGenerating(false);
+    await streamPipeline(
+      {
+        query,
+        chart,
+        k: 10,
+        stages: {
+          web_enrichment: searchMode === 'web',
+          positioning: searchMode === 'positioned',
+          generation: true,
+        },
       },
-      (msg) => {
-        setError(msg);
-        setIsGenerating(false);
+      {
+        onStages: (stages) => {
+          setHybridResults(stages.hybrid);
+          setPositionedResults(stages.positioned);
+          setWebEnrichment(stages.web_enriched);
+        },
+        onToken: (delta) => setStreamedText((prev) => prev + delta),
+        onDone: (response) => {
+          if (response.error && !response.answer_markdown) {
+            setError(response.error);
+          } else {
+            setRagResponse(response);
+          }
+          setIsGenerating(false);
+        },
+        onError: (msg) => {
+          setError(msg);
+          setIsGenerating(false);
+        },
       },
     );
   };
@@ -448,33 +487,18 @@ export const ClinicalRAGView: React.FC = () => {
       </div>
 
       {/* Query + generate */}
-      <form onSubmit={handleGenerate} className="flex gap-3 items-start">
-        <textarea
-          rows={1}
-          placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleGenerate(e as unknown as React.FormEvent);
-            }
-          }}
-          className="flex-1 border border-gray-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm resize-none overflow-y-auto max-h-32 leading-tight"
-        />
-        <button
-          type="submit"
-          disabled={isGenerating || !query.trim()}
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-2xl hover:bg-indigo-700 disabled:bg-gray-200 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-100"
-        >
-          {isGenerating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Stethoscope className="w-4 h-4" />
-          )}
-          {isGenerating ? 'Generating...' : 'Generate'}
-        </button>
-      </form>
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        onSubmit={handleGenerate}
+        onClear={() => { setQuery(''); clearResults(); }}
+        isLoading={isGenerating}
+        placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
+        submitLabel={searchMode === 'standard' ? 'Generate' : 'Search'}
+        showModeToggles
+        mode={searchMode}
+        onModeToggle={handleModeToggle}
+      />
 
       {/* Error */}
       {error && (
@@ -507,8 +531,81 @@ export const ClinicalRAGView: React.FC = () => {
               <p className="text-xs text-gray-400 mt-2">
                 {ragResponse.elapsed_seconds.toFixed(1)}s ·{' '}
                 {ragResponse.usage.output_tokens} tokens ·{' '}
-                {ragResponse.usage.model || 'ollama'}
+                {ragResponse.usage.model || 'groq'}
               </p>
+            )}
+
+            {/* Evidence tag — only when web or positioning stages produced results */}
+            {!isGenerating && (positionedResults || webEnrichment?.triggered) && (
+              <div className="border-t border-gray-100 pt-3 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setEvidenceOpen((v) => !v)}
+                  className="group inline-flex items-center gap-2 px-3 py-1.5 bg-linear-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-700 hover:from-indigo-100 hover:to-blue-100 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {evidenceOpen ? 'Ocultar evidencia' : 'Ver evidencia ampliada'}
+                  {webEnrichment?.triggered && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-600/90 text-white rounded-full text-[10px]">
+                      <Globe className="w-2.5 h-2.5" /> Web · +{webEnrichment.docs_added}
+                    </span>
+                  )}
+                  {positionedResults && positionedResults.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-600/90 text-white rounded-full text-[10px]">
+                      <MapPin className="w-2.5 h-2.5" /> {positionedResults.length} posicionadas
+                    </span>
+                  )}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${evidenceOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {evidenceOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-4 flex flex-col gap-5">
+                        {positionedResults && positionedResults.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
+                              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Posicionamiento clínico
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {positionedResults.map((r) => {
+                                const colorMap: Record<string, string> = { alta: 'bg-green-100 text-green-700', media: 'bg-amber-100 text-amber-700', baja: 'bg-gray-100 text-gray-500' };
+                                const color = colorMap[r.relevance_label?.toLowerCase()] ?? 'bg-gray-100 text-gray-500';
+                                return (
+                                  <div key={r.rank} className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">{r.rank}</span>
+                                      <span className="font-semibold text-gray-800 truncate">{r.disease_name_display}</span>
+                                    </div>
+                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 ${color}`}>{r.relevance_label}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {webEnrichment?.triggered && hybridResults && hybridResults.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
+                              <Globe className="w-3.5 h-3.5 text-blue-500" /> Documentos web indexados
+                            </div>
+                            <p className="text-[11px] text-gray-500">
+                              {webEnrichment.docs_added} documentos · {webEnrichment.chunks_added} chunks nuevos desde PubMed / EuropePMC / MedlinePlus
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </motion.div>
         )}

@@ -66,11 +66,28 @@ class ClinicalRAGUseCase:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, chart: PatientChart, user_query: str) -> RAGResponse:
-        """Blocking call — returns the complete RAGResponse."""
+    def run(
+        self,
+        chart: PatientChart,
+        user_query: str,
+        *,
+        preretrieved_chunks: list | None = None,
+        preretrieved_diseases: list | None = None,
+    ) -> RAGResponse:
+        """Blocking call — returns the complete RAGResponse.
+
+        If `preretrieved_chunks` is provided, skips the internal pipeline.search()
+        and uses those chunks as context. Same for `preretrieved_diseases` (skips
+        pipeline.search_diseases). This lets callers compose web-enrichment +
+        positioning + RAG without re-doing retrieval.
+        """
         t0 = time.monotonic()
 
-        retrieval = self._retrieve(chart, user_query)
+        retrieval = self._retrieve(
+            chart, user_query,
+            preretrieved_chunks=preretrieved_chunks,
+            preretrieved_diseases=preretrieved_diseases,
+        )
         if retrieval is None:
             return self._no_evidence_response(time.monotonic() - t0)
 
@@ -105,17 +122,28 @@ class ClinicalRAGUseCase:
         )
 
     def run_streaming(
-        self, chart: PatientChart, user_query: str
+        self,
+        chart: PatientChart,
+        user_query: str,
+        *,
+        preretrieved_chunks: list | None = None,
+        preretrieved_diseases: list | None = None,
     ) -> Iterator[str | RAGResponse]:
         """
         Streaming call.
 
         Yields str deltas as the LLM generates text, then yields a final
         RAGResponse (check with isinstance(item, RAGResponse)).
+
+        See `run()` for the meaning of preretrieved_chunks/diseases.
         """
         t0 = time.monotonic()
 
-        retrieval = self._retrieve(chart, user_query)
+        retrieval = self._retrieve(
+            chart, user_query,
+            preretrieved_chunks=preretrieved_chunks,
+            preretrieved_diseases=preretrieved_diseases,
+        )
         if retrieval is None:
             msg = "No relevant evidence found in the corpus for this query."
             yield msg
@@ -162,32 +190,46 @@ class ClinicalRAGUseCase:
     # ------------------------------------------------------------------
 
     def _retrieve(
-        self, chart: PatientChart, user_query: str
+        self,
+        chart: PatientChart,
+        user_query: str,
+        *,
+        preretrieved_chunks: list | None = None,
+        preretrieved_diseases: list | None = None,
     ) -> tuple[list[ContextBlock], list, str] | None:
-        """Run enrichment → compose → retrieve. Returns (blocks, diseases, query) or None."""
+        """Run enrichment → compose → retrieve. Returns (blocks, diseases, query) or None.
+
+        When preretrieved_* are passed, skips the corresponding pipeline calls.
+        """
         entities = self.enricher.enrich(chart)
         composed = self.composer.compose(user_query, entities, chart.language)
 
         logger.info("RAG query: %s", composed.semantic_query[:120])
 
-        chunks = self.pipeline.search(
-            query=composed.semantic_query,
-            final_results=self.config.max_context_chunks,
-        )
+        if preretrieved_chunks is not None:
+            chunks = preretrieved_chunks
+        else:
+            chunks = self.pipeline.search(
+                query=composed.semantic_query,
+                final_results=self.config.max_context_chunks,
+            )
 
         if not chunks:
             logger.warning("No chunks retrieved for query: %s", composed.semantic_query[:80])
             return None
 
-        diseases = []
-        if self.config.include_disease_hints:
-            try:
-                diseases = self.pipeline.search_diseases(
-                    query=composed.semantic_query,
-                    final_results=self.config.max_context_chunks,
-                )
-            except Exception as exc:
-                logger.warning("Disease aggregation failed (non-fatal): %s", exc)
+        if preretrieved_diseases is not None:
+            diseases = preretrieved_diseases
+        else:
+            diseases = []
+            if self.config.include_disease_hints:
+                try:
+                    diseases = self.pipeline.search_diseases(
+                        query=composed.semantic_query,
+                        final_results=self.config.max_context_chunks,
+                    )
+                except Exception as exc:
+                    logger.warning("Disease aggregation failed (non-fatal): %s", exc)
 
         blocks = self.context_builder.build(chunks)
         return blocks, diseases, composed.semantic_query

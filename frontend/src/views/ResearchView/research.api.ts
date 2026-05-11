@@ -1,74 +1,59 @@
-import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResponse } from './research.types';
+/**
+ * ResearchView API — thin wrappers over the unified /pipeline endpoint.
+ *
+ * All four "modes" (hybrid, diagnostic, positioned, web) ultimately call
+ * POST /pipeline with different stages. Hybrid retrieval always runs;
+ * positioning and web_enrichment are activated per mode.
+ */
 
-const API_BASE = 'http://localhost:8000/api';
+import { runPipeline } from '../../api/client';
+import type { PipelineResponse, PositionedResult, WebEnrichmentSummary } from '../../api/client';
+import type { DiseaseResult } from './research.types';
 
-export interface HybridSearchParams {
-  query: string;
-  k: number;
-  fusion_method: string;
-  use_reranking: boolean;
-  hybrid_candidates: number;
-}
-
-export interface DiagnoseParams {
-  query: string;
-  max_diseases: number;
-  min_ner_score: number;
-  hybrid_candidates: number;
-}
-
-export async function researchSearchHybrid(params: HybridSearchParams): Promise<HybridResult[]> {
-  const res = await fetch(`${API_BASE}/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+export async function researchSearchHybrid(query: string, k: number): Promise<PipelineResponse> {
+  return runPipeline({
+    query,
+    k,
+    stages: { web_enrichment: false, positioning: false, generation: false },
   });
-  if (!res.ok) throw new Error(`Error en búsqueda híbrida: ${res.statusText}`);
-  return res.json();
 }
 
-export async function researchSearchDiseases(params: DiagnoseParams): Promise<DiseaseResult[]> {
-  const res = await fetch(`${API_BASE}/diagnose`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+export async function researchSearchDiseases(query: string, k: number): Promise<DiseaseResult[]> {
+  const res = await runPipeline({
+    query,
+    k,
+    stages: { web_enrichment: false, positioning: false, generation: false },
   });
-  if (!res.ok) throw new Error(`Error en diagnóstico: ${res.statusText}`);
-  return res.json();
+  // The /pipeline endpoint returns DiseaseDTO[] in `hybrid`; map to DiseaseResult shape
+  return res.hybrid.map((d, idx) => ({
+    disease_name: d.name,
+    disease_name_display: d.name,
+    aggregated_score: 0,
+    evidence_count: d.evidence_count,
+    rank: d.rank ?? idx + 1,
+    evidence: [],
+  }));
 }
 
-export interface PositioningParams {
-  query: string;
-  k: number;
-  hybrid_candidates: number;
-  final_results: number;
-  min_ner_score: number;
-}
-
-export async function researchSearchPositioned(params: PositioningParams): Promise<PositionedResult[]> {
-  const res = await fetch(`http://localhost:8000/search/positioned`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+export async function researchSearchPositioned(query: string, k: number): Promise<PositionedResult[]> {
+  const res = await runPipeline({
+    query,
+    k,
+    stages: { web_enrichment: false, positioning: true, generation: false },
   });
-  if (!res.ok) throw new Error(`Error en posicionamiento: ${res.statusText}`);
-  return res.json();
+  return (res.positioned ?? []) as PositionedResult[];
 }
 
-export interface WebSearchParams {
-  query: string;
-  k: number;
-  hybrid_candidates: number;
-  final_results: number;
-  min_ner_score: number;
+export interface WebSearchResult {
+  hybrid: PipelineResponse['hybrid'];
+  web_enriched: WebEnrichmentSummary | null;
 }
 
-export async function researchWebSearch(params: WebSearchParams): Promise<WebSearchResponse> {
-  const res = await fetch(`http://localhost:8000/search/web`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+export async function researchWebSearch(query: string, k: number): Promise<WebSearchResult> {
+  const res = await runPipeline({
+    query,
+    k,
+    stages: { web_enrichment: true, positioning: false, generation: false },
   });
-  if (!res.ok) throw new Error(`Error en búsqueda web: ${res.statusText}`);
-  return res.json();
+  return { hybrid: res.hybrid, web_enriched: res.web_enriched };
 }

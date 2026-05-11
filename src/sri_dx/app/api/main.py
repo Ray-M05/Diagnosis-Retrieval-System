@@ -37,8 +37,12 @@ from sri_dx.app.api.dto import (
     DiseaseDTO,
     HealthResponse,
     ParseChartResponse,
+    PipelineRequest,
+    PipelineResponse,
+    PipelineStages,
     SearchDiseasesRequest,
     SearchDiseasesResponse,
+    WebEnrichmentSummary,
 )
 from sri_dx.modules.rag.chart_file_parser import ChartFileParser
 from sri_dx.usecases.rag.clinical_rag import ClinicalRAGConfig, ClinicalRAGUseCase
@@ -173,39 +177,6 @@ async def health():
     )
 
 
-@app.post("/search/diseases", response_model=SearchDiseasesResponse)
-async def search_diseases(req: SearchDiseasesRequest):
-    if _pipeline is None:
-        raise HTTPException(503, detail="Retrieval pipeline not available (OpenSearch unreachable).")
-
-    t0 = time.monotonic()
-    try:
-        diseases = _pipeline.search_diseases(query=req.query, final_results=req.k)
-    except Exception as exc:
-        logger.exception("search_diseases failed")
-        raise HTTPException(500, detail=str(exc)) from exc
-
-    dtos: list[DiseaseDTO] = []
-    for d in diseases:
-        top_ev = d.evidence[0] if d.evidence else None
-        dtos.append(DiseaseDTO(
-            id=str(d.rank),
-            name=d.disease_name_display,
-            description=top_ev.content_preview if top_ev else "",
-            symptoms=[],          # filled by NER aggregator; enrich if needed
-            source=top_ev.url.split("/")[2] if top_ev and "://" in top_ev.url else "",
-            sourceUrl=top_ev.url if top_ev else "",
-            evidence_count=d.evidence_count,
-            rank=d.rank,
-        ))
-
-    return SearchDiseasesResponse(
-        diseases=dtos,
-        query=req.query,
-        elapsed_seconds=time.monotonic() - t0,
-    )
-
-
 @app.post("/rag/parse-chart", response_model=ParseChartResponse)
 async def parse_chart(file: UploadFile = File(...)):
     if file.content_type not in ("application/pdf", "text/plain", None):
@@ -231,142 +202,178 @@ async def parse_chart(file: UploadFile = File(...)):
     )
 
 
-@app.post("/rag/clinical")
-async def clinical_rag(req: ClinicalRAGRequest):
-    """
-    Streaming clinical RAG via Server-Sent Events.
+# ---------------------------------------------------------------------------
+# /pipeline — composable retrieval + (web) + (positioning) + (RAG generation)
+# ---------------------------------------------------------------------------
+#
+# Single composable endpoint. Stages execute in fixed order, each optional:
+#   1. Hybrid retrieval                    (always)
+#   2. Web enrichment + re-retrieval       (if stages.web_enrichment)
+#   3. Positioning aggregation             (if stages.positioning)
+#   4. RAG generation (SSE streaming)      (if stages.generation, requires chart)
+#
+# When stages.generation is False:
+#   - Returns JSON PipelineResponse.
+# When stages.generation is True:
+#   - Returns Server-Sent Events:
+#       event: stages\ndata: <PipelineResponse JSON>\n\n   (initial, once)
+#       data: <text delta>\n\n                               (LLM stream)
+#       event: response\ndata: <RAGResponse JSON>\n\n        (final, once)
+#       event: error\ndata: <message>\n\n                    (on failure)
+# ---------------------------------------------------------------------------
 
-    SSE events:
-      data: <token>\\n\\n           — text delta while generating
-      event: response\\ndata: <RAGResponse JSON>\\n\\n  — final complete response
-      event: error\\ndata: <message>\\n\\n             — on failure
+
+def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
+    """Triggers web search + reindexing if local results are insufficient.
+
+    After this returns, _pipeline.search() will hit the enriched index.
     """
+    from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
+    from sri_dx.core.config import load_config
+
+    cfg = load_config()
+    use_case = SearchWebAndEnrichUseCase(pipeline=_pipeline, config=cfg.web_search)
+    report = use_case.run(query=query)
+    return WebEnrichmentSummary(
+        triggered=report.web_search_triggered,
+        docs_added=report.indexing.docs_indexed,
+        chunks_added=report.indexing.chunks_indexed,
+    )
+
+
+def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
+    diseases = _pipeline.search_diseases(query=query, final_results=k)
+    dtos: list[DiseaseDTO] = []
+    for d in diseases:
+        top_ev = d.evidence[0] if d.evidence else None
+        dtos.append(DiseaseDTO(
+            id=str(d.rank),
+            name=d.disease_name_display,
+            description=top_ev.content_preview if top_ev else "",
+            symptoms=[],
+            source=top_ev.url.split("/")[2] if top_ev and "://" in top_ev.url else "",
+            sourceUrl=top_ev.url if top_ev else "",
+            evidence_count=d.evidence_count,
+            rank=d.rank,
+        ))
+    return dtos
+
+
+def _run_positioning(query: str, k: int) -> list:
+    try:
+        return _pipeline.search_positioned(
+            query=query,
+            hybrid_candidates=100,
+            final_results=k,
+            positioned_results=k,
+        )
+    except AttributeError:
+        logger.warning("Positioning module not available — skipping.")
+        return []
+
+
+def _execute_pipeline_stages(
+    query: str, stages: PipelineStages, k: int
+) -> PipelineResponse:
+    """Runs all non-generation stages and returns a PipelineResponse."""
+    if _pipeline is None:
+        raise HTTPException(503, detail="Retrieval pipeline not available.")
+
+    t0 = time.monotonic()
+    web_summary: WebEnrichmentSummary | None = None
+
+    if stages.web_enrichment:
+        try:
+            web_summary = _run_web_enrichment(query)
+        except ImportError:
+            raise HTTPException(501, detail="Web search module not available.")
+        except Exception as exc:
+            logger.exception("web enrichment failed")
+            raise HTTPException(500, detail=f"web enrichment: {exc}") from exc
+
+    try:
+        hybrid_dtos = _run_hybrid_diseases(query, k)
+    except Exception as exc:
+        logger.exception("hybrid retrieval failed")
+        raise HTTPException(500, detail=str(exc)) from exc
+
+    positioned = _run_positioning(query, k) if stages.positioning else None
+
+    return PipelineResponse(
+        query=query,
+        hybrid=hybrid_dtos,
+        positioned=positioned,
+        web_enriched=web_summary,
+        elapsed_seconds=time.monotonic() - t0,
+    )
+
+
+@app.post("/pipeline")
+async def pipeline(req: PipelineRequest):
+    """Composable retrieval pipeline. See module docstring for stage flow."""
+    # Non-streaming path
+    if not req.stages.generation:
+        return _execute_pipeline_stages(req.query, req.stages, req.k)
+
+    # Streaming (RAG) path
+    if req.chart is None:
+        raise HTTPException(400, detail="`chart` is required when stages.generation is true.")
     if _rag_uc is None:
         if _llm_status == "unreachable":
-            raise HTTPException(
-                503,
-                detail="LLM not available. Verify GROQ_API_KEY is set and valid.",
-            )
+            raise HTTPException(503, detail="LLM not available. Verify GROQ_API_KEY.")
         raise HTTPException(503, detail="RAG pipeline not initialised.")
+
+    # Execute retrieval stages first (synchronous), then stream the LLM.
+    stages_response = _execute_pipeline_stages(req.query, req.stages, req.k)
 
     def generate():
         try:
-            logger.info("RAG streaming started")
-            count = 0
+            # Emit non-generation stages first so the UI can render them
+            yield f"event: stages\ndata: {stages_response.model_dump_json()}\n\n"
+
             for item in _rag_uc.run_streaming(req.chart, req.query):
                 if isinstance(item, RAGResponse):
-                    logger.info("RAG streaming done — %d deltas, error=%s", count, item.error)
                     payload = item.model_dump_json()
                     yield f"event: response\ndata: {payload}\n\n"
                 else:
-                    count += 1
-                    if count <= 3:
-                        logger.info("RAG delta #%d: %r", count, str(item)[:60])
                     safe = str(item).replace("\n", "\\n")
                     yield f"data: {safe}\n\n"
         except Exception as exc:
-            logger.exception("Streaming RAG failed")
+            logger.exception("pipeline (streaming) failed")
             yield f"event: error\ndata: {str(exc)}\n\n"
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # disable nginx buffering if behind proxy
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-from pydantic import BaseModel as _BaseModel
+# ---------------------------------------------------------------------------
+# Legacy endpoints — thin wrappers over /pipeline. Kept for backwards compat.
+# Will be removed once the frontend fully migrates to /pipeline.
+# ---------------------------------------------------------------------------
 
-class PositioningRequest(_BaseModel):
-    query: str
-    k: int = 10
-    min_ner_score: float = 0.5
-    hybrid_candidates: int = 100
-    final_results: int = 10
-
-
-@app.post("/search/positioned")
-async def positioned_search(req: PositioningRequest):
-    """Positioned clinical search — returns ranked clinical groups with explanations."""
-    if _pipeline is None:
-        raise HTTPException(503, detail="Retrieval pipeline not available.")
-
-    try:
-        results = _pipeline.search_positioned(
-            query=req.query,
-            hybrid_candidates=req.hybrid_candidates,
-            final_results=req.final_results,
-            positioned_results=req.k,
-        )
-        return results
-    except AttributeError:
-        raise HTTPException(501, detail="Positioning module not available in this pipeline build.")
-    except Exception as exc:
-        logger.exception("positioned_search failed")
-        raise HTTPException(500, detail=str(exc)) from exc
+@app.post("/search/diseases", response_model=SearchDiseasesResponse)
+async def search_diseases(req: SearchDiseasesRequest):
+    """Deprecated. Use POST /pipeline with stages={}."""
+    pr = _execute_pipeline_stages(req.query, PipelineStages(), req.k)
+    return SearchDiseasesResponse(
+        diseases=pr.hybrid,
+        query=req.query,
+        elapsed_seconds=pr.elapsed_seconds,
+    )
 
 
-class WebSearchRequest(_BaseModel):
-    query: str
-    k: int = 10
-    hybrid_candidates: int = 100
-    final_results: int = 10
-    min_ner_score: float = 0.5
-
-
-@app.post("/search/web")
-async def web_search(req: WebSearchRequest):
-    """
-    Hybrid search with automatic web enrichment.
-    If the local index results are insufficient, queries PubMed/EuropePMC/MedlinePlus,
-    indexes the delta, and re-runs the retrieval.
-    Returns results plus a 'web_enriched' flag.
-    """
-    if _pipeline is None:
-        raise HTTPException(503, detail="Retrieval pipeline not available.")
-
-    try:
-        from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
-        from sri_dx.core.config import load_config
-
-        cfg = load_config()
-        use_case = SearchWebAndEnrichUseCase(pipeline=_pipeline, config=cfg.web_search)
-        report = use_case.run(query=req.query)
-
-        diseases = [
-            {
-                "disease_name": d.disease_name,
-                "disease_name_display": d.disease_name_display,
-                "aggregated_score": d.aggregated_score,
-                "evidence_count": d.evidence_count,
-                "rank": d.rank,
-                "evidence": [
-                    {
-                        "chunk_id": e.chunk_id,
-                        "rerank_score": e.rerank_score,
-                        "ner_score": e.ner_score,
-                        "content_preview": e.content_preview,
-                        "url": e.url,
-                    }
-                    for e in d.evidence
-                ],
-            }
-            for d in report.final_results
-        ]
-        return {
-            "diseases": diseases,
-            "web_enriched": report.web_search_triggered,
-            "docs_added": report.docs_added,
-            "elapsed_seconds": report.elapsed_seconds,
-        }
-    except ImportError:
-        raise HTTPException(501, detail="Web search module not available in this build.")
-    except Exception as exc:
-        logger.exception("web_search failed")
-        raise HTTPException(500, detail=str(exc)) from exc
+@app.post("/rag/clinical")
+async def clinical_rag(req: ClinicalRAGRequest):
+    """Deprecated. Use POST /pipeline with stages.generation=true."""
+    pipeline_req = PipelineRequest(
+        query=req.query,
+        chart=req.chart,
+        stages=PipelineStages(generation=True),
+    )
+    return await pipeline(pipeline_req)
 
 
 if __name__ == "__main__":

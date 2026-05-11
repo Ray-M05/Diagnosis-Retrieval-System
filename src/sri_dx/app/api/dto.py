@@ -69,6 +69,42 @@ ClinicalRAGResponse = RAGResponse
 
 
 # ---------------------------------------------------------------------------
+# /pipeline — composable retrieval + (web enrichment) + (positioning) + (RAG)
+# ---------------------------------------------------------------------------
+
+class PipelineStages(BaseModel):
+    """Toggles for optional stages. Hybrid retrieval is always executed."""
+    web_enrichment: bool = False
+    positioning: bool = False
+    generation: bool = False   # RAG. Requires `chart`.
+
+
+class PipelineRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    stages: PipelineStages = Field(default_factory=PipelineStages)
+    chart: PatientChart | None = None   # required if stages.generation
+    k: int = Field(default=10, ge=1, le=30)
+
+
+class WebEnrichmentSummary(BaseModel):
+    triggered: bool
+    docs_added: int
+    chunks_added: int
+
+
+class PipelineResponse(BaseModel):
+    """Non-streaming response (when stages.generation is False).
+
+    Each section is present only if the corresponding stage was activated.
+    """
+    query: str
+    hybrid: list[DiseaseDTO] = []
+    positioned: Optional[list] = None     # list[dict] from search_positioned
+    web_enriched: Optional[WebEnrichmentSummary] = None
+    elapsed_seconds: float
+
+
+# ---------------------------------------------------------------------------
 # /health
 # ---------------------------------------------------------------------------
 

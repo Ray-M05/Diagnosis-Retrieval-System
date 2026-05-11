@@ -10,6 +10,23 @@ import {
   researchWebSearch,
 } from './research.api';
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
+import type { Disease } from '../../types';
+
+// Map DiseaseDTO (from /pipeline) → HybridResult expected by ResearchResults UI
+function diseasesToHybridResults(diseases: Disease[]): HybridResult[] {
+  return diseases.map((d) => ({
+    doc_id: d.id,
+    chunk_id: d.id,
+    score: 0,
+    fusion_method: 'rrf',
+    metadata: {
+      doc_id: d.id,
+      url: d.sourceUrl,
+      title: d.name,
+      chunk_text_preview: d.description,
+    },
+  }));
+}
 
 export const ResearchView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,41 +55,37 @@ export const ResearchView: React.FC = () => {
     setWebDocsAdded(0);
     try {
       if (searchMode === 'hybrid') {
-        const data = await researchSearchHybrid({
-          query: searchTerm,
-          k: finalResultsCount,
-          fusion_method: hybridFusion,
-          use_reranking: true,
-          hybrid_candidates: hybridCandidates,
-        });
-        setResults({ hybrid: data, diagnostic: null, positioned: null, web: null });
+        const data = await researchSearchHybrid(searchTerm, finalResultsCount);
+        setResults({ hybrid: diseasesToHybridResults(data.hybrid), diagnostic: null, positioned: null, web: null });
       } else if ((searchMode as string) === 'positioned') {
-        const data = await researchSearchPositioned({
-          query: searchTerm,
-          k: finalResultsCount,
-          hybrid_candidates: hybridCandidates,
-          final_results: finalResultsCount,
-          min_ner_score: 0.5,
-        });
-        setResults({ hybrid: null, diagnostic: null, positioned: data, web: null });
+        const data = await researchSearchPositioned(searchTerm, finalResultsCount);
+        const positioned: PositionedResult[] = data.map((r) => ({
+          rank: r.rank,
+          disease_name_display: r.disease_name_display,
+          final_score: r.final_score,
+          relevance_label: r.relevance_label,
+          matched_symptoms: r.matched_symptoms,
+          source_domains: [],
+          explanation: r.explanation,
+          evidences: [],
+        }));
+        setResults({ hybrid: null, diagnostic: null, positioned, web: null });
       } else if ((searchMode as string) === 'web') {
-        const data = await researchWebSearch({
-          query: searchTerm,
-          k: finalResultsCount,
-          hybrid_candidates: hybridCandidates,
-          final_results: finalResultsCount,
-          min_ner_score: 0.5,
-        });
-        setResults({ hybrid: null, diagnostic: null, positioned: null, web: data.diseases });
-        setWebEnriched(data.web_enriched);
-        setWebDocsAdded(data.docs_added);
+        const data = await researchWebSearch(searchTerm, finalResultsCount);
+        // Map DiseaseDTO → WebSearchResult shape
+        const webDiseases: WebSearchResult[] = data.hybrid.map((d) => ({
+          disease_name: d.name,
+          disease_name_display: d.name,
+          aggregated_score: 0,
+          evidence_count: d.evidence_count,
+          rank: d.rank ?? 0,
+          evidence: [],
+        }));
+        setResults({ hybrid: null, diagnostic: null, positioned: null, web: webDiseases });
+        setWebEnriched(data.web_enriched?.triggered ?? false);
+        setWebDocsAdded(data.web_enriched?.docs_added ?? 0);
       } else {
-        const data = await researchSearchDiseases({
-          query: searchTerm,
-          max_diseases: finalResultsCount,
-          hybrid_candidates: hybridCandidates,
-          min_ner_score: 0.5,
-        });
+        const data = await researchSearchDiseases(searchTerm, finalResultsCount);
         setResults({ hybrid: null, diagnostic: data, positioned: null, web: null });
       }
     } catch (err) {
@@ -88,6 +101,10 @@ export const ResearchView: React.FC = () => {
     setWebEnriched(false);
     setWebDocsAdded(0);
   };
+
+  // Hybrid configuration sliders are kept for future use (not all are routed yet)
+  void hybridFusion;
+  void hybridCandidates;
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col md:flex-row overflow-hidden">
