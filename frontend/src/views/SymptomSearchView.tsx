@@ -3,6 +3,7 @@ import { Search, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DiseaseCard } from '../components/DiseaseCard';
 import { SearchBar } from '../components/SearchBar';
+import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
 import { runPipeline } from '../api/client';
 import type { Disease } from '../types';
 import type { PipelineResponse, PositionedResult } from '../api/client';
@@ -161,6 +162,13 @@ export const SymptomSearchView: React.FC = () => {
             <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             Búsqueda web activada — {webEnriched.docs_added} documento(s) nuevos indexados desde PubMed / EuropePMC / MedlinePlus
           </div>
+        )}
+
+        {response?.sufficiency && !response.sufficiency.sufficient && mode !== 'web' && (
+          <InsufficiencyBanner
+            sufficiency={response.sufficiency}
+            onActivateWeb={() => handleModeToggle('web')}
+          />
         )}
       </div>
 

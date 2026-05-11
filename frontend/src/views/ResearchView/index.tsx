@@ -3,6 +3,7 @@ import { ShieldCheck, Globe } from 'lucide-react';
 import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchHeader } from './ResearchHeader';
 import { ResearchResults } from './ResearchResults';
+import { InsufficiencyBanner } from '../../components/InsufficiencyBanner';
 import {
   researchSearchHybrid,
   researchSearchDiseases,
@@ -10,6 +11,7 @@ import {
   researchWebSearch,
 } from './research.api';
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
+import type { SufficiencyInfo } from '../../api/client';
 import type { Disease } from '../../types';
 
 // Map DiseaseDTO (from /pipeline) → HybridResult expected by ResearchResults UI
@@ -40,6 +42,7 @@ export const ResearchView: React.FC = () => {
 
   const [webEnriched, setWebEnriched] = useState(false);
   const [webDocsAdded, setWebDocsAdded] = useState(0);
+  const [sufficiency, setSufficiency] = useState<SufficiencyInfo | null>(null);
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
   const [hybridFusion, setHybridFusion] = useState('weighted_sum');
@@ -53,13 +56,15 @@ export const ResearchView: React.FC = () => {
     setIsSearching(true);
     setWebEnriched(false);
     setWebDocsAdded(0);
+    setSufficiency(null);
     try {
       if (searchMode === 'hybrid') {
         const data = await researchSearchHybrid(searchTerm, finalResultsCount);
         setResults({ hybrid: diseasesToHybridResults(data.hybrid), diagnostic: null, positioned: null, web: null });
+        setSufficiency(data.sufficiency);
       } else if ((searchMode as string) === 'positioned') {
         const data = await researchSearchPositioned(searchTerm, finalResultsCount);
-        const positioned: PositionedResult[] = data.map((r) => ({
+        const positioned: PositionedResult[] = data.positioned.map((r) => ({
           rank: r.rank,
           disease_name_display: r.disease_name_display,
           final_score: r.final_score,
@@ -70,6 +75,7 @@ export const ResearchView: React.FC = () => {
           evidences: [],
         }));
         setResults({ hybrid: null, diagnostic: null, positioned, web: null });
+        setSufficiency(data.sufficiency);
       } else if ((searchMode as string) === 'web') {
         const data = await researchWebSearch(searchTerm, finalResultsCount);
         // Map DiseaseDTO → WebSearchResult shape
@@ -86,7 +92,8 @@ export const ResearchView: React.FC = () => {
         setWebDocsAdded(data.web_enriched?.docs_added ?? 0);
       } else {
         const data = await researchSearchDiseases(searchTerm, finalResultsCount);
-        setResults({ hybrid: null, diagnostic: data, positioned: null, web: null });
+        setResults({ hybrid: null, diagnostic: data.diseases, positioned: null, web: null });
+        setSufficiency(data.sufficiency);
       }
     } catch (err) {
       console.error('Research search failed:', err);
@@ -100,6 +107,7 @@ export const ResearchView: React.FC = () => {
     setResults({ hybrid: null, diagnostic: null, positioned: null, web: null });
     setWebEnriched(false);
     setWebDocsAdded(0);
+    setSufficiency(null);
   };
 
   // Hybrid configuration sliders are kept for future use (not all are routed yet)
@@ -133,6 +141,16 @@ export const ResearchView: React.FC = () => {
           <div className="mx-6 mt-4 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2.5 text-xs text-blue-800 font-medium">
             <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             Búsqueda web activada — {webDocsAdded} documento{webDocsAdded !== 1 ? 's' : ''} nuevos indexados desde PubMed / EuropePMC / MedlinePlus
+          </div>
+        )}
+
+        {/* Insufficiency banner */}
+        {sufficiency && !sufficiency.sufficient && (searchMode as string) !== 'web' && (
+          <div className="mx-6 mt-4">
+            <InsufficiencyBanner
+              sufficiency={sufficiency}
+              onActivateWeb={() => setSearchMode('web' as typeof searchMode)}
+            />
           </div>
         )}
 

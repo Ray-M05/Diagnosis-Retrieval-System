@@ -7,7 +7,7 @@
  */
 
 import { runPipeline } from '../../api/client';
-import type { PipelineResponse, PositionedResult, WebEnrichmentSummary } from '../../api/client';
+import type { PipelineResponse, PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../../api/client';
 import type { DiseaseResult } from './research.types';
 
 export async function researchSearchHybrid(query: string, k: number): Promise<PipelineResponse> {
@@ -18,14 +18,16 @@ export async function researchSearchHybrid(query: string, k: number): Promise<Pi
   });
 }
 
-export async function researchSearchDiseases(query: string, k: number): Promise<DiseaseResult[]> {
+export async function researchSearchDiseases(
+  query: string,
+  k: number,
+): Promise<{ diseases: DiseaseResult[]; sufficiency: SufficiencyInfo | null }> {
   const res = await runPipeline({
     query,
     k,
     stages: { web_enrichment: false, positioning: false, generation: false },
   });
-  // The /pipeline endpoint returns DiseaseDTO[] in `hybrid`; map to DiseaseResult shape
-  return res.hybrid.map((d, idx) => ({
+  const diseases: DiseaseResult[] = res.hybrid.map((d, idx) => ({
     disease_name: d.name,
     disease_name_display: d.name,
     aggregated_score: 0,
@@ -33,15 +35,19 @@ export async function researchSearchDiseases(query: string, k: number): Promise<
     rank: d.rank ?? idx + 1,
     evidence: [],
   }));
+  return { diseases, sufficiency: res.sufficiency };
 }
 
-export async function researchSearchPositioned(query: string, k: number): Promise<PositionedResult[]> {
+export async function researchSearchPositioned(
+  query: string,
+  k: number,
+): Promise<{ positioned: PositionedResult[]; sufficiency: SufficiencyInfo | null }> {
   const res = await runPipeline({
     query,
     k,
     stages: { web_enrichment: false, positioning: true, generation: false },
   });
-  return (res.positioned ?? []) as PositionedResult[];
+  return { positioned: (res.positioned ?? []) as PositionedResult[], sufficiency: res.sufficiency };
 }
 
 export interface WebSearchResult {

@@ -13,10 +13,11 @@ import {
   Upload,
 } from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
+import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseChart, streamPipeline } from '../api/client';
 import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse, Disease } from '../types';
-import type { PositionedResult, WebEnrichmentSummary } from '../api/client';
+import type { PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../api/client';
 import type { SearchBarMode } from '../components/SearchBar';
 import { emptyChart } from '../types';
 
@@ -158,6 +159,7 @@ export const ClinicalRAGView: React.FC = () => {
   const [positionedResults, setPositionedResults] = useState<PositionedResult[] | null>(null);
   const [hybridResults, setHybridResults] = useState<Disease[] | null>(null);
   const [webEnrichment, setWebEnrichment] = useState<WebEnrichmentSummary | null>(null);
+  const [sufficiency, setSufficiency] = useState<SufficiencyInfo | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -204,6 +206,7 @@ export const ClinicalRAGView: React.FC = () => {
     setPositionedResults(null);
     setHybridResults(null);
     setWebEnrichment(null);
+    setSufficiency(null);
     setEvidenceOpen(false);
     setError(null);
   };
@@ -237,6 +240,7 @@ export const ClinicalRAGView: React.FC = () => {
           setHybridResults(stages.hybrid);
           setPositionedResults(stages.positioned);
           setWebEnrichment(stages.web_enriched);
+          setSufficiency(stages.sufficiency);
         },
         onToken: (delta) => setStreamedText((prev) => prev + delta),
         onDone: (response) => {
@@ -533,6 +537,14 @@ export const ClinicalRAGView: React.FC = () => {
                 {ragResponse.usage.output_tokens} tokens ·{' '}
                 {ragResponse.usage.model || 'groq'}
               </p>
+            )}
+
+            {/* Insufficiency banner — shown when generation completed and knowledge was insufficient */}
+            {!isGenerating && sufficiency && !sufficiency.sufficient && searchMode !== 'web' && (
+              <InsufficiencyBanner
+                sufficiency={sufficiency}
+                onActivateWeb={() => setSearchMode('web')}
+              />
             )}
 
             {/* Evidence tag — only when web or positioning stages produced results */}

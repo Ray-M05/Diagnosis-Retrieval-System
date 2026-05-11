@@ -92,6 +92,17 @@ class WebEnrichmentSummary(BaseModel):
     chunks_added: int
 
 
+class SufficiencyInfo(BaseModel):
+    """Knowledge-sufficiency evaluation for the current hybrid retrieval result."""
+    sufficient: bool
+    insufficiency_score: float
+    rank_confidence: float
+    useful_count: int
+    symptom_coverage: float
+    source_diversity: int
+    failed_criteria: list[str]
+
+
 class PipelineResponse(BaseModel):
     """Non-streaming response (when stages.generation is False).
 
@@ -101,6 +112,7 @@ class PipelineResponse(BaseModel):
     hybrid: list[DiseaseDTO] = []
     positioned: Optional[list] = None     # list[dict] from search_positioned
     web_enriched: Optional[WebEnrichmentSummary] = None
+    sufficiency: Optional[SufficiencyInfo] = None
     elapsed_seconds: float
 
 

@@ -42,6 +42,7 @@ from sri_dx.app.api.dto import (
     PipelineStages,
     SearchDiseasesRequest,
     SearchDiseasesResponse,
+    SufficiencyInfo,
     WebEnrichmentSummary,
 )
 from sri_dx.modules.rag.chart_file_parser import ChartFileParser
@@ -272,6 +273,39 @@ def _run_positioning(query: str, k: int) -> list:
         return []
 
 
+def _evaluate_sufficiency(query: str, k: int) -> SufficiencyInfo | None:
+    """Run LocalSufficiencyEvaluator against the current hybrid index."""
+    try:
+        from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
+        from sri_dx.modules.web_search.schemas import LocalRetrievalResult
+        from sri_dx.usecases.web_search.search_web_and_enrich import (
+            _retrieval_results_to_chunks,
+            _extract_symptoms,
+        )
+
+        raw = _pipeline.search(query)
+        chunks = _retrieval_results_to_chunks(raw)
+        symptoms = _extract_symptoms(query)
+        evaluator = LocalSufficiencyEvaluator()
+        decision = evaluator.evaluate(LocalRetrievalResult(
+            query=query,
+            extracted_symptoms=symptoms,
+            results=chunks,
+        ))
+        return SufficiencyInfo(
+            sufficient=decision.sufficient,
+            insufficiency_score=decision.insufficiency_score,
+            rank_confidence=decision.rank_confidence,
+            useful_count=decision.useful_count,
+            symptom_coverage=decision.symptom_coverage,
+            source_diversity=decision.source_diversity,
+            failed_criteria=decision.failed_criteria,
+        )
+    except Exception as exc:
+        logger.warning("Sufficiency evaluation failed: %s", exc)
+        return None
+
+
 def _execute_pipeline_stages(
     query: str, stages: PipelineStages, k: int
 ) -> PipelineResponse:
@@ -299,11 +333,16 @@ def _execute_pipeline_stages(
 
     positioned = _run_positioning(query, k) if stages.positioning else None
 
+    # Only evaluate sufficiency when web enrichment was NOT active (if already
+    # enriched, the results are implicitly sufficient from the caller's POV).
+    sufficiency = None if stages.web_enrichment else _evaluate_sufficiency(query, k)
+
     return PipelineResponse(
         query=query,
         hybrid=hybrid_dtos,
         positioned=positioned,
         web_enriched=web_summary,
+        sufficiency=sufficiency,
         elapsed_seconds=time.monotonic() - t0,
     )
 
@@ -316,8 +355,6 @@ async def pipeline(req: PipelineRequest):
         return _execute_pipeline_stages(req.query, req.stages, req.k)
 
     # Streaming (RAG) path
-    if req.chart is None:
-        raise HTTPException(400, detail="`chart` is required when stages.generation is true.")
     if _rag_uc is None:
         if _llm_status == "unreachable":
             raise HTTPException(503, detail="LLM not available. Verify GROQ_API_KEY.")
@@ -326,12 +363,15 @@ async def pipeline(req: PipelineRequest):
     # Execute retrieval stages first (synchronous), then stream the LLM.
     stages_response = _execute_pipeline_stages(req.query, req.stages, req.k)
 
+    from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
+    chart = req.chart if req.chart is not None else _PatientChart()
+
     def generate():
         try:
             # Emit non-generation stages first so the UI can render them
             yield f"event: stages\ndata: {stages_response.model_dump_json()}\n\n"
 
-            for item in _rag_uc.run_streaming(req.chart, req.query):
+            for item in _rag_uc.run_streaming(chart, req.query):
                 if isinstance(item, RAGResponse):
                     payload = item.model_dump_json()
                     yield f"event: response\ndata: {payload}\n\n"

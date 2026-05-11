@@ -37,11 +37,22 @@ export interface WebEnrichmentSummary {
   chunks_added: number;
 }
 
+export interface SufficiencyInfo {
+  sufficient: boolean;
+  insufficiency_score: number;
+  rank_confidence: number;
+  useful_count: number;
+  symptom_coverage: number;
+  source_diversity: number;
+  failed_criteria: string[];
+}
+
 export interface PipelineResponse {
   query: string;
   hybrid: Disease[];
   positioned: PositionedResult[] | null;
   web_enriched: WebEnrichmentSummary | null;
+  sufficiency: SufficiencyInfo | null;
   elapsed_seconds: number;
 }
 
