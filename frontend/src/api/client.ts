@@ -97,12 +97,20 @@ export async function runPipeline(req: PipelineRequest): Promise<PipelineRespons
   if (req.stages.generation) {
     throw new Error('runPipeline does not support generation. Use streamPipeline instead.');
   }
-  const res = await fetch(`${API_BASE}/pipeline`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...req, k: req.k ?? 10 }),
-  });
-  if (!res.ok) throw new Error(`Pipeline failed: ${res.statusText}`);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/pipeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...req, k: req.k ?? 10 }),
+    });
+  } catch (err) {
+    throw new Error(`Pipeline network error: ${String(err)}`);
+  }
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Pipeline failed ${res.status}: ${detail || res.statusText}`);
+  }
   return res.json() as Promise<PipelineResponse>;
 }
 
