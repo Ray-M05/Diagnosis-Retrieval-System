@@ -78,6 +78,8 @@ export interface Disease {
   sourceUrl: string;
   evidence_count: number;
   rank: number;
+  feedback_chunk_id?: string | null;
+  feedback_doc_id?: string | null;
 }
 
 export interface ParseChartResponse {

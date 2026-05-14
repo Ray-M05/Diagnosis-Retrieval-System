@@ -32,6 +32,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from sri_dx.app.api.feedback import build_feedback_router
 from sri_dx.app.api.dto import (
     ClinicalRAGRequest,
     DiseaseDTO,
@@ -56,13 +57,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _pipeline = None        # TwoStageRetrievalPipeline
+_feedback_store = None  # SqliteFeedbackStore
 _rag_uc: ClinicalRAGUseCase | None = None
 _llm_status: str = "unreachable"
 _os_status: str = "unreachable"
 _chart_parser = ChartFileParser()
 
 
-def _build_pipeline():
+def _build_feedback_store():
+    import os
+    from pathlib import Path
+
+    from sri_dx.adapters.stores.sqlite_feedback_store import SqliteFeedbackStore
+
+    db_path = Path(os.environ.get("SRI_FEEDBACK_DB", "data/feedback/feedback.sqlite"))
+    return SqliteFeedbackStore(db_path)
+
+
+def _build_pipeline(feedback_store=None):
     from sri_dx.adapters.stores.opensearch_search_backend import (
         OpenSearchSearchBackend,
         OpenSearchSearchConfig,
@@ -98,6 +110,26 @@ def _build_pipeline():
     return TwoStageRetrievalPipeline(
         hybrid_search=hybrid,
         config=TwoStageRetrievalConfig(hybrid_candidates=100, final_results=10),
+        feedback_store=feedback_store,
+    )
+
+
+def _build_chunk_reader():
+    import os
+    from sri_dx.adapters.stores.opensearch_chunk_reader import OpenSearchChunkReader
+    from sri_dx.adapters.stores.schemas.opensearch_chunk_reader_config import (
+        OpenSearchChunkReaderConfig,
+    )
+
+    os_host = os.environ.get("SRI_OS_HOST", "localhost")
+    os_port = int(os.environ.get("SRI_OS_PORT", "9200"))
+    chunks_index = os.environ.get("SRI_CHUNKS_INDEX", "clinical_chunks")
+    return OpenSearchChunkReader(
+        OpenSearchChunkReaderConfig(
+            host=os_host,
+            port=os_port,
+            index_name=chunks_index,
+        )
     )
 
 
@@ -120,11 +152,12 @@ def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _pipeline, _rag_uc, _llm_status, _os_status
+    global _pipeline, _feedback_store, _rag_uc, _llm_status, _os_status
 
     logger.info("SRI-DX API starting — building pipeline...")
     try:
-        _pipeline = _build_pipeline()
+        _feedback_store = _build_feedback_store()
+        _pipeline = _build_pipeline(_feedback_store)
         _os_status = "ready"
         logger.info("Pipeline ready.")
     except Exception as exc:
@@ -136,6 +169,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield  # app runs here
 
+    if _feedback_store is not None:
+        _feedback_store.close()
     logger.info("SRI-DX API shutting down.")
 
 
@@ -242,8 +277,7 @@ def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
     )
 
 
-def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
-    diseases = _pipeline.search_diseases(query=query, final_results=k)
+def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
     dtos: list[DiseaseDTO] = []
     for d in diseases:
         top_ev = d.evidence[0] if d.evidence else None
@@ -256,8 +290,26 @@ def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
             sourceUrl=top_ev.url if top_ev else "",
             evidence_count=d.evidence_count,
             rank=d.rank,
+            feedback_chunk_id=top_ev.chunk_id if top_ev else None,
+            feedback_doc_id=top_ev.doc_id if top_ev else None,
         ))
     return dtos
+
+
+def _diseases_to_pipeline_response(query: str, diseases: list, elapsed_seconds: float) -> PipelineResponse:
+    return PipelineResponse(
+        query=query,
+        hybrid=_diseases_to_dtos(diseases),
+        positioned=None,
+        web_enriched=None,
+        sufficiency=None,
+        elapsed_seconds=elapsed_seconds,
+    )
+
+
+def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
+    diseases = _pipeline.search_diseases(query=query, final_results=k)
+    return _diseases_to_dtos(diseases)
 
 
 def _run_positioning(query: str, k: int) -> list:
@@ -345,6 +397,14 @@ def _execute_pipeline_stages(
         sufficiency=sufficiency,
         elapsed_seconds=time.monotonic() - t0,
     )
+
+
+app.include_router(build_feedback_router(
+    get_pipeline=lambda: _pipeline,
+    get_feedback_store=lambda: _feedback_store,
+    get_chunk_reader=_build_chunk_reader,
+    diseases_to_response=_diseases_to_pipeline_response,
+))
 
 
 @app.post("/pipeline")

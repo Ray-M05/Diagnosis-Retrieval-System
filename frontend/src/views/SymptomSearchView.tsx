@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Search, Globe } from 'lucide-react';
+import { RefreshCw, Search, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DiseaseCard } from '../components/DiseaseCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
 import { runPipeline } from '../api/client';
+import { useFeedback } from '../hooks/useFeedback';
 import type { Disease } from '../types';
 import type { PipelineResponse, PositionedResult } from '../api/client';
 import type { SearchBarMode } from '../components/SearchBar';
@@ -92,10 +93,13 @@ export const SymptomSearchView: React.FC = () => {
   const [mode, setMode] = useState<SearchBarMode>('standard');
   const [response, setResponse] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refinedQuery, setRefinedQuery] = useState<string | null>(null);
+  const feedback = useFeedback();
 
   const clearAll = () => {
     setResponse(null);
     setError(null);
+    setRefinedQuery(null);
   };
 
   const handleClear = () => {
@@ -126,10 +130,37 @@ export const SymptomSearchView: React.FC = () => {
         },
       });
       setResponse(data);
+      setRefinedQuery(null);
     } catch (err) {
       setError(String(err));
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleFeedbackSubmit = async (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => {
+    try {
+      await feedback.submit(args);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const handleRefine = async () => {
+    if (!searchTerm.trim()) return;
+    setError(null);
+    try {
+      const refined = await feedback.refine(searchTerm.trim(), 10);
+      setResponse(refined.results);
+      setRefinedQuery(refined.refined_query);
+      setMode('standard');
+    } catch (err) {
+      setError(String(err));
     }
   };
 
@@ -213,13 +244,35 @@ export const SymptomSearchView: React.FC = () => {
                   {totalCount} found
                 </span>
               </h2>
+              {mode !== 'positioned' && feedback.hasFeedback && (
+                <button
+                  type="button"
+                  onClick={handleRefine}
+                  disabled={feedback.isRefining}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${feedback.isRefining ? 'animate-spin' : ''}`} />
+                  Refinar
+                </button>
+              )}
             </div>
+
+            {refinedQuery && refinedQuery !== searchTerm.trim() && (
+              <div className="mx-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs text-indigo-700">
+                Consulta refinada: {refinedQuery}
+              </div>
+            )}
 
             {mode !== 'positioned' && (
               hybridDiseases.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {hybridDiseases.map((d) => (
-                    <DiseaseCard key={d.id} disease={d} />
+                    <DiseaseCard
+                      key={d.id}
+                      disease={d}
+                      query={response?.query ?? searchTerm}
+                      onFeedback={handleFeedbackSubmit}
+                    />
                   ))}
                 </div>
               ) : (

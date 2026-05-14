@@ -2,12 +2,24 @@ import React from 'react';
 import { Link2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Disease } from '../types';
+import { RelevanceFeedbackButtons } from './feedback/RelevanceFeedbackButtons';
 
 interface DiseaseCardProps {
   disease: Disease;
+  query?: string;
+  onFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => Promise<void>;
 }
 
-export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
+export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeedback }) => {
+  const canSubmitFeedback = Boolean(
+    query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -51,19 +63,32 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
         </p>
       )}
 
-      <div className="mt-auto pt-4 border-t border-gray-50 flex items-center gap-2">
-        <Link2 className="w-4 h-4 text-gray-400" />
+      <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+        <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
         {disease.sourceUrl ? (
           <a
             href={disease.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
+            className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors truncate"
           >
             {disease.source || disease.sourceUrl.split('/')[2] || 'Source'}
           </a>
         ) : (
-          <span className="text-xs text-gray-300">{disease.source || '—'}</span>
+            <span className="text-xs text-gray-300">{disease.source || '-'}</span>
+        )}
+        </div>
+
+        {canSubmitFeedback && (
+          <RelevanceFeedbackButtons
+            onSubmit={(relevant) => onFeedback!({
+              query: query!,
+              chunkId: disease.feedback_chunk_id!,
+              docId: disease.feedback_doc_id!,
+              relevant,
+            })}
+          />
         )}
       </div>
     </motion.div>

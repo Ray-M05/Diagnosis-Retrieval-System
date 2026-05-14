@@ -37,6 +37,8 @@ class DiseaseDTO(BaseModel):
     sourceUrl: str            # url of top evidence
     evidence_count: int
     rank: int
+    feedback_chunk_id: str | None = None
+    feedback_doc_id: str | None = None
 
 
 class SearchDiseasesResponse(BaseModel):

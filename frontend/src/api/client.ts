@@ -63,6 +63,32 @@ export interface PipelineRequest {
   k?: number;
 }
 
+export interface FeedbackRequest {
+  session_id: string;
+  query: string;
+  chunk_id: string;
+  doc_id: string;
+  relevant: boolean;
+}
+
+export interface FeedbackResponse {
+  ok: boolean;
+  message: string;
+}
+
+export interface RefineSearchRequest {
+  session_id: string;
+  query: string;
+  k?: number;
+}
+
+export interface RefineSearchResponse {
+  original_query: string;
+  refined_query: string;
+  strategy: 'feedback_textual';
+  results: PipelineResponse;
+}
+
 /**
  * Non-streaming call (stages.generation === false).
  * Returns a full PipelineResponse once the server finishes.
@@ -78,6 +104,26 @@ export async function runPipeline(req: PipelineRequest): Promise<PipelineRespons
   });
   if (!res.ok) throw new Error(`Pipeline failed: ${res.statusText}`);
   return res.json() as Promise<PipelineResponse>;
+}
+
+export async function submitRelevanceFeedback(req: FeedbackRequest): Promise<FeedbackResponse> {
+  const res = await fetch(`${API_BASE}/feedback/relevance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(`Feedback failed: ${res.statusText}`);
+  return res.json() as Promise<FeedbackResponse>;
+}
+
+export async function refineSearch(req: RefineSearchRequest): Promise<RefineSearchResponse> {
+  const res = await fetch(`${API_BASE}/feedback/search/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...req, k: req.k ?? 10 }),
+  });
+  if (!res.ok) throw new Error(`Refine failed: ${res.statusText}`);
+  return res.json() as Promise<RefineSearchResponse>;
 }
 
 export interface StreamPipelineCallbacks {
