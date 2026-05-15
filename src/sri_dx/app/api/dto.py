@@ -92,6 +92,9 @@ class WebEnrichmentSummary(BaseModel):
     triggered: bool
     docs_added: int
     chunks_added: int
+    api_retrieved: int = 0
+    api_new_documents: int = 0
+    duplicates_removed: int = 0
 
 
 class SufficiencyInfo(BaseModel):

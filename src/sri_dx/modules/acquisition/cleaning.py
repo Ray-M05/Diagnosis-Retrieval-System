@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from html import unescape
 from sri_dx.core.schemas.acquisition.acquired_document import Section
 
 _ws = re.compile(r"[ \t]+")
 _nl = re.compile(r"\n{3,}")
+_html_break = re.compile(r"</?(?:p|div|br|li|ul|ol|h[1-6]|section|article|tr|td|th)\b[^>]*>", re.IGNORECASE)
+_html_tag = re.compile(r"<[^>]+>")
 
 
 def clean_text(text: str) -> str:
@@ -19,7 +22,10 @@ def clean_text(text: str) -> str:
     if not text:
         return ""
 
-    t = unicodedata.normalize("NFKC", text)
+    t = unescape(text)
+    t = _html_break.sub("\n", t)
+    t = _html_tag.sub("", t)
+    t = unicodedata.normalize("NFKC", t)
     t = t.replace("\r\n", "\n").replace("\r", "\n")
     t = _ws.sub(" ", t)
     t = _nl.sub("\n\n", t)

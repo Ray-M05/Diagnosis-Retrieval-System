@@ -35,6 +35,9 @@ export interface WebEnrichmentSummary {
   triggered: boolean;
   docs_added: number;
   chunks_added: number;
+  api_retrieved: number;
+  api_new_documents: number;
+  duplicates_removed: number;
 }
 
 export interface SufficiencyInfo {

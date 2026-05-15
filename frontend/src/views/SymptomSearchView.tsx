@@ -195,7 +195,7 @@ export const SymptomSearchView: React.FC = () => {
         {webEnriched?.triggered && (
           <div className="px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2 text-xs text-blue-800 font-medium">
             <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            Búsqueda web activada — {webEnriched.docs_added} documento(s) nuevos indexados desde PubMed / EuropePMC / MedlinePlus
+            Búsqueda web activada — {webEnriched.api_retrieved} documento(s) recuperados, {webEnriched.docs_added} nuevo(s) indexados desde PubMed / EuropePMC / MedlinePlus
           </div>
         )}
 

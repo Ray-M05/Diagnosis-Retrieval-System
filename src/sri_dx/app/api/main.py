@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
+from html import unescape
 from typing import AsyncIterator
 from urllib.parse import urlparse
 
@@ -315,7 +317,7 @@ async def parse_chart(file: UploadFile = File(...)):
 # ---------------------------------------------------------------------------
 
 
-def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
+def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseDTO]]:
     """Triggers web search + reindexing if local results are insufficient.
 
     After this returns, _pipeline.search() will hit the enriched index.
@@ -408,11 +410,61 @@ def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
         chunk_cfg=ChunkingConfig(max_chars=1200, overlap_chars=200, min_chars=100),
     )
     report = use_case.run(query=query)
-    return WebEnrichmentSummary(
-        triggered=report.web_search_triggered,
-        docs_added=report.indexing.docs_indexed,
-        chunks_added=report.indexing.chunks_indexed,
+    return (
+        WebEnrichmentSummary(
+            triggered=report.web_search_triggered,
+            docs_added=report.indexing.docs_indexed,
+            chunks_added=report.indexing.chunks_indexed,
+            api_retrieved=report.api_retrieval.total,
+            api_new_documents=report.deduplication.new_documents,
+            duplicates_removed=report.deduplication.duplicates_removed,
+        ),
+        _web_report_results_to_dtos(report.results),
     )
+
+
+def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
+    """Map web-search chunk ranking to the frontend's existing result DTO."""
+    dtos: list[DiseaseDTO] = []
+    for i, result in enumerate(results, start=1):
+        rank = int(result.get("rank") or i)
+        doc_id = str(result.get("doc_id") or f"web-doc-{rank}")
+        chunk_id = str(result.get("chunk_id") or doc_id)
+        url = str(result.get("url") or "")
+        source_domain = str(result.get("source_domain") or "")
+        title = _clean_display_title(
+            str(result.get("title") or _display_title_from_url(url, source_domain, f"Resultado web #{rank}"))
+        )
+        dtos.append(DiseaseDTO(
+            id=f"{doc_id}:{chunk_id}",
+            name=title,
+            description=str(result.get("chunk_text") or ""),
+            symptoms=[],
+            source=source_domain,
+            sourceUrl=url,
+            evidence_count=1,
+            rank=rank,
+            feedback_chunk_id=chunk_id,
+            feedback_doc_id=doc_id,
+        ))
+    return dtos
+
+
+def _display_title_from_url(url: str, source_domain: str, fallback: str) -> str:
+    if source_domain:
+        parsed = urlparse(url) if url else None
+        path = parsed.path.strip("/") if parsed else ""
+        if path:
+            slug = path.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").strip()
+            if slug:
+                return f"{slug} ({source_domain})"
+        return source_domain
+    return fallback
+
+
+def _clean_display_title(title: str) -> str:
+    cleaned = re.sub(r"<[^>]+>", "", unescape(str(title or "")))
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
@@ -510,10 +562,11 @@ def _execute_pipeline_stages(
 
     t0 = time.monotonic()
     web_summary: WebEnrichmentSummary | None = None
+    web_ranked_dtos: list[DiseaseDTO] | None = None
 
     if stages.web_enrichment:
         try:
-            web_summary = _run_web_enrichment(query)
+            web_summary, web_ranked_dtos = _run_web_enrichment(query)
         except ImportError as exc:
             logger.exception("web enrichment import failed")
             raise HTTPException(
@@ -524,11 +577,14 @@ def _execute_pipeline_stages(
             logger.exception("web enrichment failed")
             raise HTTPException(500, detail=f"web enrichment: {exc}") from exc
 
-    try:
-        hybrid_dtos = _run_hybrid_diseases(query, k)
-    except Exception as exc:
-        logger.exception("hybrid retrieval failed")
-        raise HTTPException(500, detail=str(exc)) from exc
+    if web_ranked_dtos is not None:
+        hybrid_dtos = web_ranked_dtos[:k]
+    else:
+        try:
+            hybrid_dtos = _run_hybrid_diseases(query, k)
+        except Exception as exc:
+            logger.exception("hybrid retrieval failed")
+            raise HTTPException(500, detail=str(exc)) from exc
 
     positioned = _run_positioning(query, k) if stages.positioning else None
 

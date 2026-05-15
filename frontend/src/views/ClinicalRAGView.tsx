@@ -559,7 +559,7 @@ export const ClinicalRAGView: React.FC = () => {
                   {evidenceOpen ? 'Ocultar evidencia' : 'Ver evidencia ampliada'}
                   {webEnrichment?.triggered && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-600/90 text-white rounded-full text-[10px]">
-                      <Globe className="w-2.5 h-2.5" /> Web · +{webEnrichment.docs_added}
+                      <Globe className="w-2.5 h-2.5" /> Web · {webEnrichment.api_retrieved}
                     </span>
                   )}
                   {positionedResults && positionedResults.length > 0 && (
@@ -609,7 +609,7 @@ export const ClinicalRAGView: React.FC = () => {
                               <Globe className="w-3.5 h-3.5 text-blue-500" /> Documentos web indexados
                             </div>
                             <p className="text-[11px] text-gray-500">
-                              {webEnrichment.docs_added} documentos · {webEnrichment.chunks_added} chunks nuevos desde PubMed / EuropePMC / MedlinePlus
+                              {webEnrichment.api_retrieved} documentos recuperados · {webEnrichment.docs_added} nuevos · {webEnrichment.chunks_added} chunks indexados desde PubMed / EuropePMC / MedlinePlus
                             </p>
                           </div>
                         )}

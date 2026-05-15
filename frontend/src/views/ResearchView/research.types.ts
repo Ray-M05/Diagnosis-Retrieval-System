@@ -67,6 +67,7 @@ export interface WebSearchResponse {
   diseases: WebSearchResult[];
   web_enriched: boolean;
   docs_added: number;
+  api_retrieved: number;
   elapsed_seconds: number;
 }
 

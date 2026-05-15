@@ -20,12 +20,16 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import re
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any
+
+from opensearchpy import NotFoundError
 
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
 from sri_dx.adapters.medical_apis.medical_api_search_service import (
@@ -113,22 +117,69 @@ def _extract_symptoms(query: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _results_to_response(results: list[RetrievalResult]) -> list[dict]:
+def _results_to_response(
+    results: list[RetrievalResult],
+    docs_by_doc_id: dict[str, dict[str, str]] | None = None,
+) -> list[dict]:
     """Serialise retrieval results to plain dicts for the report."""
     out: list[dict] = []
+    doc_lookup = docs_by_doc_id or {}
     for i, r in enumerate(results, start=1):
         meta = r.metadata or {}
+        doc_meta = doc_lookup.get(r.doc_id, {})
+        chunk_id = meta.get("chunk_id", r.doc_id)
+        title = _clean_display_title(doc_meta.get("title") or meta.get("title") or "")
+        url = meta.get("url") or doc_meta.get("url") or ""
+        source_domain = meta.get("source_domain") or doc_meta.get("source_domain") or ""
         out.append({
             "rank": i,
             "doc_id": r.doc_id,
-            "title": meta.get("title", ""),
-            "url": meta.get("url", ""),
-            "source_domain": meta.get("source_domain", ""),
+            "chunk_id": chunk_id,
+            "title": title,
+            "url": url,
+            "source_domain": source_domain,
             "rerank_score": round(r.rerank_score, 4),
             "hybrid_score": round(r.original_hybrid_score, 4),
             "chunk_text": (r.content or "")[:400],
+            "seed_group": meta.get("seed_group") or doc_meta.get("seed_group") or "",
         })
     return out
+
+
+def _renumber_results(results: list[dict]) -> list[dict]:
+    for i, result in enumerate(results, start=1):
+        result["rank"] = i
+    return results
+
+
+def _clean_display_title(title: str) -> str:
+    cleaned = re.sub(r"<[^>]+>", "", unescape(str(title or "")))
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _interleave_api_results(base_results: list[dict], api_results: list[dict], max_api: int = 3) -> list[dict]:
+    """Mix a few API hits into the web ranking so fresh evidence is visible."""
+    if not api_results:
+        return _renumber_results(base_results)
+
+    seen_chunks = {str(r.get("chunk_id") or "") for r in base_results}
+    unique_api = [
+        result for result in api_results
+        if str(result.get("chunk_id") or "") not in seen_chunks
+    ][:max_api]
+    if not unique_api:
+        return _renumber_results(base_results)
+
+    mixed: list[dict] = []
+    api_iter = iter(unique_api)
+    for i, result in enumerate(base_results, start=1):
+        mixed.append(result)
+        if i in {2, 5, 8}:
+            next_api = next(api_iter, None)
+            if next_api is not None:
+                mixed.append(next_api)
+    mixed.extend(api_iter)
+    return _renumber_results(mixed)
 
 
 # Use case
@@ -219,7 +270,10 @@ class SearchWebAndEnrichUseCase:
                 query_hash=q_hash,
                 web_search_triggered=False,
                 sufficiency=decision,
-                results=_results_to_response(local_raw),
+                results=_results_to_response(
+                    local_raw,
+                    self._load_docs_by_doc_id(local_raw),
+                ),
             )
             self._save_report(report)
             return report
@@ -262,6 +316,11 @@ class SearchWebAndEnrichUseCase:
         if not new_docs:
             logger.info("No new documents after dedup — re-running retrieval without indexing")
             final_raw = self.pipeline.search(query)
+            final_results = _results_to_response(
+                final_raw,
+                self._load_docs_by_doc_id(final_raw),
+            )
+            api_results = self._search_api_chunks_for_query(query=query, query_hash=q_hash)
             report = WebSearchRunReport(
                 query=query,
                 query_hash=q_hash,
@@ -269,7 +328,7 @@ class SearchWebAndEnrichUseCase:
                 sufficiency=decision,
                 api_retrieval=api_stats,
                 deduplication=dedup_stats,
-                results=_results_to_response(final_raw),
+                results=_interleave_api_results(final_results, api_results),
             )
             self._save_report(report)
             return report
@@ -312,6 +371,11 @@ class SearchWebAndEnrichUseCase:
         except Exception as exc:
             logger.error("Final retrieval failed: %s", exc)
             final_raw = local_raw
+        final_results = _results_to_response(
+            final_raw,
+            self._load_docs_by_doc_id(final_raw),
+        )
+        api_results = self._search_api_chunks_for_query(query=query, query_hash=q_hash)
 
         # Build and save report
         report = WebSearchRunReport(
@@ -322,7 +386,7 @@ class SearchWebAndEnrichUseCase:
             api_retrieval=api_stats,
             deduplication=dedup_stats,
             indexing=idx_stats,
-            results=_results_to_response(final_raw),
+            results=_interleave_api_results(final_results, api_results),
         )
         self._save_report(report)
         logger.info(
@@ -349,3 +413,90 @@ class SearchWebAndEnrichUseCase:
             logger.info("Report saved to '%s'", path)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not save report: %s", exc)
+
+    def _load_docs_by_doc_id(self, results: list[RetrievalResult]) -> dict[str, dict[str, str]]:
+        """Fetch document metadata for chunk-level retrieval results."""
+        doc_ids = list(dict.fromkeys(r.doc_id for r in results if r.doc_id))
+        return self._load_doc_records_by_id(doc_ids)
+
+    def _search_api_chunks_for_query(self, *, query: str, query_hash: str, size: int = 6) -> list[dict]:
+        """Search API-ingested chunks for this web query."""
+        body = {
+            "size": size,
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": ["section_heading^3", "chunk_text^1"],
+                                "type": "best_fields",
+                                "operator": "or",
+                            }
+                        }
+                    ],
+                    "filter": [{"term": {"seed_id": query_hash}}],
+                }
+            },
+        }
+
+        try:
+            response = self.chunk_sink.client.search(
+                index=self.chunk_sink.cfg.index_name,
+                body=body,
+            )
+        except NotFoundError:
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not search API chunks for web query: %s", exc)
+            return []
+
+        hits = response.get("hits", {}).get("hits", [])
+        doc_ids = [str((hit.get("_source") or {}).get("doc_id") or "") for hit in hits]
+        docs_by_id = self._load_doc_records_by_id(doc_ids)
+
+        results: list[dict] = []
+        for hit in hits:
+            source = hit.get("_source") or {}
+            doc_id = str(source.get("doc_id") or hit.get("_id") or "")
+            doc_meta = docs_by_id.get(doc_id, {})
+            results.append({
+                "rank": 0,
+                "doc_id": doc_id,
+                "chunk_id": str(source.get("chunk_id") or hit.get("_id") or doc_id),
+                "title": _clean_display_title(doc_meta.get("title") or str(source.get("section_heading") or doc_id)),
+                "url": doc_meta.get("url") or str(source.get("url") or ""),
+                "source_domain": doc_meta.get("source_domain") or str(source.get("source_domain") or ""),
+                "rerank_score": 0.0,
+                "hybrid_score": float(hit.get("_score") or 0.0),
+                "chunk_text": str(source.get("chunk_text") or "")[:400],
+                "seed_group": str(source.get("seed_group") or doc_meta.get("seed_group") or ""),
+            })
+        return results
+
+    def _load_doc_records_by_id(self, doc_ids: list[str]) -> dict[str, dict[str, str]]:
+        ids = list(dict.fromkeys(doc_id for doc_id in doc_ids if doc_id))
+        if not ids:
+            return {}
+
+        try:
+            response = self.doc_sink.client.mget(
+                index=self.doc_sink.cfg.index_name,
+                body={"ids": ids},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not load document metadata: %s", exc)
+            return {}
+
+        docs: dict[str, dict[str, str]] = {}
+        for doc in response.get("docs", []):
+            if not doc.get("found"):
+                continue
+            source = doc.get("_source") or {}
+            docs[str(doc.get("_id"))] = {
+                "title": _clean_display_title(str(source.get("title") or "")),
+                "url": str(source.get("url") or "").strip(),
+                "source_domain": str(source.get("source_domain") or "").strip(),
+                "seed_group": str(source.get("seed_group") or "").strip(),
+            }
+        return docs

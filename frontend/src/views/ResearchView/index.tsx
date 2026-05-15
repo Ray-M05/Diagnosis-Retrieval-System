@@ -42,6 +42,7 @@ export const ResearchView: React.FC = () => {
 
   const [webEnriched, setWebEnriched] = useState(false);
   const [webDocsAdded, setWebDocsAdded] = useState(0);
+  const [webDocsRetrieved, setWebDocsRetrieved] = useState(0);
   const [sufficiency, setSufficiency] = useState<SufficiencyInfo | null>(null);
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
@@ -56,6 +57,7 @@ export const ResearchView: React.FC = () => {
     setIsSearching(true);
     setWebEnriched(false);
     setWebDocsAdded(0);
+    setWebDocsRetrieved(0);
     setSufficiency(null);
     try {
       if (searchMode === 'hybrid') {
@@ -90,6 +92,7 @@ export const ResearchView: React.FC = () => {
         setResults({ hybrid: null, diagnostic: null, positioned: null, web: webDiseases });
         setWebEnriched(data.web_enriched?.triggered ?? false);
         setWebDocsAdded(data.web_enriched?.docs_added ?? 0);
+        setWebDocsRetrieved(data.web_enriched?.api_retrieved ?? 0);
       } else {
         const data = await researchSearchDiseases(searchTerm, finalResultsCount);
         setResults({ hybrid: null, diagnostic: data.diseases, positioned: null, web: null });
@@ -107,6 +110,7 @@ export const ResearchView: React.FC = () => {
     setResults({ hybrid: null, diagnostic: null, positioned: null, web: null });
     setWebEnriched(false);
     setWebDocsAdded(0);
+    setWebDocsRetrieved(0);
     setSufficiency(null);
   };
 
@@ -140,7 +144,7 @@ export const ResearchView: React.FC = () => {
         {(searchMode as string) === 'web' && webEnriched && (
           <div className="mx-6 mt-4 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2.5 text-xs text-blue-800 font-medium">
             <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            Búsqueda web activada — {webDocsAdded} documento{webDocsAdded !== 1 ? 's' : ''} nuevos indexados desde PubMed / EuropePMC / MedlinePlus
+            Búsqueda web activada — {webDocsRetrieved} documento{webDocsRetrieved !== 1 ? 's' : ''} recuperados, {webDocsAdded} nuevo{webDocsAdded !== 1 ? 's' : ''} indexados desde PubMed / EuropePMC / MedlinePlus
           </div>
         )}
 
