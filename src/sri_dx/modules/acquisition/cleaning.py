@@ -6,7 +6,7 @@ from html import unescape
 from sri_dx.core.schemas.acquisition.acquired_document import Section
 
 _ws = re.compile(r"[ \t]+")
-_nl = re.compile(r"\n{3,}")
+_nl = re.compile(r"\n{2,}")
 _html_break = re.compile(r"</?(?:p|div|br|li|ul|ol|h[1-6]|section|article|tr|td|th)\b[^>]*>", re.IGNORECASE)
 _html_tag = re.compile(r"<[^>]+>")
 
@@ -28,7 +28,7 @@ def clean_text(text: str) -> str:
     t = unicodedata.normalize("NFKC", t)
     t = t.replace("\r\n", "\n").replace("\r", "\n")
     t = _ws.sub(" ", t)
-    t = _nl.sub("\n\n", t)
+    t = _nl.sub("\n", t)
     return t.strip()
 
 

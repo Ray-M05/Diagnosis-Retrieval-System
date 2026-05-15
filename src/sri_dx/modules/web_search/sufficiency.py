@@ -102,7 +102,9 @@ def _source_diversity(
     domains: dict[str, str] = {}
     for r in results:
         if _normalise_score(r.final_score) >= theta_useful_doc_score:
-            domains[r.doc_id] = r.source_domain
+            domain = (r.source_domain or "").strip().lower()
+            if domain:
+                domains[r.doc_id] = domain
     return len(set(domains.values()))
 
 

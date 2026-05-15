@@ -529,11 +529,14 @@ def _evaluate_sufficiency(query: str, k: int) -> SufficiencyInfo | None:
             _retrieval_results_to_chunks,
             _extract_symptoms,
         )
+        from sri_dx.core.config import load_config
 
-        raw = _pipeline.search(query)
+        raw = _pipeline.search(query, final_results=max(k, 20))
         chunks = _retrieval_results_to_chunks(raw)
         symptoms = _extract_symptoms(query)
-        evaluator = LocalSufficiencyEvaluator()
+        evaluator = LocalSufficiencyEvaluator.from_config(
+            load_config().web_search.sufficiency
+        )
         decision = evaluator.evaluate(LocalRetrievalResult(
             query=query,
             extracted_symptoms=symptoms,

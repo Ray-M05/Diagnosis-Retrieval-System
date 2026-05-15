@@ -40,7 +40,7 @@ from sri_dx.adapters.stores.opensearch_sink import OpenSearchIndexSink
 from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
 from sri_dx.modules.indexing.chunking import ChunkingConfig
 from sri_dx.modules.web_search.converters import external_to_acquired_dict
-from sri_dx.modules.web_search.deduplicator import ApiDocumentDeduplicator
+from sri_dx.modules.web_search.deduplicator import ApiDocumentDeduplicator, identity_keys
 from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
 from sri_dx.modules.web_search.schemas import (
     DeduplicationStats,
@@ -240,8 +240,12 @@ class SearchWebAndEnrichUseCase:
 
         # Stage 1 — Local retrieval
         logger.info("Stage 1: running local two-stage retrieval")
+        configured_k = getattr(getattr(self.pipeline, "config", None), "final_results", 10)
+        if not isinstance(configured_k, int):
+            configured_k = 10
+        sufficiency_k = max(configured_k, 20)
         try:
-            local_raw = self.pipeline.search(query)
+            local_raw = self.pipeline.search(query, final_results=sufficiency_k)
         except Exception as exc:
             logger.error("Local retrieval failed: %s", exc)
             local_raw = []
@@ -297,7 +301,11 @@ class SearchWebAndEnrichUseCase:
                     "Converter error for '%s': %s", ext.title[:60], exc
                 )
 
-        deduplicator = ApiDocumentDeduplicator()
+        existing_hashes, existing_keys = self._load_existing_document_identity(pairs)
+        deduplicator = ApiDocumentDeduplicator(
+            existing_content_hashes=existing_hashes,
+            existing_identity_keys=existing_keys,
+        )
         kept_pairs = deduplicator.filter(pairs)
         new_docs = [acq_dict for _, acq_dict in kept_pairs]
 
@@ -418,6 +426,79 @@ class SearchWebAndEnrichUseCase:
         """Fetch document metadata for chunk-level retrieval results."""
         doc_ids = list(dict.fromkeys(r.doc_id for r in results if r.doc_id))
         return self._load_doc_records_by_id(doc_ids)
+
+    def _load_existing_document_identity(
+        self,
+        pairs: list[tuple[ExternalApiDocument, dict]],
+    ) -> tuple[set[str], set[str]]:
+        """Return already-indexed hashes and identity keys for API candidates."""
+        doc_ids = list(dict.fromkeys(
+            str(acq.get("doc_id") or "")
+            for _, acq in pairs
+            if acq.get("doc_id")
+        ))
+        content_hashes = list(dict.fromkeys(
+            str(acq.get("content_hash") or "")
+            for _, acq in pairs
+            if acq.get("content_hash")
+        ))
+        candidate_keys = (
+            set().union(*(identity_keys(ext) for ext, _ in pairs))
+            if pairs else set()
+        )
+
+        existing_hashes: set[str] = set()
+        existing_keys: set[str] = set()
+
+        def register(source: dict) -> None:
+            content_hash = str(source.get("content_hash") or "").strip()
+            if content_hash:
+                existing_hashes.add(content_hash)
+            url = str(source.get("url") or "").strip()
+            if url:
+                existing_keys.add(f"url:{url}")
+
+        if doc_ids:
+            try:
+                response = self.doc_sink.client.mget(
+                    index=self.doc_sink.cfg.index_name,
+                    body={"ids": doc_ids},
+                )
+                docs = response.get("docs", []) if isinstance(response, dict) else []
+                for doc in docs:
+                    if doc.get("found"):
+                        register(doc.get("_source") or {})
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Could not load existing docs for dedup by id: %s", exc)
+
+        if content_hashes:
+            try:
+                response = self.doc_sink.client.search(
+                    index=self.doc_sink.cfg.index_name,
+                    body={
+                        "size": min(len(content_hashes), 1000),
+                        "_source": ["content_hash", "url"],
+                        "query": {"terms": {"content_hash": content_hashes}},
+                    },
+                )
+                hits = (
+                    response.get("hits", {}).get("hits", [])
+                    if isinstance(response, dict) else []
+                )
+                for hit in hits:
+                    register(hit.get("_source") or {})
+            except NotFoundError:
+                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Could not load existing docs for dedup by hash: %s", exc)
+
+        existing_keys &= candidate_keys
+        logger.info(
+            "Dedup corpus check: existing_hashes=%d existing_identity_keys=%d",
+            len(existing_hashes),
+            len(existing_keys),
+        )
+        return existing_hashes, existing_keys
 
     def _search_api_chunks_for_query(self, *, query: str, query_hash: str, size: int = 6) -> list[dict]:
         """Search API-ingested chunks for this web query."""
