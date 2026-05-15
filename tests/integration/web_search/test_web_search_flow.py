@@ -48,7 +48,7 @@ class TestWebSearchEndToEnd:
         from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
         from sri_dx.modules.web_search.schemas import SufficiencyDecision
         from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
-        from sri_dx.usecases.search.tow_stage_retrieval_pipeline import RetrievalResult
+        from sri_dx.usecases.search.two_stage_retrieval_pipeline import RetrievalResult
         from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
 
         cfg = load_config()

@@ -56,7 +56,10 @@ def build_feedback_router(
         if store is None:
             raise HTTPException(503, detail="Feedback store not available.")
 
-        feedback_items = store.get_feedback_for_session(req.session_id)
+        feedback_items = [
+            item for item in store.get_feedback_for_session(req.session_id)
+            if item["query"] == req.query
+        ]
         relevant_ids = [
             item["chunk_id"] for item in feedback_items
             if item["relevant"]

@@ -100,6 +100,7 @@ export const SymptomSearchView: React.FC = () => {
     setResponse(null);
     setError(null);
     setRefinedQuery(null);
+    feedback.reset();
   };
 
   const handleClear = () => {
@@ -118,6 +119,7 @@ export const SymptomSearchView: React.FC = () => {
     setIsSearching(true);
     setError(null);
     setResponse(null);
+    feedback.reset();
 
     try {
       const data = await runPipeline({
@@ -155,10 +157,12 @@ export const SymptomSearchView: React.FC = () => {
     if (!searchTerm.trim()) return;
     setError(null);
     try {
-      const refined = await feedback.refine(searchTerm.trim(), 10);
+      const currentQuery = response?.query ?? searchTerm.trim();
+      const refined = await feedback.refine(currentQuery, 10);
       setResponse(refined.results);
       setRefinedQuery(refined.refined_query);
       setMode('standard');
+      feedback.reset();
     } catch (err) {
       setError(String(err));
     }
@@ -266,14 +270,23 @@ export const SymptomSearchView: React.FC = () => {
             {mode !== 'positioned' && (
               hybridDiseases.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {hybridDiseases.map((d) => (
-                    <DiseaseCard
-                      key={d.id}
-                      disease={d}
-                      query={response?.query ?? searchTerm}
-                      onFeedback={handleFeedbackSubmit}
-                    />
-                  ))}
+                  {hybridDiseases.map((d) => {
+                    const resultKey = [
+                      response?.query ?? searchTerm,
+                      d.id,
+                      d.feedback_doc_id,
+                      d.feedback_chunk_id,
+                      d.name,
+                    ].join('|');
+                    return (
+                      <DiseaseCard
+                        key={resultKey}
+                        disease={d}
+                        query={response?.query ?? searchTerm}
+                        onFeedback={handleFeedbackSubmit}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <EmptyState />

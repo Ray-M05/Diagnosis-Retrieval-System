@@ -1,17 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
 interface RelevanceFeedbackButtonsProps {
   disabled?: boolean;
+  targetId: string;
   onSubmit: (relevant: boolean) => Promise<void>;
 }
 
 export const RelevanceFeedbackButtons: React.FC<RelevanceFeedbackButtonsProps> = ({
   disabled = false,
+  targetId,
   onSubmit,
 }) => {
   const [selected, setSelected] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setSelected(null);
+    setBusy(false);
+  }, [targetId]);
 
   const handleClick = async (relevant: boolean) => {
     setBusy(true);

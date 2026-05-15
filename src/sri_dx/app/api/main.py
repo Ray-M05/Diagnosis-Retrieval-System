@@ -24,6 +24,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,6 +32,7 @@ load_dotenv()
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from sri_dx.app.api.feedback import build_feedback_router
 from sri_dx.app.api.dto import (
@@ -64,6 +66,33 @@ _os_status: str = "unreachable"
 _chart_parser = ChartFileParser()
 
 
+def _opensearch_settings() -> tuple[str, int, bool]:
+    """Read OpenSearch host from either SRI_* or docker-compose OPENSEARCH_HOST."""
+    raw_host = os.environ.get("SRI_OS_HOST") or os.environ.get("OPENSEARCH_HOST") or "localhost"
+    default_port = int(os.environ.get("SRI_OS_PORT", "9200"))
+
+    if "://" in raw_host:
+        parsed = urlparse(raw_host)
+        host = _normalize_opensearch_host(parsed.hostname or "localhost")
+        port = parsed.port or (443 if parsed.scheme == "https" else default_port)
+        use_ssl = parsed.scheme == "https"
+        return host, port, use_ssl
+
+    if ":" in raw_host:
+        host, port_text = raw_host.rsplit(":", 1)
+        if port_text.isdigit():
+            return _normalize_opensearch_host(host), int(port_text), False
+
+    return _normalize_opensearch_host(raw_host), default_port, False
+
+
+def _normalize_opensearch_host(host: str) -> str:
+    """Use Docker DNS only inside containers; local Windows must use localhost."""
+    if host == "opensearch" and not os.path.exists("/.dockerenv"):
+        return "localhost"
+    return host
+
+
 def _build_feedback_store():
     import os
     from pathlib import Path
@@ -86,48 +115,65 @@ def _build_pipeline(feedback_store=None):
         TwoStageRetrievalPipeline,
         TwoStageRetrievalConfig,
     )
-    import os
-
-    os_host = os.environ.get("SRI_OS_HOST", "localhost")
-    os_port = int(os.environ.get("SRI_OS_PORT", "9200"))
+    os_host, os_port, use_ssl = _opensearch_settings()
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks"
+    )
+    embeddings_index = (
+        os.environ.get("SRI_EMBEDDINGS_INDEX")
+        or os.environ.get("OPENSEARCH_EMBEDDINGS_INDEX")
+        or "clinical_embeddings_v1"
+    )
 
     lexical = OpenSearchSearchBackend(OpenSearchSearchConfig(
         host=os_host,
         port=os_port,
-        index_alias="clinical_chunks",
+        use_ssl=use_ssl,
+        index_alias=chunks_index,
         search_fields=["section_heading^3", "chunk_text^1"],
     ))
     embedding = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
         host=os_host,
         port=os_port,
-        index_name="clinical_embeddings_v1",
+        use_ssl=use_ssl,
+        index_name=embeddings_index,
     ))
     hybrid = SearchHybridUseCase(
         lexical_backend=lexical,
         embedding_store=embedding,
         config=HybridSearchConfig(fusion_method="rrf", lexical_k=100, semantic_k=100, use_reranking=False),
     )
+    enable_prf = os.environ.get("SRI_ENABLE_PRF", "false").lower() in {"1", "true", "yes", "on"}
     return TwoStageRetrievalPipeline(
         hybrid_search=hybrid,
-        config=TwoStageRetrievalConfig(hybrid_candidates=100, final_results=10),
+        config=TwoStageRetrievalConfig(
+            hybrid_candidates=100,
+            final_results=10,
+            enable_prf=enable_prf,
+        ),
         feedback_store=feedback_store,
     )
 
 
 def _build_chunk_reader():
-    import os
     from sri_dx.adapters.stores.opensearch_chunk_reader import OpenSearchChunkReader
     from sri_dx.adapters.stores.schemas.opensearch_chunk_reader_config import (
         OpenSearchChunkReaderConfig,
     )
 
-    os_host = os.environ.get("SRI_OS_HOST", "localhost")
-    os_port = int(os.environ.get("SRI_OS_PORT", "9200"))
-    chunks_index = os.environ.get("SRI_CHUNKS_INDEX", "clinical_chunks")
+    os_host, os_port, use_ssl = _opensearch_settings()
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks"
+    )
     return OpenSearchChunkReader(
         OpenSearchChunkReaderConfig(
             host=os_host,
             port=os_port,
+            use_ssl=use_ssl,
             index_name=chunks_index,
         )
     )
@@ -213,6 +259,16 @@ async def health():
     )
 
 
+@app.get("/")
+async def root():
+    return {
+        "name": "SRI-DX Clinical Retrieval API",
+        "health": "/health",
+        "docs": "/docs",
+        "pipeline": "/pipeline",
+    }
+
+
 @app.post("/rag/parse-chart", response_model=ParseChartResponse)
 async def parse_chart(file: UploadFile = File(...)):
     if file.content_type not in ("application/pdf", "text/plain", None):
@@ -264,11 +320,93 @@ def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
 
     After this returns, _pipeline.search() will hit the enriched index.
     """
+    from sri_dx.adapters.medical_apis.europe_pmc_client import EuropePmcClient
+    from sri_dx.adapters.medical_apis.medical_api_search_service import (
+        MedicalApiSearchService,
+    )
+    from sri_dx.adapters.medical_apis.medlineplus_client import MedlinePlusClient
+    from sri_dx.adapters.medical_apis.pubmed_client import PubMedClient
+    from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksSink
+    from sri_dx.adapters.stores.opensearch_sink import (
+        OpenSearchConfig as OpenSearchIndexConfig,
+        OpenSearchIndexSink,
+    )
+    from sri_dx.adapters.stores.schemas.opensearch_chunks_config import (
+        OpenSearchChunksConfig,
+    )
+    from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
+    from sri_dx.modules.indexing.chunking import ChunkingConfig
+    from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
+    from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
     from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
     from sri_dx.core.config import load_config
 
     cfg = load_config()
-    use_case = SearchWebAndEnrichUseCase(pipeline=_pipeline, config=cfg.web_search)
+    if not cfg.web_search.enabled:
+        raise HTTPException(503, detail="Web search module is disabled by configuration.")
+
+    ws_cfg = cfg.web_search
+    os_host, os_port, use_ssl = _opensearch_settings()
+    docs_index = (
+        os.environ.get("SRI_OS_INDEX")
+        or os.environ.get("OPENSEARCH_DOCS_INDEX")
+        or cfg.opensearch.index_name
+    )
+    docs_alias = (
+        os.environ.get("SRI_OS_ALIAS")
+        or os.environ.get("OPENSEARCH_DOCS_ALIAS")
+        or cfg.opensearch.alias_name
+    )
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks_v1"
+    )
+    chunks_alias = (
+        os.environ.get("SRI_CHUNKS_ALIAS")
+        or os.environ.get("OPENSEARCH_CHUNKS_ALIAS")
+        or "clinical_chunks"
+    )
+
+    api_service = MedicalApiSearchService(
+        medlineplus=MedlinePlusClient(
+            retmax=ws_cfg.retmax_medlineplus,
+            timeout=ws_cfg.http_timeout,
+        ),
+        europe_pmc=EuropePmcClient(
+            retmax=ws_cfg.retmax_europe_pmc,
+            timeout=ws_cfg.http_timeout,
+        ),
+        pubmed=PubMedClient(
+            retmax=ws_cfg.retmax_pubmed,
+            timeout=ws_cfg.http_timeout,
+        ),
+    )
+    use_case = SearchWebAndEnrichUseCase(
+        pipeline=_pipeline,
+        sufficiency_evaluator=LocalSufficiencyEvaluator.from_config(ws_cfg.sufficiency),
+        api_service=api_service,
+        delta_writer=JsonlDeltaWriter(ws_cfg.delta_dir),
+        doc_sink=OpenSearchIndexSink(OpenSearchIndexConfig(
+            host=os_host,
+            port=os_port,
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            index_name=docs_index,
+            alias_name=docs_alias,
+        )),
+        chunk_sink=OpenSearchChunksSink(OpenSearchChunksConfig(
+            host=os_host,
+            port=os_port,
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            index_name=chunks_index,
+            alias_name=chunks_alias,
+        )),
+        manifest=SqliteManifestStore(cfg.indexing.manifest_path),
+        report_dir=ws_cfg.report_dir,
+        chunk_cfg=ChunkingConfig(max_chars=1200, overlap_chars=200, min_chars=100),
+    )
     report = use_case.run(query=query)
     return WebEnrichmentSummary(
         triggered=report.web_search_triggered,
@@ -281,8 +419,13 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
     dtos: list[DiseaseDTO] = []
     for d in diseases:
         top_ev = d.evidence[0] if d.evidence else None
+        disease_id = (
+            f"{top_ev.doc_id}:{top_ev.chunk_id}"
+            if top_ev
+            else f"{d.disease_name_display}:{d.rank}"
+        )
         dtos.append(DiseaseDTO(
-            id=str(d.rank),
+            id=disease_id,
             name=d.disease_name_display,
             description=top_ev.content_preview if top_ev else "",
             symptoms=[],
@@ -371,8 +514,12 @@ def _execute_pipeline_stages(
     if stages.web_enrichment:
         try:
             web_summary = _run_web_enrichment(query)
-        except ImportError:
-            raise HTTPException(501, detail="Web search module not available.")
+        except ImportError as exc:
+            logger.exception("web enrichment import failed")
+            raise HTTPException(
+                501,
+                detail=f"Web search module not available: {exc}",
+            ) from exc
         except Exception as exc:
             logger.exception("web enrichment failed")
             raise HTTPException(500, detail=f"web enrichment: {exc}") from exc
@@ -412,7 +559,12 @@ async def pipeline(req: PipelineRequest):
     """Composable retrieval pipeline. See module docstring for stage flow."""
     # Non-streaming path
     if not req.stages.generation:
-        return _execute_pipeline_stages(req.query, req.stages, req.k)
+        return await run_in_threadpool(
+            _execute_pipeline_stages,
+            req.query,
+            req.stages,
+            req.k,
+        )
 
     # Streaming (RAG) path
     if _rag_uc is None:
@@ -421,7 +573,12 @@ async def pipeline(req: PipelineRequest):
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 
     # Execute retrieval stages first (synchronous), then stream the LLM.
-    stages_response = _execute_pipeline_stages(req.query, req.stages, req.k)
+    stages_response = await run_in_threadpool(
+        _execute_pipeline_stages,
+        req.query,
+        req.stages,
+        req.k,
+    )
 
     from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
     chart = req.chart if req.chart is not None else _PatientChart()

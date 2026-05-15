@@ -62,6 +62,12 @@ export function useFeedback() {
     }
   };
 
+  const reset = () => {
+    setHasFeedback(false);
+    setIsSubmitting(false);
+    setIsRefining(false);
+  };
+
   return {
     sessionId,
     hasFeedback,
@@ -69,5 +75,6 @@ export function useFeedback() {
     isRefining,
     submit,
     refine,
+    reset,
   };
 }

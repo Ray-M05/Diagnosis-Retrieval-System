@@ -19,6 +19,12 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeed
   const canSubmitFeedback = Boolean(
     query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
   );
+  const feedbackTargetId = [
+    query,
+    disease.feedback_doc_id,
+    disease.feedback_chunk_id,
+    disease.name,
+  ].join('|');
 
   return (
     <motion.div
@@ -82,6 +88,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeed
 
         {canSubmitFeedback && (
           <RelevanceFeedbackButtons
+            targetId={feedbackTargetId}
             onSubmit={(relevant) => onFeedback!({
               query: query!,
               chunkId: disease.feedback_chunk_id!,

@@ -48,7 +48,7 @@ from sri_dx.modules.web_search.schemas import (
 )
 from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
 from sri_dx.usecases.indexing.index_combined import IndexCombinedUseCase
-from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
+from sri_dx.usecases.search.two_stage_retrieval_pipeline import (
     RetrievalResult,
     TwoStageRetrievalPipeline,
 )
