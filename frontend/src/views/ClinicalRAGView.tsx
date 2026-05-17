@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { parseChart, streamPipeline } from '../api/client';
 import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse, Disease } from '../types';
 import type { PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../api/client';
-import type { SearchBarMode } from '../components/SearchBar';
+import type { SearchBarModifier, SearchBarModifiers } from '../components/SearchBar';
 import { emptyChart } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ export const ClinicalRAGView: React.FC = () => {
   const [chartOpen, setChartOpen] = useState(false);
   const [chart, setChart] = useState<PatientChart>(emptyChart());
   const [query, setQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchBarMode>('standard');
+  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: false });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -212,8 +212,8 @@ export const ClinicalRAGView: React.FC = () => {
     setError(null);
   };
 
-  const handleModeToggle = (m: SearchBarMode) => {
-    setSearchMode((prev) => (prev === m ? 'standard' : m));
+  const handleModifierToggle = (m: SearchBarModifier) => {
+    setModifiers((prev) => ({ ...prev, [m]: !prev[m] }));
     clearResults();
   };
 
@@ -231,8 +231,8 @@ export const ClinicalRAGView: React.FC = () => {
         chart,
         k: 10,
         stages: {
-          web_enrichment: searchMode === 'web',
-          positioning: searchMode === 'positioned',
+          web_enrichment: modifiers.web,
+          positioning: modifiers.positioned,
           generation: true,
         },
       },
@@ -499,10 +499,10 @@ export const ClinicalRAGView: React.FC = () => {
         onClear={() => { setQuery(''); clearResults(); }}
         isLoading={isGenerating}
         placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
-        submitLabel={searchMode === 'standard' ? 'Generate' : 'Search'}
+        submitLabel={!modifiers.web && !modifiers.positioned ? 'Generate' : 'Search'}
         showModeToggles
-        mode={searchMode}
-        onModeToggle={handleModeToggle}
+        modifiers={modifiers}
+        onModifierToggle={handleModifierToggle}
       />
 
       {/* Error */}
@@ -541,10 +541,10 @@ export const ClinicalRAGView: React.FC = () => {
             )}
 
             {/* Insufficiency banner — shown when generation completed and knowledge was insufficient */}
-            {!isGenerating && sufficiency && !sufficiency.sufficient && searchMode !== 'web' && (
+            {!isGenerating && sufficiency && !sufficiency.sufficient && !modifiers.web && (
               <InsufficiencyBanner
                 sufficiency={sufficiency}
-                onActivateWeb={() => setSearchMode('web')}
+                onActivateWeb={() => setModifiers((prev) => ({ ...prev, web: true }))}
               />
             )}
 

@@ -9,7 +9,7 @@ import { runPipeline } from '../api/client';
 import { useFeedback } from '../hooks/useFeedback';
 import type { Disease } from '../types';
 import type { PipelineResponse, PositionedResult } from '../api/client';
-import type { SearchBarMode } from '../components/SearchBar';
+import type { SearchBarModifier, SearchBarModifiers } from '../components/SearchBar';
 
 const relevanceColor: Record<string, string> = {
   high: 'bg-green-100 text-green-700',
@@ -94,7 +94,7 @@ const EmptyState: React.FC = () => (
 export const SymptomSearchView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [mode, setMode] = useState<SearchBarMode>('standard');
+  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: false });
   const [response, setResponse] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refinedQuery, setRefinedQuery] = useState<string | null>(null);
@@ -112,8 +112,8 @@ export const SymptomSearchView: React.FC = () => {
     clearAll();
   };
 
-  const handleModeToggle = (m: SearchBarMode) => {
-    setMode((prev) => (prev === m ? 'standard' : m));
+  const handleModifierToggle = (m: SearchBarModifier) => {
+    setModifiers((prev) => ({ ...prev, [m]: !prev[m] }));
     clearAll();
   };
 
@@ -130,8 +130,8 @@ export const SymptomSearchView: React.FC = () => {
         query: searchTerm.trim(),
         k: 10,
         stages: {
-          web_enrichment: mode === 'web',
-          positioning: mode === 'positioned',
+          web_enrichment: modifiers.web,
+          positioning: modifiers.positioned,
           generation: false,
         },
       });
@@ -165,7 +165,7 @@ export const SymptomSearchView: React.FC = () => {
       const refined = await feedback.refine(currentQuery, 10);
       setResponse(refined.results);
       setRefinedQuery(refined.refined_query);
-      setMode('standard');
+      setModifiers({ web: false, positioned: false });
       feedback.reset();
     } catch (err) {
       setError(String(err));
@@ -176,10 +176,9 @@ export const SymptomSearchView: React.FC = () => {
   const positioned = response?.positioned ?? null;
   const webEnriched = response?.web_enriched;
   const hasResults = response !== null;
-  const totalCount =
-    mode === 'positioned'
-      ? positioned?.length ?? 0
-      : hybridDiseases.length;
+  const totalCount = modifiers.positioned
+    ? positioned?.length ?? 0
+    : hybridDiseases.length;
 
   return (
     <div className="flex flex-col gap-10">
@@ -192,8 +191,8 @@ export const SymptomSearchView: React.FC = () => {
           isLoading={isSearching}
           placeholder="Enter symptoms (e.g. fever, cough...)"
           showModeToggles
-          mode={mode}
-          onModeToggle={handleModeToggle}
+          modifiers={modifiers}
+          onModifierToggle={handleModifierToggle}
         />
 
         {webEnriched?.triggered && (
@@ -203,10 +202,10 @@ export const SymptomSearchView: React.FC = () => {
           </div>
         )}
 
-        {response?.sufficiency && !response.sufficiency.sufficient && mode !== 'web' && (
+        {response?.sufficiency && !response.sufficiency.sufficient && !modifiers.web && (
           <InsufficiencyBanner
             sufficiency={response.sufficiency}
-            onActivateWeb={() => handleModeToggle('web')}
+            onActivateWeb={() => handleModifierToggle('web')}
           />
         )}
       </div>
@@ -231,9 +230,11 @@ export const SymptomSearchView: React.FC = () => {
               <div className="w-12 h-12 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin absolute inset-0" />
             </div>
             <p className="text-gray-500 font-medium animate-pulse">
-              {mode === 'web'
+              {modifiers.web && modifiers.positioned
+                ? 'Searching web + analyzing positioning...'
+                : modifiers.web
                 ? 'Searching web sources...'
-                : mode === 'positioned'
+                : modifiers.positioned
                 ? 'Analyzing clinical positioning...'
                 : 'Processing medical data...'}
             </p>
@@ -252,7 +253,7 @@ export const SymptomSearchView: React.FC = () => {
                   {totalCount} found
                 </span>
               </h2>
-              {mode !== 'positioned' && feedback.hasFeedback && (
+              {!modifiers.positioned && feedback.hasFeedback && (
                 <button
                   type="button"
                   onClick={handleRefine}
@@ -271,7 +272,7 @@ export const SymptomSearchView: React.FC = () => {
               </div>
             )}
 
-            {mode === 'web' && (
+            {modifiers.web && (
               hybridDiseases.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {hybridDiseases.map((d, idx) => {
@@ -291,7 +292,7 @@ export const SymptomSearchView: React.FC = () => {
               )
             )}
 
-            {mode !== 'positioned' && mode !== 'web' && (
+            {!modifiers.web && !modifiers.positioned && (
               hybridDiseases.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {hybridDiseases.map((d) => {
@@ -317,7 +318,7 @@ export const SymptomSearchView: React.FC = () => {
               )
             )}
 
-            {mode === 'positioned' && (
+            {modifiers.positioned && (
               positioned && positioned.length > 0 ? (
                 <div className="flex flex-col gap-4">
                   {positioned.map((r) => (
