@@ -2,10 +2,16 @@ export interface HybridResult {
   doc_id: string;
   chunk_id: string;
   score: number;
-  lexical_score?: number;
-  vector_score?: number;
+  lexical_score?: number | null;
+  vector_score?: number | null;
   rerank_score?: number;
   fusion_method: string;
+  title?: string | null;
+  section_heading?: string | null;
+  url?: string | null;
+  source_domain?: string | null;
+  chunk_text_preview?: string;
+  /** @deprecated old nested shape — kept for backward compatibility */
   metadata?: {
     doc_id?: string;
     url?: string;

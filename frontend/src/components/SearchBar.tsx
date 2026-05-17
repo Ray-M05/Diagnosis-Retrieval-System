@@ -11,7 +11,7 @@ interface SearchBarProps {
   isLoading?: boolean;
   placeholder?: string;
   submitLabel?: string;
-  /** Show Web / Posicionamiento toggle buttons */
+  /** Show Web / Positioning toggle buttons */
   showModeToggles?: boolean;
   mode?: SearchBarMode;
   onModeToggle?: (mode: SearchBarMode) => void;
@@ -103,7 +103,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 }`}
               >
                 <MapPin className="w-3.5 h-3.5" />
-                Posicionamiento
+                Positioning
               </button>
             </>
           )}

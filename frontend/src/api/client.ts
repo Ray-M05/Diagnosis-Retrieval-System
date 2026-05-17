@@ -20,6 +20,22 @@ export interface PipelineStages {
   web_enrichment: boolean;
   positioning: boolean;
   generation: boolean;
+  raw_hybrid?: boolean;
+}
+
+export interface HybridChunk {
+  doc_id: string;
+  chunk_id: string;
+  score: number;
+  rerank_score: number;
+  vector_score?: number | null;
+  lexical_score?: number | null;
+  fusion_method: string;
+  title?: string | null;
+  section_heading?: string | null;
+  url?: string | null;
+  source_domain?: string | null;
+  chunk_text_preview: string;
 }
 
 export interface PositionedResult {
@@ -53,6 +69,7 @@ export interface SufficiencyInfo {
 export interface PipelineResponse {
   query: string;
   hybrid: Disease[];
+  hybrid_chunks?: HybridChunk[] | null;
   positioned: PositionedResult[] | null;
   web_enriched: WebEnrichmentSummary | null;
   sufficiency: SufficiencyInfo | null;

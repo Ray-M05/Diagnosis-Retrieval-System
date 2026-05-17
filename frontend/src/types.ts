@@ -80,6 +80,8 @@ export interface Disease {
   rank: number;
   feedback_chunk_id?: string | null;
   feedback_doc_id?: string | null;
+  score?: number;
+  doc_title?: string | null;
 }
 
 export interface ParseChartResponse {

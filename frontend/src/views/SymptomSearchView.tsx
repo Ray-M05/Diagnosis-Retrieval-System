@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RefreshCw, Search, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DiseaseCard } from '../components/DiseaseCard';
+import { WebDocumentCard } from '../components/WebDocumentCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
 import { runPipeline } from '../api/client';
@@ -11,8 +12,11 @@ import type { PipelineResponse, PositionedResult } from '../api/client';
 import type { SearchBarMode } from '../components/SearchBar';
 
 const relevanceColor: Record<string, string> = {
+  high: 'bg-green-100 text-green-700',
   alta: 'bg-green-100 text-green-700',
+  medium: 'bg-amber-100 text-amber-700',
   media: 'bg-amber-100 text-amber-700',
+  low: 'bg-gray-100 text-gray-500',
   baja: 'bg-gray-100 text-gray-500',
 };
 
@@ -52,7 +56,7 @@ const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result }) => {
             onClick={() => setOpen((v) => !v)}
             className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
           >
-            {open ? 'Ocultar explicación' : 'Ver explicación'}
+            {open ? 'Hide explanation' : 'View explanation'}
           </button>
           <AnimatePresence>
             {open && (
@@ -195,7 +199,7 @@ export const SymptomSearchView: React.FC = () => {
         {webEnriched?.triggered && (
           <div className="px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2 text-xs text-blue-800 font-medium">
             <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            Búsqueda web activada — {webEnriched.api_retrieved} documento(s) recuperados, {webEnriched.docs_added} nuevo(s) indexados desde PubMed / EuropePMC / MedlinePlus
+            Web search enabled — {webEnriched.api_retrieved} document(s) retrieved, {webEnriched.docs_added} new indexed from PubMed / EuropePMC / MedlinePlus
           </div>
         )}
 
@@ -228,9 +232,9 @@ export const SymptomSearchView: React.FC = () => {
             </div>
             <p className="text-gray-500 font-medium animate-pulse">
               {mode === 'web'
-                ? 'Buscando en fuentes web...'
+                ? 'Searching web sources...'
                 : mode === 'positioned'
-                ? 'Analizando posicionamiento clínico...'
+                ? 'Analyzing clinical positioning...'
                 : 'Processing medical data...'}
             </p>
           </motion.div>
@@ -256,18 +260,38 @@ export const SymptomSearchView: React.FC = () => {
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${feedback.isRefining ? 'animate-spin' : ''}`} />
-                  Refinar
+                  Refine
                 </button>
               )}
             </div>
 
             {refinedQuery && refinedQuery !== searchTerm.trim() && (
               <div className="mx-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs text-indigo-700">
-                Consulta refinada: {refinedQuery}
+                Refined query: {refinedQuery}
               </div>
             )}
 
-            {mode !== 'positioned' && (
+            {mode === 'web' && (
+              hybridDiseases.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {hybridDiseases.map((d, idx) => {
+                    const resultKey = [
+                      response?.query ?? searchTerm,
+                      d.id,
+                      d.feedback_doc_id,
+                      d.feedback_chunk_id,
+                      d.name,
+                      idx,
+                    ].join('|');
+                    return <WebDocumentCard key={resultKey} disease={d} />;
+                  })}
+                </div>
+              ) : (
+                <EmptyState />
+              )
+            )}
+
+            {mode !== 'positioned' && mode !== 'web' && (
               hybridDiseases.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {hybridDiseases.map((d) => {

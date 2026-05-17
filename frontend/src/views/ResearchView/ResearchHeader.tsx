@@ -22,9 +22,9 @@ export const ResearchHeader: React.FC<ResearchHeaderProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-0.5 shrink-0">
           <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight leading-none">
-            Encuentra información de salud <br className="hidden md:block" />
+            Find health information <br className="hidden md:block" />
             <span className="bg-clip-text bg-linear-to-r from-indigo-600 to-blue-500 text-lg md:text-xl">
-              por síntomas.
+              by symptoms.
             </span>
           </h1>
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -39,8 +39,8 @@ export const ResearchHeader: React.FC<ResearchHeaderProps> = ({
             onSubmit={handleSearch}
             onClear={handleClear}
             isLoading={isSearching}
-            placeholder="Ingrese síntomas clínicos..."
-            submitLabel="BUSCAR"
+            placeholder="Enter clinical symptoms..."
+            submitLabel="SEARCH"
           />
         </div>
       </div>

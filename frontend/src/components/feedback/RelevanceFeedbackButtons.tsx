@@ -36,8 +36,8 @@ export const RelevanceFeedbackButtons: React.FC<RelevanceFeedbackButtonsProps> =
     <div className="flex items-center gap-1.5" aria-label="Relevance feedback">
       <button
         type="button"
-        title="Relevante"
-        aria-label="Marcar como relevante"
+        title="Relevant"
+        aria-label="Mark as relevant"
         disabled={disabled || busy}
         onClick={() => handleClick(true)}
         className={`${baseClass} ${
@@ -50,8 +50,8 @@ export const RelevanceFeedbackButtons: React.FC<RelevanceFeedbackButtonsProps> =
       </button>
       <button
         type="button"
-        title="No relevante"
-        aria-label="Marcar como no relevante"
+        title="Not relevant"
+        aria-label="Mark as not relevant"
         disabled={disabled || busy}
         onClick={() => handleClick(false)}
         className={`${baseClass} ${

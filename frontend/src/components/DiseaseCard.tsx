@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link2 } from 'lucide-react';
+import { Link2, Target, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Disease } from '../types';
 import { RelevanceFeedbackButtons } from './feedback/RelevanceFeedbackButtons';
@@ -33,7 +33,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeed
       className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4"
     >
       <div>
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           {disease.rank > 0 && (
             <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
               #{disease.rank}
@@ -42,9 +42,21 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeed
           <h3 className="text-xl font-bold text-gray-900 leading-tight">
             {disease.name}
           </h3>
+          {typeof disease.score === 'number' && disease.score > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
+              <Target className="w-3 h-3" />
+              {disease.score.toFixed(disease.score < 1 ? 3 : 2)}
+            </span>
+          )}
         </div>
+        {disease.doc_title && disease.doc_title.toLowerCase() !== disease.name.toLowerCase() && (
+          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+            <FileText className="w-3 h-3 text-gray-400" />
+            <span className="truncate">{disease.doc_title}</span>
+          </p>
+        )}
         {disease.description && (
-          <p className="text-sm text-gray-500 mt-1 leading-relaxed line-clamp-3">
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed line-clamp-3">
             {disease.description}
           </p>
         )}

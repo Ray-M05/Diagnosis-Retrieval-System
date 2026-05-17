@@ -23,6 +23,16 @@ import json
 import logging
 import re
 import time
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logging.getLogger("opensearch").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 from contextlib import asynccontextmanager
 from html import unescape
 from typing import AsyncIterator
@@ -41,6 +51,7 @@ from sri_dx.app.api.dto import (
     ClinicalRAGRequest,
     DiseaseDTO,
     HealthResponse,
+    HybridChunkDTO,
     ParseChartResponse,
     PipelineRequest,
     PipelineResponse,
@@ -435,6 +446,7 @@ def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
         title = _clean_display_title(
             str(result.get("title") or _display_title_from_url(url, source_domain, f"Resultado web #{rank}"))
         )
+        rerank_score = float(result.get("rerank_score") or 0.0)
         dtos.append(DiseaseDTO(
             id=f"{doc_id}:{chunk_id}",
             name=title,
@@ -446,6 +458,8 @@ def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
             rank=rank,
             feedback_chunk_id=chunk_id,
             feedback_doc_id=doc_id,
+            score=rerank_score,
+            doc_title=title,
         ))
     return dtos
 
@@ -465,6 +479,22 @@ def _display_title_from_url(url: str, source_domain: str, fallback: str) -> str:
 def _clean_display_title(title: str) -> str:
     cleaned = re.sub(r"<[^>]+>", "", unescape(str(title or "")))
     return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _title_from_url(url: str) -> str | None:
+    """Best-effort title from a URL path slug (e.g. .../acromegaly → 'acromegaly')."""
+    if not url:
+        return None
+    try:
+        path = urlparse(url).path.strip("/")
+        if not path:
+            return None
+        slug = path.rsplit("/", 1)[-1]
+        slug = re.sub(r"\.(html?|aspx?|php)$", "", slug, flags=re.IGNORECASE)
+        slug = slug.replace("-", " ").replace("_", " ").strip()
+        return slug.title() if slug else None
+    except Exception:
+        return None
 
 
 def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
@@ -487,6 +517,8 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
             rank=d.rank,
             feedback_chunk_id=top_ev.chunk_id if top_ev else None,
             feedback_doc_id=top_ev.doc_id if top_ev else None,
+            score=float(d.aggregated_score),
+            doc_title=_title_from_url(top_ev.url) if top_ev else None,
         ))
     return dtos
 
@@ -505,6 +537,32 @@ def _diseases_to_pipeline_response(query: str, diseases: list, elapsed_seconds: 
 def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
     diseases = _pipeline.search_diseases(query=query, final_results=k)
     return _diseases_to_dtos(diseases)
+
+
+def _run_hybrid_chunks(query: str, k: int) -> list[HybridChunkDTO]:
+    """Run the two-stage retrieval and return raw reranked chunks (no NER aggregation)."""
+    raw = _pipeline.search(query=query, final_results=k)
+    dtos: list[HybridChunkDTO] = []
+    for r in raw:
+        meta = r.metadata or {}
+        url = str(meta.get("url") or "").strip()
+        raw_title = meta.get("title") or meta.get("doc_title") or ""
+        title = _clean_display_title(str(raw_title)) if raw_title else (_title_from_url(url) or "")
+        dtos.append(HybridChunkDTO(
+            doc_id=str(r.doc_id),
+            chunk_id=str(meta.get("chunk_id") or r.doc_id),
+            score=float(r.rerank_score),
+            rerank_score=float(r.rerank_score),
+            vector_score=float(r.vector_score) if r.vector_score is not None else None,
+            lexical_score=float(r.lexical_score) if r.lexical_score is not None else None,
+            fusion_method="cross-encoder",
+            title=title or None,
+            section_heading=str(meta.get("section_heading") or "") or None,
+            url=url or None,
+            source_domain=str(meta.get("source_domain") or "") or None,
+            chunk_text_preview=(r.content or "")[:400],
+        ))
+    return dtos
 
 
 def _run_positioning(query: str, k: int) -> list:
@@ -563,6 +621,10 @@ def _execute_pipeline_stages(
     if _pipeline is None:
         raise HTTPException(503, detail="Retrieval pipeline not available.")
 
+    logger.info(
+        "Pipeline request: web_enrichment=%s positioning=%s generation=%s raw_hybrid=%s",
+        stages.web_enrichment, stages.positioning, stages.generation, stages.raw_hybrid,
+    )
     t0 = time.monotonic()
     web_summary: WebEnrichmentSummary | None = None
     web_ranked_dtos: list[DiseaseDTO] | None = None
@@ -591,6 +653,14 @@ def _execute_pipeline_stages(
 
     positioned = _run_positioning(query, k) if stages.positioning else None
 
+    hybrid_chunks: list[HybridChunkDTO] | None = None
+    if stages.raw_hybrid:
+        try:
+            hybrid_chunks = _run_hybrid_chunks(query, k)
+        except Exception as exc:
+            logger.exception("raw hybrid retrieval failed")
+            raise HTTPException(500, detail=f"raw_hybrid: {exc}") from exc
+
     # Only evaluate sufficiency when web enrichment was NOT active (if already
     # enriched, the results are implicitly sufficient from the caller's POV).
     sufficiency = None if stages.web_enrichment else _evaluate_sufficiency(query, k)
@@ -598,6 +668,7 @@ def _execute_pipeline_stages(
     return PipelineResponse(
         query=query,
         hybrid=hybrid_dtos,
+        hybrid_chunks=hybrid_chunks,
         positioned=positioned,
         web_enriched=web_summary,
         sufficiency=sufficiency,

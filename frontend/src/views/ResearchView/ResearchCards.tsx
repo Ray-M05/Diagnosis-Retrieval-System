@@ -4,10 +4,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { HybridResult, DiseaseResult, DiseaseEvidence, PositionedResult } from './research.types';
 
 export const HybridCard: React.FC<{ result: HybridResult }> = ({ result }) => {
-  const title = result.metadata?.title || result.metadata?.section_heading || 'Sin título';
-  const url = result.metadata?.url || '#';
+  const title =
+    result.title ||
+    result.section_heading ||
+    result.metadata?.title ||
+    result.metadata?.section_heading ||
+    'No title';
+  const url = result.url || result.metadata?.url || '#';
   const snippet =
-    result.metadata?.chunk_text_preview || result.metadata?.chunk_text || 'Sin contenido disponible';
+    result.chunk_text_preview ||
+    result.metadata?.chunk_text_preview ||
+    result.metadata?.chunk_text ||
+    'No content available';
 
   return (
     <motion.div
@@ -55,7 +63,7 @@ export const HybridCard: React.FC<{ result: HybridResult }> = ({ result }) => {
         {result.vector_score !== undefined && (
           <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100/50">
             <p className="text-[10px] text-gray-400 font-bold uppercase mb-1 flex items-center gap-1">
-              <Activity className="w-3 h-3 text-blue-500" /> Semántico
+              <Activity className="w-3 h-3 text-blue-500" /> Semantic
             </p>
             <p className="text-sm font-bold text-gray-700">{result.vector_score.toFixed(4)}</p>
           </div>
@@ -93,7 +101,7 @@ export const DiagnosticCard: React.FC<{ result: DiseaseResult }> = ({ result }) 
               <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
             </h3>
             <p className="text-xs text-gray-400 font-medium mt-1">
-              {result.evidence_count} fragmentos de evidencia detectados
+              {result.evidence_count} evidence fragments detected
             </p>
           </div>
         </div>
@@ -120,7 +128,7 @@ export const DiagnosticCard: React.FC<{ result: DiseaseResult }> = ({ result }) 
           >
             <div className="p-6 bg-gray-50/30 space-y-4">
               <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
-                Evidencia clínica
+                Clinical evidence
               </h4>
               <div className="space-y-3">
                 {result.evidence.map((ev, idx) => (
@@ -148,7 +156,7 @@ const EvidenceItem: React.FC<{ evidence: DiseaseEvidence; index: number }> = ({ 
           rel="noopener noreferrer"
           className="text-[9px] text-gray-400 hover:text-indigo-500 flex items-center gap-1"
         >
-          <Link2 className="w-2.5 h-2.5" /> Ver origen
+          <Link2 className="w-2.5 h-2.5" /> View source
         </a>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -166,7 +174,7 @@ const EvidenceItem: React.FC<{ evidence: DiseaseEvidence; index: number }> = ({ 
   </div>
 );
 
-// --- Positioned Card (Mode 3: Posicionamiento Clínico) ---
+// --- Positioned Card (Mode 3: Clinical Positioning) ---
 export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -198,7 +206,7 @@ export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result 
             </h3>
             {result.matched_symptoms.length > 0 && (
               <p className="text-xs text-gray-400 mt-0.5">
-                Síntomas: {result.matched_symptoms.join(', ')}
+                Symptoms: {result.matched_symptoms.join(', ')}
               </p>
             )}
           </div>
@@ -228,7 +236,7 @@ export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result 
             <div className="p-6 bg-gray-50/30 space-y-4">
               {result.explanation.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Explicación</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Explanation</p>
                   {result.explanation.map((line, i) => (
                     <p key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
                       <AlertCircle className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" /> {line}
@@ -238,7 +246,7 @@ export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result 
               )}
               {result.evidences.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Evidencias</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Evidence</p>
                   {result.evidences.slice(0, 3).map((ev) => (
                     <div key={ev.chunk_id} className="bg-white rounded-xl border border-gray-100 p-3 text-xs space-y-1">
                       <div className="flex justify-between items-center">

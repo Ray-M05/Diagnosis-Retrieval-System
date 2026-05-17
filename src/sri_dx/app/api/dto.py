@@ -39,6 +39,8 @@ class DiseaseDTO(BaseModel):
     rank: int
     feedback_chunk_id: str | None = None
     feedback_doc_id: str | None = None
+    score: float = 0.0        # aggregated_score (NER mode) or rerank_score (web mode)
+    doc_title: str | None = None  # title of the top evidence document
 
 
 class SearchDiseasesResponse(BaseModel):
@@ -79,6 +81,7 @@ class PipelineStages(BaseModel):
     web_enrichment: bool = False
     positioning: bool = False
     generation: bool = False   # RAG. Requires `chart`.
+    raw_hybrid: bool = False   # Return raw reranked chunks in `hybrid_chunks`.
 
 
 class PipelineRequest(BaseModel):
@@ -108,6 +111,25 @@ class SufficiencyInfo(BaseModel):
     failed_criteria: list[str]
 
 
+class HybridChunkDTO(BaseModel):
+    """Raw reranked chunk — used by Research/Hybrid+Reranking mode.
+
+    Distinct from `DiseaseDTO` which carries NER-aggregated diseases.
+    """
+    doc_id: str
+    chunk_id: str
+    score: float                          # rerank_score (final ranking)
+    rerank_score: float
+    vector_score: float | None = None
+    lexical_score: float | None = None
+    fusion_method: str = "cross-encoder"
+    title: str | None = None              # from doc metadata or URL slug
+    section_heading: str | None = None
+    url: str | None = None
+    source_domain: str | None = None
+    chunk_text_preview: str = ""          # first ~400 chars
+
+
 class PipelineResponse(BaseModel):
     """Non-streaming response (when stages.generation is False).
 
@@ -115,6 +137,7 @@ class PipelineResponse(BaseModel):
     """
     query: str
     hybrid: list[DiseaseDTO] = []
+    hybrid_chunks: Optional[list[HybridChunkDTO]] = None   # only when stages.raw_hybrid
     positioned: Optional[list] = None     # list[dict] from search_positioned
     web_enriched: Optional[WebEnrichmentSummary] = None
     sufficiency: Optional[SufficiencyInfo] = None

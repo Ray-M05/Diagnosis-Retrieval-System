@@ -7,15 +7,19 @@
  */
 
 import { runPipeline } from '../../api/client';
-import type { PipelineResponse, PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../../api/client';
+import type { HybridChunk, PipelineResponse, PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../../api/client';
 import type { DiseaseResult } from './research.types';
 
-export async function researchSearchHybrid(query: string, k: number): Promise<PipelineResponse> {
-  return runPipeline({
+export async function researchSearchHybrid(
+  query: string,
+  k: number,
+): Promise<{ chunks: HybridChunk[]; sufficiency: SufficiencyInfo | null }> {
+  const res = await runPipeline({
     query,
     k,
-    stages: { web_enrichment: false, positioning: false, generation: false },
+    stages: { web_enrichment: false, positioning: false, generation: false, raw_hybrid: true },
   });
+  return { chunks: res.hybrid_chunks ?? [], sufficiency: res.sufficiency };
 }
 
 export async function researchSearchDiseases(
@@ -29,8 +33,8 @@ export async function researchSearchDiseases(
   });
   const diseases: DiseaseResult[] = res.hybrid.map((d, idx) => ({
     disease_name: d.name,
-    disease_name_display: d.name,
-    aggregated_score: 0,
+    disease_name_display: d.doc_title ?? d.name,
+    aggregated_score: d.score ?? 0,
     evidence_count: d.evidence_count,
     rank: d.rank ?? idx + 1,
     evidence: [],

@@ -26,41 +26,11 @@ services:
       timeout: 10s
       retries: 5
 
-  sri-dx:
-    build: .
-    container_name: sri-dx-app
-    ports:
-      - "8501:8501"
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app/data
-      - ./src:/app/src
-      - ./scripts:/app/scripts
-    environment:
-      - WATCH_FILES=true
-      - OPENSEARCH_HOST=http://opensearch:9200
-    command:
-      [
-        "/app/.venv/bin/python",
-        "-m",
-        "streamlit",
-        "run",
-        "src/sri_dx/app/ui/ui_streamlit.py",
-        "--server.port=8501",
-        "--server.address=0.0.0.0",
-      ]
-    networks:
-      - sri-network
-    depends_on:
-      opensearch:
-        condition: service_healthy
-
   sri-dx-api:
     build: .
     container_name: sri-dx-api
     ports:
-      - "8000:8000"
+      - "8080:8000"
     env_file:
       - .env
     volumes:
