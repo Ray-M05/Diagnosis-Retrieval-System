@@ -17,6 +17,16 @@ class FeedbackStorePort(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def delete_feedback(
+        self,
+        session_id: str,
+        query: str,
+        chunk_id: str,
+        doc_id: str,
+    ) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_feedback_for_session(self, session_id: str) -> list[dict[str, Any]]:
         raise NotImplementedError
 

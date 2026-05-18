@@ -1,7 +1,7 @@
 import React from 'react';
 import { CheckCircle2, AlertCircle, Search, HeartPulse } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HybridCard, DiagnosticCard, PositionedCard } from './ResearchCards';
+import { HybridCard, DiagnosticCard, PositionedCard, type CardFeedbackHandlers } from './ResearchCards';
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
 
 interface ResearchResultsProps {
@@ -14,6 +14,7 @@ interface ResearchResultsProps {
   };
   searchMode: SearchMode;
   searchTerm: string;
+  feedback?: CardFeedbackHandlers;
 }
 
 export const ResearchResults: React.FC<ResearchResultsProps> = ({
@@ -21,6 +22,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
   results,
   searchMode,
   searchTerm,
+  feedback,
 }) => {
   const count =
     searchMode === 'hybrid'
@@ -90,19 +92,19 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
           >
             {searchMode === 'hybrid' &&
               results.hybrid?.map((r) => (
-                <HybridCard key={r.chunk_id || r.doc_id} result={r} />
+                <HybridCard key={r.chunk_id || r.doc_id} result={r} feedback={feedback} />
               ))}
             {searchMode === 'diagnostic' &&
               results.diagnostic?.map((r) => (
-                <DiagnosticCard key={r.disease_name} result={r} />
+                <DiagnosticCard key={r.disease_name} result={r} feedback={feedback} />
               ))}
             {(searchMode as string) === 'positioned' &&
               results.positioned?.map((r) => (
-                <PositionedCard key={r.rank} result={r} />
+                <PositionedCard key={r.rank} result={r} feedback={feedback} />
               ))}
             {(searchMode as string) === 'web' &&
               results.web?.map((r) => (
-                <DiagnosticCard key={r.disease_name} result={r} />
+                <DiagnosticCard key={r.disease_name} result={r} feedback={feedback} />
               ))}
           </motion.div>
         ) : searchTerm && !isSearching ? (

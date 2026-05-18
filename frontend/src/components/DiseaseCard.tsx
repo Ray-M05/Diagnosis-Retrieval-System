@@ -13,9 +13,19 @@ interface DiseaseCardProps {
     docId: string;
     relevant: boolean;
   }) => Promise<void>;
+  onRetractFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => Promise<void>;
 }
 
-export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeedback }) => {
+export const DiseaseCard: React.FC<DiseaseCardProps> = ({
+  disease,
+  query,
+  onFeedback,
+  onRetractFeedback,
+}) => {
   const canSubmitFeedback = Boolean(
     query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
   );
@@ -107,6 +117,15 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease, query, onFeed
               docId: disease.feedback_doc_id!,
               relevant,
             })}
+            onRetract={
+              onRetractFeedback
+                ? () => onRetractFeedback({
+                    query: query!,
+                    chunkId: disease.feedback_chunk_id!,
+                    docId: disease.feedback_doc_id!,
+                  })
+                : undefined
+            }
           />
         )}
       </div>

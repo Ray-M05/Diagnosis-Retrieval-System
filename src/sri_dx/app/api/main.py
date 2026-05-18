@@ -481,17 +481,40 @@ def _clean_display_title(title: str) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
+_SLUG_NOISE_PATTERNS = (
+    re.compile(r"^syc[\s\-_]?\d+$", re.IGNORECASE),
+    re.compile(r"^pmc\d+$", re.IGNORECASE),
+    re.compile(r"^\d+$"),
+    re.compile(r"^(symptoms?[\s\-_]causes?|causes?|symptoms?|diagnosis|treatment|prevention)$", re.IGNORECASE),
+    re.compile(r"^(health[\s\-_]topics?|article|ency|medlineplus)$", re.IGNORECASE),
+)
+
+
+def _is_noise_slug(slug: str) -> bool:
+    s = slug.replace("-", " ").replace("_", " ").strip()
+    return any(p.match(s) for p in _SLUG_NOISE_PATTERNS)
+
+
 def _title_from_url(url: str) -> str | None:
-    """Best-effort title from a URL path slug (e.g. .../acromegaly → 'acromegaly')."""
+    """Best-effort title from a URL path. Picks the most meaningful slug,
+    skipping noise like 'syc-20352557', 'PMC1234', 'symptoms-causes', etc."""
     if not url:
         return None
     try:
         path = urlparse(url).path.strip("/")
         if not path:
             return None
-        slug = path.rsplit("/", 1)[-1]
-        slug = re.sub(r"\.(html?|aspx?|php)$", "", slug, flags=re.IGNORECASE)
-        slug = slug.replace("-", " ").replace("_", " ").strip()
+        segments = [s for s in path.split("/") if s]
+        # Walk from end to start, pick first segment that isn't noise.
+        for seg in reversed(segments):
+            seg_clean = re.sub(r"\.(html?|aspx?|php)$", "", seg, flags=re.IGNORECASE)
+            if _is_noise_slug(seg_clean):
+                continue
+            slug = seg_clean.replace("-", " ").replace("_", " ").strip()
+            if slug:
+                return slug.title()
+        # Fallback: last segment even if noisy
+        slug = segments[-1].replace("-", " ").replace("_", " ").strip()
         return slug.title() if slug else None
     except Exception:
         return None

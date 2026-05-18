@@ -2,9 +2,22 @@ import React from 'react';
 import { Link2, Target, FileText, Globe } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Disease } from '../types';
+import { RelevanceFeedbackButtons } from './feedback/RelevanceFeedbackButtons';
 
 interface WebDocumentCardProps {
   disease: Disease;
+  query?: string;
+  onFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => Promise<void>;
+  onRetractFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => Promise<void>;
 }
 
 /**
@@ -16,11 +29,25 @@ interface WebDocumentCardProps {
  * surfaces the document title, the chunk preview and the rerank score —
  * which is what the Testing/Web Search panel already does.
  */
-export const WebDocumentCard: React.FC<WebDocumentCardProps> = ({ disease }) => {
+export const WebDocumentCard: React.FC<WebDocumentCardProps> = ({
+  disease,
+  query,
+  onFeedback,
+  onRetractFeedback,
+}) => {
   const title = disease.doc_title || disease.name || 'Untitled document';
   const snippet = disease.description || '';
   const score = typeof disease.score === 'number' ? disease.score : 0;
   const source = disease.source || (disease.sourceUrl ? disease.sourceUrl.split('/')[2] ?? '' : '');
+  const canSubmitFeedback = Boolean(
+    query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
+  );
+  const feedbackTargetId = [
+    query,
+    disease.feedback_doc_id,
+    disease.feedback_chunk_id,
+    disease.name,
+  ].join('|');
 
   return (
     <motion.div
@@ -62,17 +89,41 @@ export const WebDocumentCard: React.FC<WebDocumentCardProps> = ({ disease }) => 
         </p>
       )}
 
-      {disease.sourceUrl && (
-        <a
-          href={disease.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="self-start inline-flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 transition-colors"
-        >
-          <Link2 className="w-3 h-3" />
-          <span className="truncate max-w-[280px]">{disease.sourceUrl}</span>
-        </a>
-      )}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        {disease.sourceUrl ? (
+          <a
+            href={disease.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 transition-colors min-w-0"
+          >
+            <Link2 className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[280px]">{disease.sourceUrl}</span>
+          </a>
+        ) : (
+          <span />
+        )}
+        {canSubmitFeedback && (
+          <RelevanceFeedbackButtons
+            targetId={feedbackTargetId}
+            onSubmit={(relevant) => onFeedback!({
+              query: query!,
+              chunkId: disease.feedback_chunk_id!,
+              docId: disease.feedback_doc_id!,
+              relevant,
+            })}
+            onRetract={
+              onRetractFeedback
+                ? () => onRetractFeedback({
+                    query: query!,
+                    chunkId: disease.feedback_chunk_id!,
+                    docId: disease.feedback_doc_id!,
+                  })
+                : undefined
+            }
+          />
+        )}
+      </div>
     </motion.div>
   );
 };

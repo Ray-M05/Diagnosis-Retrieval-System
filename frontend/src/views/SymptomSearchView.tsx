@@ -157,6 +157,18 @@ export const SymptomSearchView: React.FC = () => {
     }
   };
 
+  const handleFeedbackRetract = async (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => {
+    try {
+      await feedback.retract(args);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
   const handleRefine = async () => {
     if (!searchTerm.trim()) return;
     setError(null);
@@ -284,7 +296,15 @@ export const SymptomSearchView: React.FC = () => {
                       d.name,
                       idx,
                     ].join('|');
-                    return <WebDocumentCard key={resultKey} disease={d} />;
+                    return (
+                      <WebDocumentCard
+                        key={resultKey}
+                        disease={d}
+                        query={response?.query ?? searchTerm}
+                        onFeedback={handleFeedbackSubmit}
+                        onRetractFeedback={handleFeedbackRetract}
+                      />
+                    );
                   })}
                 </div>
               ) : (
@@ -309,6 +329,7 @@ export const SymptomSearchView: React.FC = () => {
                         disease={d}
                         query={response?.query ?? searchTerm}
                         onFeedback={handleFeedbackSubmit}
+                        onRetractFeedback={handleFeedbackRetract}
                       />
                     );
                   })}

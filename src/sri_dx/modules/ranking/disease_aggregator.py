@@ -21,6 +21,37 @@ __all__ = ["DiseaseAggregator", "DiseaseAggregatorConfig", "DiseaseNormalizerPor
 
 logger = logging.getLogger(__name__)
 
+# Single-word tokens that BioBERT-NER tags as PROBLEM but are not standalone
+# diagnoses (anatomy, symptoms, generic clinical words). Multi-word phrases
+# containing these are still valid (e.g. "pulmonary embolism", "coronary
+# artery disease"). Valid single-word diseases like "pneumonia",
+# "tuberculosis", "acromegaly" are NOT in this list.
+_SINGLE_WORD_NOISE: frozenset[str] = frozenset({
+    # anatomy / tissue
+    "blood", "heart", "lung", "lungs", "kidney", "kidneys", "liver", "brain",
+    "artery", "vein", "vessel", "tissue", "muscle", "bone", "joint",
+    "pulmonary", "cardiac", "hepatic", "renal", "cerebral", "vascular",
+    "coronary", "arterial", "venous", "respiratory", "intestinal", "gastric",
+    "collarbone", "shoulder", "knee", "hip", "wrist", "ankle", "spine",
+    # symptoms (not diseases)
+    "pain", "chest", "cough", "fever", "fatigue", "dyspnea", "dyspnoea",
+    "tachycardia", "hypoxia", "hypoxemia", "syncope", "nausea", "vomiting",
+    "swelling", "edema", "oedema", "rash", "bleeding",
+    # generic disease words (need a qualifier to be meaningful)
+    "infection", "inflammation", "disorder", "disease", "syndrome",
+    "condition", "abnormality", "failure", "insufficiency", "deficiency",
+    "lesion", "mass", "nodule", "effusion", "stenosis", "occlusion",
+    "thrombus", "clot", "embolus", "emboli", "infarct",
+    "cancer", "tumor", "tumour", "neoplasm", "carcinoma",
+    "necrosis",
+    "fracture", "injury", "trauma", "wound",
+    # adjectives / qualifiers (no diagnostic value alone)
+    "acute", "chronic", "bilateral", "unilateral",
+    "broken", "injured", "infected", "inflamed", "swollen", "ruptured",
+    "torn", "bruised", "damaged", "affected", "impaired",
+})
+
+
 # Acrónimos comunes → nombre canónico (expansión local, sin red)
 _ACRONYM_MAP: Dict[str, str] = {
     "uti": "urinary tract infection",
@@ -91,6 +122,11 @@ class DiseaseAggregator:
             if not ner_entities:
                 continue
 
+            # One chunk contributes to EXACTLY ONE disease: the highest-scoring
+            # PROBLEM entity that passes all filters. This guarantees chunk-to-
+            # disease is 1:1 in the final ranking.
+            best: Optional[Tuple[float, str, str]] = None  # (ner_score, disease_text, normalized)
+
             for entity in ner_entities:
                 label = entity.get("label", "")
                 if label != "PROBLEM":
@@ -104,18 +140,38 @@ class DiseaseAggregator:
                 if not disease_text:
                     continue
 
-                normalized = self._normalize(disease_text, self._normalizer)
+                # Strip dangling open/close punctuation (e.g. "Pulmonary embolism (PE")
+                disease_text = re.sub(r"^[\s\(\[\{<]+|[\s\)\]\}>]+$", "", disease_text).strip()
+                if not disease_text:
+                    continue
 
-                evidence = DiseaseEvidence(
-                    chunk_id=result.metadata.get("chunk_id", ""),
-                    doc_id=result.doc_id,
-                    rerank_score=result.rerank_score,
-                    ner_score=ner_score,
-                    combined_score=ner_score,
-                    content_preview=(result.content or "")[:200],
-                    url=result.metadata.get("url", ""),
-                )
-                disease_map[normalized].append((evidence, disease_text, position))
+                # Filter single-word noise (anatomy/symptoms/generic terms).
+                # Multi-word entities always pass through.
+                words = disease_text.split()
+                if len(words) == 1 and disease_text.lower() in _SINGLE_WORD_NOISE:
+                    continue
+
+                normalized = self._normalize(disease_text, self._normalizer)
+                if not normalized:
+                    continue
+
+                if best is None or ner_score > best[0]:
+                    best = (ner_score, disease_text, normalized)
+
+            if best is None:
+                continue
+
+            ner_score, disease_text, normalized = best
+            evidence = DiseaseEvidence(
+                chunk_id=result.metadata.get("chunk_id", ""),
+                doc_id=result.doc_id,
+                rerank_score=result.rerank_score,
+                ner_score=ner_score,
+                combined_score=ner_score,
+                content_preview=(result.content or "")[:200],
+                url=result.metadata.get("url", ""),
+            )
+            disease_map[normalized].append((evidence, disease_text, position))
 
         # Construir DiseaseResult por cada enfermedad
         results: List[DiseaseResult] = []

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   refineSearch,
+  retractRelevanceFeedback,
   submitRelevanceFeedback,
   type RefineSearchResponse,
 } from '../api/client';
@@ -24,7 +25,7 @@ function getSessionId(): string {
 
 export function useFeedback() {
   const sessionId = useMemo(getSessionId, []);
-  const [hasFeedback, setHasFeedback] = useState(false);
+  const [voteCount, setVoteCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
 
@@ -43,7 +44,26 @@ export function useFeedback() {
         doc_id: args.docId,
         relevant: args.relevant,
       });
-      setHasFeedback(true);
+      setVoteCount((n) => n + 1);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const retract = async (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => {
+    setIsSubmitting(true);
+    try {
+      await retractRelevanceFeedback({
+        session_id: sessionId,
+        query: args.query,
+        chunk_id: args.chunkId,
+        doc_id: args.docId,
+      });
+      setVoteCount((n) => Math.max(0, n - 1));
     } finally {
       setIsSubmitting(false);
     }
@@ -63,17 +83,18 @@ export function useFeedback() {
   };
 
   const reset = () => {
-    setHasFeedback(false);
+    setVoteCount(0);
     setIsSubmitting(false);
     setIsRefining(false);
   };
 
   return {
     sessionId,
-    hasFeedback,
+    hasFeedback: voteCount > 0,
     isSubmitting,
     isRefining,
     submit,
+    retract,
     refine,
     reset,
   };

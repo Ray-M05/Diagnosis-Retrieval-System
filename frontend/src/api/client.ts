@@ -38,13 +38,24 @@ export interface HybridChunk {
   chunk_text_preview: string;
 }
 
+export interface PositionedEvidenceDTO {
+  chunk_id: string;
+  doc_id: string;
+  url: string;
+  content_preview?: string;
+  cross_encoder_score?: number | null;
+}
+
 export interface PositionedResult {
   rank: number;
+  disease_name?: string;
   disease_name_display: string;
   final_score: number;
   relevance_label: string;
   matched_symptoms: string[];
+  source_domains?: string[];
   explanation: string[];
+  evidences?: PositionedEvidenceDTO[];
 }
 
 export interface WebEnrichmentSummary {
@@ -141,6 +152,29 @@ export async function submitRelevanceFeedback(req: FeedbackRequest): Promise<Fee
     body: JSON.stringify(req),
   });
   if (!res.ok) throw new Error(`Feedback failed: ${res.statusText}`);
+  return res.json() as Promise<FeedbackResponse>;
+}
+
+export interface RetractFeedbackRequest {
+  session_id: string;
+  query: string;
+  chunk_id: string;
+  doc_id: string;
+}
+
+export async function retractRelevanceFeedback(
+  req: RetractFeedbackRequest,
+): Promise<FeedbackResponse> {
+  const params = new URLSearchParams({
+    session_id: req.session_id,
+    query: req.query,
+    chunk_id: req.chunk_id,
+    doc_id: req.doc_id,
+  });
+  const res = await fetch(`${API_BASE}/feedback/relevance?${params.toString()}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Retract feedback failed: ${res.statusText}`);
   return res.json() as Promise<FeedbackResponse>;
 }
 

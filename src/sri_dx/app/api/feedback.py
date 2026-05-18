@@ -45,6 +45,32 @@ def build_feedback_router(
 
         return FeedbackResponse(ok=True, message="Feedback registrado correctamente")
 
+    @router.delete("/relevance", response_model=FeedbackResponse)
+    async def retract_relevance_feedback(
+        session_id: str,
+        query: str,
+        chunk_id: str,
+        doc_id: str,
+    ) -> FeedbackResponse:
+        store = get_feedback_store()
+        if store is None:
+            raise HTTPException(503, detail="Feedback store not available.")
+
+        try:
+            removed = FeedbackService(store).retract_feedback(
+                session_id=session_id,
+                query=query,
+                chunk_id=chunk_id,
+                doc_id=doc_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+
+        return FeedbackResponse(
+            ok=True,
+            message="Feedback eliminado" if removed else "No había feedback registrado",
+        )
+
     @router.post("/search/refine", response_model=RefineSearchResponse)
     async def refine_search(req: RefineSearchRequest) -> RefineSearchResponse:
         import time

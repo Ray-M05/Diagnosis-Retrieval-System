@@ -2,8 +2,57 @@ import React, { useState } from 'react';
 import { Link2, ChevronDown, Activity, ShieldCheck, Target, Zap, MapPin, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { HybridResult, DiseaseResult, DiseaseEvidence, PositionedResult } from './research.types';
+import { RelevanceFeedbackButtons } from '../../components/feedback/RelevanceFeedbackButtons';
 
-export const HybridCard: React.FC<{ result: HybridResult }> = ({ result }) => {
+export interface CardFeedbackHandlers {
+  query: string;
+  onFeedback: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => Promise<void>;
+  onRetractFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => Promise<void>;
+}
+
+function feedbackButtonsFor(
+  handlers: CardFeedbackHandlers | undefined,
+  chunkId: string | undefined | null,
+  docId: string | undefined | null,
+  targetSuffix: string,
+) {
+  if (!handlers || !chunkId || !docId) return null;
+  const targetId = [handlers.query, docId, chunkId, targetSuffix].join('|');
+  return (
+    <RelevanceFeedbackButtons
+      targetId={targetId}
+      onSubmit={(relevant) => handlers.onFeedback({
+        query: handlers.query,
+        chunkId,
+        docId,
+        relevant,
+      })}
+      onRetract={
+        handlers.onRetractFeedback
+          ? () => handlers.onRetractFeedback!({
+              query: handlers.query,
+              chunkId,
+              docId,
+            })
+          : undefined
+      }
+    />
+  );
+}
+
+export const HybridCard: React.FC<{ result: HybridResult; feedback?: CardFeedbackHandlers }> = ({
+  result,
+  feedback,
+}) => {
   const title =
     result.title ||
     result.section_heading ||
@@ -74,11 +123,20 @@ export const HybridCard: React.FC<{ result: HybridResult }> = ({ result }) => {
         <div className="absolute -left-2 top-0 bottom-0 w-1 bg-indigo-100/50 rounded-full" />
         <p className="text-sm text-gray-600 leading-relaxed italic pl-4">"{snippet}"</p>
       </div>
+
+      {feedback && (result.chunk_id || result.doc_id) && (
+        <div className="mt-4 pt-3 border-t border-gray-50 flex justify-end">
+          {feedbackButtonsFor(feedback, result.chunk_id || result.doc_id, result.doc_id || result.chunk_id, 'hybrid')}
+        </div>
+      )}
     </motion.div>
   );
 };
 
-export const DiagnosticCard: React.FC<{ result: DiseaseResult }> = ({ result }) => {
+export const DiagnosticCard: React.FC<{ result: DiseaseResult; feedback?: CardFeedbackHandlers }> = ({
+  result,
+  feedback,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -117,6 +175,20 @@ export const DiagnosticCard: React.FC<{ result: DiseaseResult }> = ({ result }) 
           </div>
         </div>
       </button>
+
+      {feedback && result.evidence[0]?.chunk_id && result.evidence[0]?.doc_id && (
+        <div
+          className="px-6 pb-3 pt-0 flex justify-end"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {feedbackButtonsFor(
+            feedback,
+            result.evidence[0].chunk_id,
+            result.evidence[0].doc_id,
+            `diagnostic|${result.disease_name}`,
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {isOpen && (
@@ -175,8 +247,12 @@ const EvidenceItem: React.FC<{ evidence: DiseaseEvidence; index: number }> = ({ 
 );
 
 // --- Positioned Card (Mode 3: Clinical Positioning) ---
-export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result }) => {
+export const PositionedCard: React.FC<{
+  result: PositionedResult;
+  feedback?: CardFeedbackHandlers;
+}> = ({ result, feedback }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const topEvidence = result.evidences[0];
 
   const labelColor =
     result.relevance_label === 'high'
@@ -224,6 +300,20 @@ export const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result 
           </div>
         </div>
       </button>
+
+      {feedback && topEvidence?.chunk_id && topEvidence?.doc_id && (
+        <div
+          className="px-6 pb-3 pt-0 flex justify-end"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {feedbackButtonsFor(
+            feedback,
+            topEvidence.chunk_id,
+            topEvidence.doc_id,
+            `positioned|${result.disease_name_display}`,
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {isOpen && (

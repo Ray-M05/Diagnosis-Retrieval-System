@@ -33,6 +33,9 @@ class SqliteFeedbackStore(FeedbackStorePort):
             CREATE INDEX IF NOT EXISTS idx_relevance_feedback_session
             ON relevance_feedback(session_id, created_at);
 
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_relevance_feedback_vote
+            ON relevance_feedback(session_id, query, chunk_id, doc_id);
+
             CREATE TABLE IF NOT EXISTS query_expansions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT,
@@ -46,6 +49,20 @@ class SqliteFeedbackStore(FeedbackStorePort):
             ON query_expansions(session_id, created_at);
             """
         )
+        # Best-effort dedup of any pre-existing duplicate votes from before the
+        # unique index existed. Keep the most recent (highest id) for each key.
+        try:
+            self.conn.execute(
+                """
+                DELETE FROM relevance_feedback
+                WHERE id NOT IN (
+                    SELECT MAX(id) FROM relevance_feedback
+                    GROUP BY session_id, query, chunk_id, doc_id
+                )
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
         self.conn.commit()
 
     def save_feedback(
@@ -56,14 +73,37 @@ class SqliteFeedbackStore(FeedbackStorePort):
         doc_id: str,
         relevant: bool,
     ) -> None:
+        # Upsert: a user can change their mind (thumbs up → thumbs down) without
+        # creating duplicate rows.
         self.conn.execute(
             """
             INSERT INTO relevance_feedback (session_id, query, chunk_id, doc_id, relevant)
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(session_id, query, chunk_id, doc_id) DO UPDATE SET
+                relevant = excluded.relevant,
+                created_at = CURRENT_TIMESTAMP
             """,
             (session_id, query, chunk_id, doc_id, int(relevant)),
         )
         self.conn.commit()
+
+    def delete_feedback(
+        self,
+        session_id: str,
+        query: str,
+        chunk_id: str,
+        doc_id: str,
+    ) -> bool:
+        """Retract a vote. Returns True if a row was deleted."""
+        cursor = self.conn.execute(
+            """
+            DELETE FROM relevance_feedback
+            WHERE session_id = ? AND query = ? AND chunk_id = ? AND doc_id = ?
+            """,
+            (session_id, query, chunk_id, doc_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
 
     def get_feedback_for_session(self, session_id: str) -> list[dict[str, Any]]:
         cursor = self.conn.execute(

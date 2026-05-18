@@ -294,15 +294,18 @@ class TwoStageRetrievalPipeline:
         Args:
             query: Query del usuario (síntomas, lab tests, etc.)
             hybrid_candidates: Override de número de candidatos
-            final_results: Override de resultados del cross-encoder
+            final_results: Número de enfermedades a devolver (no de chunks para NER)
 
         Returns:
             Lista de enfermedades rankeadas con evidencia de soporte.
         """
+        # NER needs enough chunks to find disease entities — always rerank at
+        # least 20 chunks regardless of the requested number of final diseases.
+        ner_k = max(final_results or self.config.final_results, 20)
         chunk_results = self.search(
             query,
             hybrid_candidates,
-            final_results,
+            ner_k,
             session_id=session_id,
             excluded_chunk_ids=excluded_chunk_ids,
         )
@@ -324,7 +327,9 @@ class TwoStageRetrievalPipeline:
 
         diseases = self.disease_aggregator.aggregate(chunk_results)
         logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
-        return diseases
+        # Truncate to the originally requested k (not ner_k)
+        requested_k = final_results or self.config.final_results
+        return diseases[:requested_k]
 
     def search_positioned(
         self,

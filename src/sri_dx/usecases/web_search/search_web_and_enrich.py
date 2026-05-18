@@ -295,6 +295,9 @@ class SearchWebAndEnrichUseCase:
                 acq_dict = external_to_acquired_dict(
                     ext, query_id=q_hash, original_query=query
                 )
+                if acq_dict is None:
+                    logger.debug("Skipping content-less document: '%s'", ext.title[:60])
+                    continue
                 pairs.append((ext, acq_dict))
             except Exception as exc:  # noqa: BLE001
                 logger.warning(

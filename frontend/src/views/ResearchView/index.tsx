@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Globe } from 'lucide-react';
+import { RefreshCw, ShieldCheck, Globe } from 'lucide-react';
 import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchHeader } from './ResearchHeader';
 import { ResearchResults } from './ResearchResults';
@@ -12,6 +12,7 @@ import {
 } from './research.api';
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
 import type { HybridChunk, SufficiencyInfo } from '../../api/client';
+import { useFeedback } from '../../hooks/useFeedback';
 
 // Map backend HybridChunk → HybridResult expected by ResearchResults UI
 function chunksToHybridResults(chunks: HybridChunk[]): HybridResult[] {
@@ -50,6 +51,71 @@ export const ResearchView: React.FC = () => {
   const [hybridFusion, setHybridFusion] = useState('weighted_sum');
   const [hybridCandidates, setHybridCandidates] = useState(20);
   const [finalResultsCount, setFinalResultsCount] = useState(3);
+  const [refinedQuery, setRefinedQuery] = useState<string | null>(null);
+  const feedback = useFeedback();
+
+  const handleFeedbackSubmit = async (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => {
+    try {
+      await feedback.submit(args);
+    } catch (err) {
+      console.error('Feedback submit failed:', err);
+    }
+  };
+
+  const handleFeedbackRetract = async (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => {
+    try {
+      await feedback.retract(args);
+    } catch (err) {
+      console.error('Feedback retract failed:', err);
+    }
+  };
+
+  const handleRefine = async () => {
+    if (!searchTerm.trim()) return;
+    try {
+      const currentQuery = searchTerm.trim();
+      const refined = await feedback.refine(currentQuery, finalResultsCount);
+      // Refine always returns NER-aggregated diseases via the diseases_to_response
+      // helper in the backend. Map them into the diagnostic card shape.
+      const diseases: DiseaseResult[] = (refined.results?.hybrid ?? []).map((d: any, idx: number) => {
+        const chunkId = d.feedback_chunk_id ?? '';
+        const docId = d.feedback_doc_id ?? '';
+        return {
+          disease_name: d.name,
+          disease_name_display: d.doc_title ?? d.name,
+          aggregated_score: d.score ?? 0,
+          evidence_count: d.evidence_count,
+          rank: d.rank ?? idx + 1,
+          evidence: chunkId && docId
+            ? [{
+                chunk_id: chunkId,
+                doc_id: docId,
+                rerank_score: 0,
+                ner_score: 0,
+                combined_score: d.score ?? 0,
+                content_preview: d.description ?? '',
+                url: d.sourceUrl ?? '',
+              }]
+            : [],
+        };
+      });
+      setResults({ hybrid: null, diagnostic: diseases, positioned: null, web: null });
+      setSearchMode('diagnostic');
+      setRefinedQuery(refined.refined_query);
+      feedback.reset();
+    } catch (err) {
+      console.error('Refine failed:', err);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +126,8 @@ export const ResearchView: React.FC = () => {
     setWebDocsAdded(0);
     setWebDocsRetrieved(0);
     setSufficiency(null);
+    setRefinedQuery(null);
+    feedback.reset();
     try {
       if (searchMode === 'hybrid') {
         const data = await researchSearchHybrid(searchTerm, finalResultsCount);
@@ -75,21 +143,37 @@ export const ResearchView: React.FC = () => {
           matched_symptoms: r.matched_symptoms,
           source_domains: [],
           explanation: r.explanation,
-          evidences: [],
+          evidences: r.evidences ?? [],
         }));
         setResults({ hybrid: null, diagnostic: null, positioned, web: null });
         setSufficiency(data.sufficiency);
       } else if ((searchMode as string) === 'web') {
         const data = await researchWebSearch(searchTerm, finalResultsCount);
         // Map DiseaseDTO → WebSearchResult shape (preserving score + doc title)
-        const webDiseases: WebSearchResult[] = data.hybrid.map((d, idx) => ({
-          disease_name: d.name,
-          disease_name_display: d.doc_title ?? d.name,
-          aggregated_score: d.score ?? 0,
-          evidence_count: d.evidence_count,
-          rank: d.rank ?? idx + 1,
-          evidence: [],
-        }));
+        const webDiseases: WebSearchResult[] = data.hybrid.map((d, idx) => {
+          const chunkId = d.feedback_chunk_id ?? '';
+          const docId = d.feedback_doc_id ?? '';
+          return {
+            disease_name: d.name,
+            disease_name_display: d.doc_title ?? d.name,
+            aggregated_score: d.score ?? 0,
+            evidence_count: d.evidence_count,
+            rank: d.rank ?? idx + 1,
+            evidence: chunkId && docId
+              ? [{
+                  chunk_id: chunkId,
+                  doc_id: docId,
+                  rerank_score: 0,
+                  ner_score: 0,
+                  combined_score: d.score ?? 0,
+                  content_preview: d.description ?? '',
+                  url: d.sourceUrl ?? '',
+                }]
+              : [],
+            feedback_chunk_id: chunkId || null,
+            feedback_doc_id: docId || null,
+          };
+        });
         setResults({ hybrid: null, diagnostic: null, positioned: null, web: webDiseases });
         setWebEnriched(data.web_enriched?.triggered ?? false);
         setWebDocsAdded(data.web_enriched?.docs_added ?? 0);
@@ -113,6 +197,8 @@ export const ResearchView: React.FC = () => {
     setWebDocsAdded(0);
     setWebDocsRetrieved(0);
     setSufficiency(null);
+    setRefinedQuery(null);
+    feedback.reset();
   };
 
   // Hybrid configuration sliders are kept for future use (not all are routed yet)
@@ -159,11 +245,36 @@ export const ResearchView: React.FC = () => {
           </div>
         )}
 
+        {/* Refine button + refined query banner */}
+        {feedback.hasFeedback && (
+          <div className="mx-6 mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={handleRefine}
+              disabled={feedback.isRefining}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 shadow-sm transition-colors hover:border-indigo-200 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${feedback.isRefining ? 'animate-spin' : ''}`} />
+              Refine with feedback
+            </button>
+          </div>
+        )}
+        {refinedQuery && refinedQuery !== searchTerm.trim() && (
+          <div className="mx-6 mt-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs text-indigo-700">
+            Refined query: {refinedQuery}
+          </div>
+        )}
+
         <ResearchResults
           isSearching={isSearching}
           results={results}
           searchMode={searchMode}
           searchTerm={searchTerm}
+          feedback={{
+            query: searchTerm.trim(),
+            onFeedback: handleFeedbackSubmit,
+            onRetractFeedback: handleFeedbackRetract,
+          }}
         />
 
         <footer className="bg-white border-t border-gray-100 px-6 py-4 flex justify-end items-center shrink-0">

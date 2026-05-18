@@ -44,6 +44,7 @@ export interface DiseaseResult {
 
 export interface PositionedEvidence {
   chunk_id: string;
+  doc_id: string;
   url: string;
   cross_encoder_score?: number;
   content_preview?: string;
@@ -67,6 +68,9 @@ export interface WebSearchResult {
   evidence_count: number;
   rank: number;
   evidence: DiseaseEvidence[];
+  /** Top-evidence chunk/doc identifiers used by the feedback flow. */
+  feedback_chunk_id?: string | null;
+  feedback_doc_id?: string | null;
 }
 
 export interface WebSearchResponse {
