@@ -47,6 +47,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from sri_dx.app.api.feedback import build_feedback_router
+from sri_dx.app.api.evaluation import build_evaluation_router
 from sri_dx.app.api.dto import (
     ClinicalRAGRequest,
     DiseaseDTO,
@@ -73,6 +74,8 @@ logger = logging.getLogger(__name__)
 
 _pipeline = None        # TwoStageRetrievalPipeline
 _feedback_store = None  # SqliteFeedbackStore
+_evaluation_store = None  # EvaluationStore
+_corpus_size: int = 1   # Cached at startup; used as denominator for Fallout.
 _rag_uc: ClinicalRAGUseCase | None = None
 _llm_status: str = "unreachable"
 _os_status: str = "unreachable"
@@ -114,6 +117,26 @@ def _build_feedback_store():
 
     db_path = Path(os.environ.get("SRI_FEEDBACK_DB", "data/feedback/feedback.sqlite"))
     return SqliteFeedbackStore(db_path)
+
+
+def _build_evaluation_store():
+    import os
+    from pathlib import Path
+
+    from sri_dx.modules.evaluation.evaluation_store import EvaluationStore
+
+    db_path = Path(os.environ.get("SRI_EVALUATION_DB", "data/evaluation/evaluation.sqlite"))
+    return EvaluationStore(db_path)
+
+
+def _compute_corpus_size() -> int:
+    """Total indexed chunks — used as denominator for Fallout (closed-world)."""
+    try:
+        reader = _build_chunk_reader()
+        return max(int(reader.get_total_chunks()), 1)
+    except Exception as exc:
+        logger.warning("Could not compute corpus size: %s. Defaulting to 1.", exc)
+        return 1
 
 
 def _build_pipeline(feedback_store=None):
@@ -211,7 +234,8 @@ def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _pipeline, _feedback_store, _rag_uc, _llm_status, _os_status
+    global _pipeline, _feedback_store, _evaluation_store, _corpus_size
+    global _rag_uc, _llm_status, _os_status
 
     logger.info("SRI-DX API starting — building pipeline...")
     try:
@@ -226,10 +250,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if _pipeline is not None:
         _rag_uc, _llm_status = _build_rag_usecase(_pipeline)
 
+    try:
+        _evaluation_store = _build_evaluation_store()
+        logger.info("Evaluation store ready.")
+    except Exception as exc:
+        logger.warning("Evaluation store unavailable: %s", exc)
+
+    if _os_status == "ready":
+        _corpus_size = _compute_corpus_size()
+        logger.info("Corpus size cached: %d chunks.", _corpus_size)
+
     yield  # app runs here
 
     if _feedback_store is not None:
         _feedback_store.close()
+    if _evaluation_store is not None:
+        _evaluation_store.close()
     logger.info("SRI-DX API shutting down.")
 
 
@@ -704,6 +740,13 @@ app.include_router(build_feedback_router(
     get_feedback_store=lambda: _feedback_store,
     get_chunk_reader=_build_chunk_reader,
     diseases_to_response=_diseases_to_pipeline_response,
+))
+
+app.include_router(build_evaluation_router(
+    execute_stages=_execute_pipeline_stages,
+    PipelineStagesCls=PipelineStages,
+    get_evaluation_store=lambda: _evaluation_store,
+    get_corpus_size=lambda: _corpus_size,
 ))
 
 

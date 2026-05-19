@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { RefreshCw, ShieldCheck, Globe } from 'lucide-react';
+import { RefreshCw, ShieldCheck, Globe, Search as SearchIcon, BarChart3 } from 'lucide-react';
 import { ResearchSidebar } from './ResearchSidebar';
 import { ResearchHeader } from './ResearchHeader';
 import { ResearchResults } from './ResearchResults';
+import { EvaluationPanel } from './EvaluationPanel';
 import { InsufficiencyBanner } from '../../components/InsufficiencyBanner';
 import {
   researchSearchHybrid,
@@ -13,6 +14,8 @@ import {
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
 import type { HybridChunk, SufficiencyInfo } from '../../api/client';
 import { useFeedback } from '../../hooks/useFeedback';
+
+type SubTab = 'results' | 'evaluation';
 
 // Map backend HybridChunk → HybridResult expected by ResearchResults UI
 function chunksToHybridResults(chunks: HybridChunk[]): HybridResult[] {
@@ -48,6 +51,7 @@ export const ResearchView: React.FC = () => {
   const [sufficiency, setSufficiency] = useState<SufficiencyInfo | null>(null);
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
+  const [subTab, setSubTab] = useState<SubTab>('results');
   const [hybridFusion, setHybridFusion] = useState('weighted_sum');
   const [hybridCandidates, setHybridCandidates] = useState(20);
   const [finalResultsCount, setFinalResultsCount] = useState(3);
@@ -219,6 +223,40 @@ export const ResearchView: React.FC = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Sub-tab toggle — Results vs Evaluation */}
+        <div className="px-6 pt-4 pb-2 bg-white border-b border-gray-50 shrink-0">
+          <div className="inline-flex bg-gray-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setSubTab('results')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                subTab === 'results'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <SearchIcon className="w-3.5 h-3.5" />
+              Resultados
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('evaluation')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                subTab === 'evaluation'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Evaluación
+            </button>
+          </div>
+        </div>
+
+        {subTab === 'evaluation' ? (
+          <EvaluationPanel mode={searchMode} />
+        ) : (
+        <>
         <ResearchHeader
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -276,6 +314,8 @@ export const ResearchView: React.FC = () => {
             onRetractFeedback: handleFeedbackRetract,
           }}
         />
+        </>
+        )}
 
         <footer className="bg-white border-t border-gray-100 px-6 py-4 flex justify-end items-center shrink-0">
           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
