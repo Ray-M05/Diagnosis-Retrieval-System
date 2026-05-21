@@ -1,7 +1,15 @@
 import React, { useRef, useEffect } from 'react';
 import { Search, X, Loader2, Globe, MapPin } from 'lucide-react';
 
-export type SearchBarMode = 'standard' | 'web' | 'positioned';
+/**
+ * Search modifiers. Independent flags so the user can combine Web + Positioning.
+ * 'standard' is the absence of all modifiers.
+ */
+export type SearchBarModifier = 'web' | 'positioned';
+export interface SearchBarModifiers {
+  web: boolean;
+  positioned: boolean;
+}
 
 interface SearchBarProps {
   value: string;
@@ -11,10 +19,10 @@ interface SearchBarProps {
   isLoading?: boolean;
   placeholder?: string;
   submitLabel?: string;
-  /** Show Web / Posicionamiento toggle buttons */
+  /** Show Web / Positioning toggle buttons */
   showModeToggles?: boolean;
-  mode?: SearchBarMode;
-  onModeToggle?: (mode: SearchBarMode) => void;
+  modifiers?: SearchBarModifiers;
+  onModifierToggle?: (modifier: SearchBarModifier) => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -26,8 +34,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = 'Enter symptoms...',
   submitLabel = 'Search',
   showModeToggles = false,
-  mode = 'standard',
-  onModeToggle,
+  modifiers = { web: false, positioned: false },
+  onModifierToggle,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -79,13 +87,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       <div className="flex items-center justify-between px-4 pb-3 pt-1 border-t border-gray-100">
         {/* Mode toggles */}
         <div className="flex items-center gap-2">
-          {showModeToggles && onModeToggle && (
+          {showModeToggles && onModifierToggle && (
             <>
               <button
                 type="button"
-                onClick={() => onModeToggle('web')}
+                onClick={() => onModifierToggle('web')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
-                  mode === 'web'
+                  modifiers.web
                     ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                     : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600'
                 }`}
@@ -95,15 +103,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onModeToggle('positioned')}
+                onClick={() => onModifierToggle('positioned')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
-                  mode === 'positioned'
+                  modifiers.positioned
                     ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
                     : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
                 }`}
               >
                 <MapPin className="w-3.5 h-3.5" />
-                Posicionamiento
+                Positioning
               </button>
             </>
           )}

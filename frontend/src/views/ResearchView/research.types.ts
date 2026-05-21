@@ -2,10 +2,16 @@ export interface HybridResult {
   doc_id: string;
   chunk_id: string;
   score: number;
-  lexical_score?: number;
-  vector_score?: number;
+  lexical_score?: number | null;
+  vector_score?: number | null;
   rerank_score?: number;
   fusion_method: string;
+  title?: string | null;
+  section_heading?: string | null;
+  url?: string | null;
+  source_domain?: string | null;
+  chunk_text_preview?: string;
+  /** @deprecated old nested shape — kept for backward compatibility */
   metadata?: {
     doc_id?: string;
     url?: string;
@@ -38,6 +44,7 @@ export interface DiseaseResult {
 
 export interface PositionedEvidence {
   chunk_id: string;
+  doc_id: string;
   url: string;
   cross_encoder_score?: number;
   content_preview?: string;
@@ -61,12 +68,16 @@ export interface WebSearchResult {
   evidence_count: number;
   rank: number;
   evidence: DiseaseEvidence[];
+  /** Top-evidence chunk/doc identifiers used by the feedback flow. */
+  feedback_chunk_id?: string | null;
+  feedback_doc_id?: string | null;
 }
 
 export interface WebSearchResponse {
   diseases: WebSearchResult[];
   web_enriched: boolean;
   docs_added: number;
+  api_retrieved: number;
   elapsed_seconds: number;
 }
 

@@ -64,7 +64,14 @@ def _slug_from_url(url: str | None) -> str | None:
 
 
 def _fallback_display(candidate: PositioningCandidate) -> str:
-    for value in (candidate.title, _slug_from_url(candidate.url), candidate.doc_id):
+    # Prefer human-readable identifiers over opaque hashes. doc_id is a last
+    # resort so the UI never shows raw hex strings to clinicians.
+    candidates_in_order = (
+        candidate.title,
+        candidate.section_heading,
+        _slug_from_url(candidate.url),
+    )
+    for value in candidates_in_order:
         if value and str(value).strip():
             return str(value).strip()
     return "unknown condition"

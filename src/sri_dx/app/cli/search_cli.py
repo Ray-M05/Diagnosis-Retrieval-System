@@ -133,7 +133,7 @@ def main() -> None:
         uc = SearchHybridUseCase(lexical_backend=backend, embedding_store=store, config=config)
 
         if args.diseases or args.positioned:
-            from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
+            from sri_dx.usecases.search.two_stage_retrieval_pipeline import (
                 TwoStageRetrievalPipeline, TwoStageRetrievalConfig,
             )
             pipeline_config = TwoStageRetrievalConfig(

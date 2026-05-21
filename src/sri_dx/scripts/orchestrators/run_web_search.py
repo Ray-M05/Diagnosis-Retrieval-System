@@ -75,7 +75,7 @@ def _build_use_case():  # noqa: ANN201
     from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
     from sri_dx.usecases.search.search_hybrid import SearchHybridUseCase
     from sri_dx.usecases.search.schemas.hybrid_search_config import HybridSearchConfig
-    from sri_dx.usecases.search.tow_stage_retrieval_pipeline import (
+    from sri_dx.usecases.search.two_stage_retrieval_pipeline import (
         TwoStageRetrievalConfig,
         TwoStageRetrievalPipeline,
     )

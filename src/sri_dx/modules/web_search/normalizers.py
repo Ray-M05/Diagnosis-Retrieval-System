@@ -181,11 +181,6 @@ def normalize_europe_pmc_result(item: dict) -> ExternalApiDocument:
     sections: list[Section] = []
     for s in [
         _section("Abstract", abstract),
-        _section("Journal", journal or ""),
-        _section(
-            "Publication metadata",
-            f"Year: {pub_year or ''}; DOI: {doi or ''}; PMID: {pmid or ''}; PMCID: {pmcid or ''}",
-        ),
     ]:
         if s:
             sections.append(s)
@@ -235,11 +230,6 @@ def normalize_pubmed_article(article_xml: etree._Element) -> ExternalApiDocument
     for s in [
         _section("Abstract", abstract),
         _section("MeSH terms", ", ".join(mesh_terms)),
-        _section("Journal", journal or ""),
-        _section(
-            "Publication metadata",
-            f"PMID: {pmid or ''}; DOI: {doi or ''}; PMCID: {pmcid or ''}; Year: {year or ''}",
-        ),
     ]:
         if s:
             sections.append(s)

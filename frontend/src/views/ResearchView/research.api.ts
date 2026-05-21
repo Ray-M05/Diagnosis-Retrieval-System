@@ -7,15 +7,19 @@
  */
 
 import { runPipeline } from '../../api/client';
-import type { PipelineResponse, PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../../api/client';
+import type { HybridChunk, PipelineResponse, PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../../api/client';
 import type { DiseaseResult } from './research.types';
 
-export async function researchSearchHybrid(query: string, k: number): Promise<PipelineResponse> {
-  return runPipeline({
+export async function researchSearchHybrid(
+  query: string,
+  k: number,
+): Promise<{ chunks: HybridChunk[]; sufficiency: SufficiencyInfo | null }> {
+  const res = await runPipeline({
     query,
     k,
-    stages: { web_enrichment: false, positioning: false, generation: false },
+    stages: { web_enrichment: false, positioning: false, generation: false, raw_hybrid: true },
   });
+  return { chunks: res.hybrid_chunks ?? [], sufficiency: res.sufficiency };
 }
 
 export async function researchSearchDiseases(
@@ -27,14 +31,28 @@ export async function researchSearchDiseases(
     k,
     stages: { web_enrichment: false, positioning: false, generation: false },
   });
-  const diseases: DiseaseResult[] = res.hybrid.map((d, idx) => ({
-    disease_name: d.name,
-    disease_name_display: d.name,
-    aggregated_score: 0,
-    evidence_count: d.evidence_count,
-    rank: d.rank ?? idx + 1,
-    evidence: [],
-  }));
+  const diseases: DiseaseResult[] = res.hybrid.map((d, idx) => {
+    const chunkId = d.feedback_chunk_id ?? '';
+    const docId = d.feedback_doc_id ?? '';
+    return {
+      disease_name: d.name,
+      disease_name_display: d.doc_title ?? d.name,
+      aggregated_score: d.score ?? 0,
+      evidence_count: d.evidence_count,
+      rank: d.rank ?? idx + 1,
+      evidence: chunkId && docId
+        ? [{
+            chunk_id: chunkId,
+            doc_id: docId,
+            rerank_score: 0,
+            ner_score: 0,
+            combined_score: d.score ?? 0,
+            content_preview: d.description ?? '',
+            url: d.sourceUrl ?? '',
+          }]
+        : [],
+    };
+  });
   return { diseases, sufficiency: res.sufficiency };
 }
 

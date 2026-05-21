@@ -1,13 +1,41 @@
 import React from 'react';
-import { Link2 } from 'lucide-react';
+import { Link2, Target, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Disease } from '../types';
+import { RelevanceFeedbackButtons } from './feedback/RelevanceFeedbackButtons';
 
 interface DiseaseCardProps {
   disease: Disease;
+  query?: string;
+  onFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+    relevant: boolean;
+  }) => Promise<void>;
+  onRetractFeedback?: (args: {
+    query: string;
+    chunkId: string;
+    docId: string;
+  }) => Promise<void>;
 }
 
-export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
+export const DiseaseCard: React.FC<DiseaseCardProps> = ({
+  disease,
+  query,
+  onFeedback,
+  onRetractFeedback,
+}) => {
+  const canSubmitFeedback = Boolean(
+    query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
+  );
+  const feedbackTargetId = [
+    query,
+    disease.feedback_doc_id,
+    disease.feedback_chunk_id,
+    disease.name,
+  ].join('|');
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -15,7 +43,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
       className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4"
     >
       <div>
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           {disease.rank > 0 && (
             <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
               #{disease.rank}
@@ -24,9 +52,21 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
           <h3 className="text-xl font-bold text-gray-900 leading-tight">
             {disease.name}
           </h3>
+          {typeof disease.score === 'number' && disease.score > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
+              <Target className="w-3 h-3" />
+              {disease.score.toFixed(disease.score < 1 ? 3 : 2)}
+            </span>
+          )}
         </div>
+        {disease.doc_title && (
+          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+            <FileText className="w-3 h-3 text-gray-400" />
+            <span className="truncate">{disease.doc_title}</span>
+          </p>
+        )}
         {disease.description && (
-          <p className="text-sm text-gray-500 mt-1 leading-relaxed line-clamp-3">
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed line-clamp-3">
             {disease.description}
           </p>
         )}
@@ -51,19 +91,42 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({ disease }) => {
         </p>
       )}
 
-      <div className="mt-auto pt-4 border-t border-gray-50 flex items-center gap-2">
-        <Link2 className="w-4 h-4 text-gray-400" />
+      <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+        <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
         {disease.sourceUrl ? (
           <a
             href={disease.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors"
+            className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors truncate"
           >
             {disease.source || disease.sourceUrl.split('/')[2] || 'Source'}
           </a>
         ) : (
-          <span className="text-xs text-gray-300">{disease.source || '—'}</span>
+            <span className="text-xs text-gray-300">{disease.source || '-'}</span>
+        )}
+        </div>
+
+        {canSubmitFeedback && (
+          <RelevanceFeedbackButtons
+            targetId={feedbackTargetId}
+            onSubmit={(relevant) => onFeedback!({
+              query: query!,
+              chunkId: disease.feedback_chunk_id!,
+              docId: disease.feedback_doc_id!,
+              relevant,
+            })}
+            onRetract={
+              onRetractFeedback
+                ? () => onRetractFeedback({
+                    query: query!,
+                    chunkId: disease.feedback_chunk_id!,
+                    docId: disease.feedback_doc_id!,
+                  })
+                : undefined
+            }
+          />
         )}
       </div>
     </motion.div>

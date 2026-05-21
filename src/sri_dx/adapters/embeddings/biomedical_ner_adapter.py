@@ -132,16 +132,22 @@ class BiomedicalNERAdapter:
                 "end": end,
             })
 
-        # Paso 2: fusionar entidades adyacentes del mismo tipo
-        # (ej: "Diabetic" + "ketoacidosis" → "Diabetic ketoacidosis")
+        # Paso 2: fusionar entidades adyacentes del mismo tipo dentro del mismo
+        # "phrase span" — abarca tokens partidos por el tokenizer subword
+        # (ej: "Diabetic" + "ketoacidosis", "Pulmonary" + "embolism" partido en
+        # "em" + "bolism"). Toleramos hasta 4 chars de gap para puentear
+        # subtokens internos que el modelo etiquetó como O.
         merged: List[Dict[str, Any]] = []
         for ent in mapped:
-            if merged and merged[-1]["domain_label"] == ent["domain_label"] and ent["start"] - merged[-1]["end"] <= 1:
+            if (
+                merged
+                and merged[-1]["domain_label"] == ent["domain_label"]
+                and 0 <= ent["start"] - merged[-1]["end"] <= 4
+                and original_text
+                and not original_text[merged[-1]["end"]:ent["start"]].strip().endswith((".", ",", ";", ":", "!", "?"))
+            ):
                 prev = merged[-1]
-                if original_text:
-                    prev["word"] = original_text[prev["start"]:ent["end"]].strip()
-                else:
-                    prev["word"] = prev["word"] + " " + ent["word"]
+                prev["word"] = original_text[prev["start"]:ent["end"]].strip()
                 prev["end"] = ent["end"]
                 prev["score"] = max(prev["score"], ent["score"])
             else:

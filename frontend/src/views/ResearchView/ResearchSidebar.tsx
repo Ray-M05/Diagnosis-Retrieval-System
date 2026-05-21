@@ -29,13 +29,13 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
         <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-100">
           <Settings className="w-5 h-5 text-white" />
         </div>
-        <h2 className="text-lg font-extrabold text-gray-900 tracking-tight">Configuración</h2>
+        <h2 className="text-lg font-extrabold text-gray-900 tracking-tight">Configuration</h2>
       </div>
 
       <div className="p-6 space-y-8">
         <div className="space-y-4">
           <label className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5" /> Modo de búsqueda
+            <Activity className="w-3.5 h-3.5" /> Search mode
           </label>
           <div className="grid grid-cols-1 gap-2">
             <button
@@ -48,7 +48,7 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
             >
               <div className="flex items-center gap-3">
                 <Database className={`w-4 h-4 ${searchMode === 'hybrid' ? 'text-indigo-200' : 'text-gray-400'}`} />
-                <span className="text-sm font-bold">Híbrido + Reranking</span>
+                <span className="text-sm font-bold">Hybrid + Reranking</span>
               </div>
               {searchMode === 'hybrid' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
@@ -62,7 +62,7 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
             >
               <div className="flex items-center gap-3">
                 <FlaskConical className={`w-4 h-4 ${searchMode === 'diagnostic' ? 'text-indigo-200' : 'text-gray-400'}`} />
-                <span className="text-sm font-bold">Diagnóstico por Enfermedades</span>
+                <span className="text-sm font-bold">Disease Diagnosis</span>
               </div>
               {searchMode === 'diagnostic' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
@@ -76,7 +76,7 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
             >
               <div className="flex items-center gap-3">
                 <MapPin className={`w-4 h-4 ${(searchMode as string) === 'positioned' ? 'text-indigo-200' : 'text-gray-400'}`} />
-                <span className="text-sm font-bold">Posicionamiento Clínico</span>
+                <span className="text-sm font-bold">Clinical Positioning</span>
               </div>
               {(searchMode as string) === 'positioned' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
@@ -90,7 +90,7 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
             >
               <div className="flex items-center gap-3">
                 <Globe className={`w-4 h-4 ${(searchMode as string) === 'web' ? 'text-indigo-200' : 'text-gray-400'}`} />
-                <span className="text-sm font-bold">Búsqueda Web</span>
+                <span className="text-sm font-bold">Web Search</span>
               </div>
               {(searchMode as string) === 'web' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
@@ -100,11 +100,11 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
         <div className="h-px bg-gray-50 w-full" />
 
         <div className="space-y-6">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Parámetros</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Parameters</h3>
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-gray-600 flex justify-between">
-              <span>Fusión híbrida</span>
+              <span>Hybrid fusion</span>
               <span className="text-indigo-600 font-bold">
                 {hybridFusion === 'weighted_sum' ? 'CC' : 'RRF'}
               </span>
@@ -114,14 +114,14 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
               onChange={(e) => setHybridFusion(e.target.value)}
               className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-100 focus:outline-none cursor-pointer"
             >
-              <option value="weighted_sum">Combina Scores (CC)</option>
+              <option value="weighted_sum">Combined Scores (CC)</option>
               <option value="rrf">Reciprocal Rank Fusion (RRF)</option>
             </select>
           </div>
 
           <div className="space-y-3">
             <label className="text-xs font-semibold text-gray-600 flex justify-between">
-              <span>Candidatos híbridos</span>
+              <span>Hybrid candidates</span>
               <span className="text-indigo-600 font-bold">{hybridCandidates}</span>
             </label>
             <input
@@ -134,7 +134,7 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
 
           <div className="space-y-3">
             <label className="text-xs font-semibold text-gray-600 flex justify-between">
-              <span>Resultados finales</span>
+              <span>Final results</span>
               <span className="text-indigo-600 font-bold">{finalResultsCount}</span>
             </label>
             <input

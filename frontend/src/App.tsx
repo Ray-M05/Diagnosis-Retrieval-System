@@ -9,7 +9,7 @@ type Tab = 'search' | 'rag' | 'research';
 export default function App() {
   const [tab, setTab] = useState<Tab>('search');
 
-  // La vista Research ocupa toda la pantalla con su propio layout
+  // Research view takes up the full screen with its own layout
   const isResearch = (tab as string) === 'research';
 
   if (isResearch) {
@@ -20,7 +20,7 @@ export default function App() {
             onClick={() => setTab('search')}
             className="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-xs font-semibold rounded-xl shadow-md hover:bg-gray-50 transition-all"
           >
-            ← Volver
+            ← Back
           </button>
         </div>
         <ResearchView />

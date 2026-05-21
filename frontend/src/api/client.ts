@@ -20,21 +20,51 @@ export interface PipelineStages {
   web_enrichment: boolean;
   positioning: boolean;
   generation: boolean;
+  raw_hybrid?: boolean;
+}
+
+export interface HybridChunk {
+  doc_id: string;
+  chunk_id: string;
+  score: number;
+  rerank_score: number;
+  vector_score?: number | null;
+  lexical_score?: number | null;
+  fusion_method: string;
+  title?: string | null;
+  section_heading?: string | null;
+  url?: string | null;
+  source_domain?: string | null;
+  chunk_text_preview: string;
+}
+
+export interface PositionedEvidenceDTO {
+  chunk_id: string;
+  doc_id: string;
+  url: string;
+  content_preview?: string;
+  cross_encoder_score?: number | null;
 }
 
 export interface PositionedResult {
   rank: number;
+  disease_name?: string;
   disease_name_display: string;
   final_score: number;
   relevance_label: string;
   matched_symptoms: string[];
+  source_domains?: string[];
   explanation: string[];
+  evidences?: PositionedEvidenceDTO[];
 }
 
 export interface WebEnrichmentSummary {
   triggered: boolean;
   docs_added: number;
   chunks_added: number;
+  api_retrieved: number;
+  api_new_documents: number;
+  duplicates_removed: number;
 }
 
 export interface SufficiencyInfo {
@@ -50,6 +80,7 @@ export interface SufficiencyInfo {
 export interface PipelineResponse {
   query: string;
   hybrid: Disease[];
+  hybrid_chunks?: HybridChunk[] | null;
   positioned: PositionedResult[] | null;
   web_enriched: WebEnrichmentSummary | null;
   sufficiency: SufficiencyInfo | null;
@@ -63,6 +94,32 @@ export interface PipelineRequest {
   k?: number;
 }
 
+export interface FeedbackRequest {
+  session_id: string;
+  query: string;
+  chunk_id: string;
+  doc_id: string;
+  relevant: boolean;
+}
+
+export interface FeedbackResponse {
+  ok: boolean;
+  message: string;
+}
+
+export interface RefineSearchRequest {
+  session_id: string;
+  query: string;
+  k?: number;
+}
+
+export interface RefineSearchResponse {
+  original_query: string;
+  refined_query: string;
+  strategy: 'feedback_textual';
+  results: PipelineResponse;
+}
+
 /**
  * Non-streaming call (stages.generation === false).
  * Returns a full PipelineResponse once the server finishes.
@@ -71,13 +128,64 @@ export async function runPipeline(req: PipelineRequest): Promise<PipelineRespons
   if (req.stages.generation) {
     throw new Error('runPipeline does not support generation. Use streamPipeline instead.');
   }
-  const res = await fetch(`${API_BASE}/pipeline`, {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/pipeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...req, k: req.k ?? 10 }),
+    });
+  } catch (err) {
+    throw new Error(`Pipeline network error: ${String(err)}`);
+  }
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Pipeline failed ${res.status}: ${detail || res.statusText}`);
+  }
+  return res.json() as Promise<PipelineResponse>;
+}
+
+export async function submitRelevanceFeedback(req: FeedbackRequest): Promise<FeedbackResponse> {
+  const res = await fetch(`${API_BASE}/feedback/relevance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(`Feedback failed: ${res.statusText}`);
+  return res.json() as Promise<FeedbackResponse>;
+}
+
+export interface RetractFeedbackRequest {
+  session_id: string;
+  query: string;
+  chunk_id: string;
+  doc_id: string;
+}
+
+export async function retractRelevanceFeedback(
+  req: RetractFeedbackRequest,
+): Promise<FeedbackResponse> {
+  const params = new URLSearchParams({
+    session_id: req.session_id,
+    query: req.query,
+    chunk_id: req.chunk_id,
+    doc_id: req.doc_id,
+  });
+  const res = await fetch(`${API_BASE}/feedback/relevance?${params.toString()}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`Retract feedback failed: ${res.statusText}`);
+  return res.json() as Promise<FeedbackResponse>;
+}
+
+export async function refineSearch(req: RefineSearchRequest): Promise<RefineSearchResponse> {
+  const res = await fetch(`${API_BASE}/feedback/search/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...req, k: req.k ?? 10 }),
   });
-  if (!res.ok) throw new Error(`Pipeline failed: ${res.statusText}`);
-  return res.json() as Promise<PipelineResponse>;
+  if (!res.ok) throw new Error(`Refine failed: ${res.statusText}`);
+  return res.json() as Promise<RefineSearchResponse>;
 }
 
 export interface StreamPipelineCallbacks {

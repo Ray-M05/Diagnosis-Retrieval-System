@@ -1,7 +1,7 @@
 import React from 'react';
 import { CheckCircle2, AlertCircle, Search, HeartPulse } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HybridCard, DiagnosticCard, PositionedCard } from './ResearchCards';
+import { HybridCard, DiagnosticCard, PositionedCard, type CardFeedbackHandlers } from './ResearchCards';
 import type { HybridResult, DiseaseResult, PositionedResult, WebSearchResult, SearchMode } from './research.types';
 
 interface ResearchResultsProps {
@@ -14,6 +14,7 @@ interface ResearchResultsProps {
   };
   searchMode: SearchMode;
   searchTerm: string;
+  feedback?: CardFeedbackHandlers;
 }
 
 export const ResearchResults: React.FC<ResearchResultsProps> = ({
@@ -21,6 +22,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
   results,
   searchMode,
   searchTerm,
+  feedback,
 }) => {
   const count =
     searchMode === 'hybrid'
@@ -41,7 +43,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
           </div>
           <div className="text-xs">
             <p className="text-gray-400 font-bold uppercase tracking-tighter leading-none mb-0.5">
-              Resultados
+              Results
             </p>
             <p className="text-gray-900 font-extrabold">{count}</p>
           </div>
@@ -51,8 +53,8 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
           <div className="bg-amber-50/50 border border-amber-100/50 p-2 rounded-xl flex items-start gap-3">
             <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-[10px] text-amber-900 font-medium leading-tight">
-              <span className="font-bold">Aviso:</span> Herramienta de apoyo diagnóstico. No sustituye
-              la valoración clínica profesional.
+              <span className="font-bold">Notice:</span> Diagnostic support tool. Does not replace
+              professional clinical assessment.
             </p>
           </div>
         </div>
@@ -73,11 +75,11 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
               <div className="w-16 h-16 border-t-4 border-indigo-600 rounded-2xl rotate-45 animate-spin absolute inset-0" />
             </div>
             <div className="text-center space-y-2">
-              <p className="text-gray-900 font-black text-xl tracking-tight">Procesando consulta...</p>
+              <p className="text-gray-900 font-black text-xl tracking-tight">Processing query...</p>
               <p className="text-gray-400 text-sm font-medium animate-pulse max-w-xs">
                 {searchMode === 'hybrid'
-                  ? 'Analizando documentos médicos con Cross-Encoders'
-                  : 'Extrayendo entidades clínicas y agregando evidencia'}
+                  ? 'Analyzing medical documents with Cross-Encoders'
+                  : 'Extracting clinical entities and aggregating evidence'}
               </p>
             </div>
           </motion.div>
@@ -90,19 +92,19 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
           >
             {searchMode === 'hybrid' &&
               results.hybrid?.map((r) => (
-                <HybridCard key={r.chunk_id || r.doc_id} result={r} />
+                <HybridCard key={r.chunk_id || r.doc_id} result={r} feedback={feedback} />
               ))}
             {searchMode === 'diagnostic' &&
               results.diagnostic?.map((r) => (
-                <DiagnosticCard key={r.disease_name} result={r} />
+                <DiagnosticCard key={r.disease_name} result={r} feedback={feedback} />
               ))}
             {(searchMode as string) === 'positioned' &&
               results.positioned?.map((r) => (
-                <PositionedCard key={r.rank} result={r} />
+                <PositionedCard key={r.rank} result={r} feedback={feedback} />
               ))}
             {(searchMode as string) === 'web' &&
               results.web?.map((r) => (
-                <DiagnosticCard key={r.disease_name} result={r} />
+                <DiagnosticCard key={r.disease_name} result={r} feedback={feedback} />
               ))}
           </motion.div>
         ) : searchTerm && !isSearching ? (
@@ -115,9 +117,9 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
             <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-12">
               <Search className="w-10 h-10 text-gray-200" />
             </div>
-            <h3 className="text-xl font-black text-gray-900 mb-2">Sin coincidencias clínicas</h3>
+            <h3 className="text-xl font-black text-gray-900 mb-2">No clinical matches</h3>
             <p className="text-gray-400 font-medium max-w-sm mx-auto">
-              Ajuste los parámetros de búsqueda o intente con síntomas más específicos.
+              Adjust the search parameters or try with more specific symptoms.
             </p>
           </motion.div>
         ) : (
@@ -132,11 +134,11 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({
             </div>
             <div className="space-y-4">
               <h2 className="text-3xl font-black text-gray-900 tracking-tight">
-                Modo Testing & Investigación
+                Testing & Research Mode
               </h2>
               <p className="text-gray-400 font-medium max-w-lg mx-auto leading-relaxed">
-                Configure los parámetros del motor híbrido en el panel lateral y ejecute consultas
-                de prueba para evaluar el comportamiento del sistema.
+                Configure the hybrid engine parameters in the side panel and run test queries
+                to evaluate system behavior.
               </p>
             </div>
           </motion.div>

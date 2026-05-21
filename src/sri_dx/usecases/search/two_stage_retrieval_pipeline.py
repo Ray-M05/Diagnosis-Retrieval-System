@@ -25,7 +25,9 @@ from sri_dx.modules.ranking.schemas import (
     RerankResult,
 )
 from sri_dx.modules.ranking.disease_aggregator import DiseaseAggregator, DiseaseAggregatorConfig
+from sri_dx.core.ports.feedback.feedback_store_port import FeedbackStorePort
 from sri_dx.core.schemas.search.disease_result import DiseaseResult
+from sri_dx.modules.expansion import SimplePseudoRelevanceFeedback, SynonymExpander
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,8 @@ class TwoStageRetrievalConfig:
     min_ner_score: float = 0.5  # Confianza mínima de NER
     max_diseases: int = 10  # Máximo de enfermedades a retornar
     positioned_results: int = 10  # Máximo de condiciones posicionadas a retornar
+    enable_synonym_expansion: bool = True
+    enable_prf: bool = False
 
 
 @dataclass
@@ -122,6 +126,9 @@ class TwoStageRetrievalPipeline:
     cross_encoder: Optional[SentenceTransformersCrossEncoderAdapter] = None
     disease_aggregator: Optional[DiseaseAggregator] = None
     positioning_service: Optional[Any] = None
+    synonym_expander: Optional[SynonymExpander] = None
+    prf_expander: Optional[SimplePseudoRelevanceFeedback] = None
+    feedback_store: Optional[FeedbackStorePort] = None
     
     def __post_init__(self):
         """Inicializa el cross-encoder si no fue proporcionado."""
@@ -136,12 +143,18 @@ class TwoStageRetrievalPipeline:
             )
             self.cross_encoder = SentenceTransformersCrossEncoderAdapter(ce_config)
             logger.info("Cross-encoder inicializado correctamente")
+        if self.synonym_expander is None:
+            self.synonym_expander = SynonymExpander()
+        if self.prf_expander is None:
+            self.prf_expander = SimplePseudoRelevanceFeedback()
     
     def search(
         self,
         query: str,
         hybrid_candidates: Optional[int] = None,
         final_results: Optional[int] = None,
+        session_id: Optional[str] = None,
+        excluded_chunk_ids: Optional[set[str]] = None,
     ) -> List[RetrievalResult]:
         """
         Ejecuta búsqueda en dos etapas.
@@ -166,14 +179,51 @@ class TwoStageRetrievalPipeline:
         
         logger.info("=== Búsqueda en 2 etapas: '%s...' ===", query[:50])
         logger.info("Stage 1: %d candidatos | Stage 2: %d finales", k_candidates, k_final)
+
+        retrieval_query = query
+        if self.config.enable_synonym_expansion and self.synonym_expander is not None:
+            retrieval_query = self.synonym_expander.expand(query)
+
+        if self.feedback_store is not None and retrieval_query != query:
+            self.feedback_store.save_query_expansion(
+                session_id=session_id,
+                original_query=query,
+                expanded_query=retrieval_query,
+                strategy="synonym",
+            )
         
         # Stage 1: Búsqueda híbrida
         logger.info("Stage 1: Ejecutando búsqueda híbrida...")
-        hybrid_results = self.hybrid_search.search(query=query, k=k_candidates)
+        hybrid_results = self.hybrid_search.search(query=retrieval_query, k=k_candidates)
         
         if not hybrid_results:
             logger.warning("Búsqueda híbrida no retornó resultados")
             return []
+
+        if self.config.enable_prf and self.prf_expander is not None:
+            top_chunks = [
+                str((r.metadata or {}).get(self.config.content_field) or "")
+                for r in hybrid_results[: self.prf_expander.top_docs]
+            ]
+            prf_query = self.prf_expander.expand(retrieval_query, top_chunks)
+            if prf_query != retrieval_query:
+                if self.feedback_store is not None:
+                    self.feedback_store.save_query_expansion(
+                        session_id=session_id,
+                        original_query=query,
+                        expanded_query=prf_query,
+                        strategy="pseudo_relevance",
+                    )
+                hybrid_results = self.hybrid_search.search(query=prf_query, k=k_candidates)
+
+        if excluded_chunk_ids:
+            hybrid_results = [
+                result for result in hybrid_results
+                if result.chunk_id not in excluded_chunk_ids
+            ]
+            if not hybrid_results:
+                logger.warning("Todos los candidatos fueron filtrados por feedback negativo")
+                return []
         
         logger.info("Stage 1 completado: %d candidatos obtenidos", len(hybrid_results))
         
@@ -233,6 +283,8 @@ class TwoStageRetrievalPipeline:
         query: str,
         hybrid_candidates: Optional[int] = None,
         final_results: Optional[int] = None,
+        session_id: Optional[str] = None,
+        excluded_chunk_ids: Optional[set[str]] = None,
     ) -> List[DiseaseResult]:
         """
         Búsqueda en tres etapas: híbrida → reranking → NER on-demand → agregación por enfermedad.
@@ -242,12 +294,21 @@ class TwoStageRetrievalPipeline:
         Args:
             query: Query del usuario (síntomas, lab tests, etc.)
             hybrid_candidates: Override de número de candidatos
-            final_results: Override de resultados del cross-encoder
+            final_results: Número de enfermedades a devolver (no de chunks para NER)
 
         Returns:
             Lista de enfermedades rankeadas con evidencia de soporte.
         """
-        chunk_results = self.search(query, hybrid_candidates, final_results)
+        # NER needs enough chunks to find disease entities — always rerank at
+        # least 20 chunks regardless of the requested number of final diseases.
+        ner_k = max(final_results or self.config.final_results, 20)
+        chunk_results = self.search(
+            query,
+            hybrid_candidates,
+            ner_k,
+            session_id=session_id,
+            excluded_chunk_ids=excluded_chunk_ids,
+        )
 
         if not chunk_results:
             logger.warning("No hay chunks para agregar en enfermedades")
@@ -266,7 +327,9 @@ class TwoStageRetrievalPipeline:
 
         diseases = self.disease_aggregator.aggregate(chunk_results)
         logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
-        return diseases
+        # Truncate to the originally requested k (not ner_k)
+        requested_k = final_results or self.config.final_results
+        return diseases[:requested_k]
 
     def search_positioned(
         self,

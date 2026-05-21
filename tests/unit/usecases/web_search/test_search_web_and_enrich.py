@@ -15,7 +15,7 @@ from sri_dx.modules.web_search.schemas import (
     RetrievedChunkResult,
     SufficiencyDecision,
 )
-from sri_dx.usecases.search.tow_stage_retrieval_pipeline import RetrievalResult
+from sri_dx.usecases.search.two_stage_retrieval_pipeline import RetrievalResult
 
 
 # ---------------------------------------------------------------------------

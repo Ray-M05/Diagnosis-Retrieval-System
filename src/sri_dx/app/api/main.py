@@ -21,9 +21,22 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logging.getLogger("opensearch").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 from contextlib import asynccontextmanager
+from html import unescape
 from typing import AsyncIterator
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,11 +44,14 @@ load_dotenv()
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
+from sri_dx.app.api.feedback import build_feedback_router
 from sri_dx.app.api.dto import (
     ClinicalRAGRequest,
     DiseaseDTO,
     HealthResponse,
+    HybridChunkDTO,
     ParseChartResponse,
     PipelineRequest,
     PipelineResponse,
@@ -56,13 +72,51 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _pipeline = None        # TwoStageRetrievalPipeline
+_feedback_store = None  # SqliteFeedbackStore
 _rag_uc: ClinicalRAGUseCase | None = None
 _llm_status: str = "unreachable"
 _os_status: str = "unreachable"
 _chart_parser = ChartFileParser()
 
 
-def _build_pipeline():
+def _opensearch_settings() -> tuple[str, int, bool]:
+    """Read OpenSearch host from either SRI_* or docker-compose OPENSEARCH_HOST."""
+    raw_host = os.environ.get("SRI_OS_HOST") or os.environ.get("OPENSEARCH_HOST") or "localhost"
+    default_port = int(os.environ.get("SRI_OS_PORT", "9200"))
+
+    if "://" in raw_host:
+        parsed = urlparse(raw_host)
+        host = _normalize_opensearch_host(parsed.hostname or "localhost")
+        port = parsed.port or (443 if parsed.scheme == "https" else default_port)
+        use_ssl = parsed.scheme == "https"
+        return host, port, use_ssl
+
+    if ":" in raw_host:
+        host, port_text = raw_host.rsplit(":", 1)
+        if port_text.isdigit():
+            return _normalize_opensearch_host(host), int(port_text), False
+
+    return _normalize_opensearch_host(raw_host), default_port, False
+
+
+def _normalize_opensearch_host(host: str) -> str:
+    """Use Docker DNS only inside containers; local Windows must use localhost."""
+    if host == "opensearch" and not os.path.exists("/.dockerenv"):
+        return "localhost"
+    return host
+
+
+def _build_feedback_store():
+    import os
+    from pathlib import Path
+
+    from sri_dx.adapters.stores.sqlite_feedback_store import SqliteFeedbackStore
+
+    db_path = Path(os.environ.get("SRI_FEEDBACK_DB", "data/feedback/feedback.sqlite"))
+    return SqliteFeedbackStore(db_path)
+
+
+def _build_pipeline(feedback_store=None):
     from sri_dx.adapters.stores.opensearch_search_backend import (
         OpenSearchSearchBackend,
         OpenSearchSearchConfig,
@@ -74,30 +128,67 @@ def _build_pipeline():
         TwoStageRetrievalPipeline,
         TwoStageRetrievalConfig,
     )
-    import os
-
-    os_host = os.environ.get("SRI_OS_HOST", "localhost")
-    os_port = int(os.environ.get("SRI_OS_PORT", "9200"))
+    os_host, os_port, use_ssl = _opensearch_settings()
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks"
+    )
+    embeddings_index = (
+        os.environ.get("SRI_EMBEDDINGS_INDEX")
+        or os.environ.get("OPENSEARCH_EMBEDDINGS_INDEX")
+        or "clinical_embeddings_v1"
+    )
 
     lexical = OpenSearchSearchBackend(OpenSearchSearchConfig(
         host=os_host,
         port=os_port,
-        index_alias="clinical_chunks",
+        use_ssl=use_ssl,
+        index_alias=chunks_index,
         search_fields=["section_heading^3", "chunk_text^1"],
     ))
     embedding = OpenSearchEmbeddingSink(OpenSearchEmbeddingConfig(
         host=os_host,
         port=os_port,
-        index_name="clinical_embeddings_v1",
+        use_ssl=use_ssl,
+        index_name=embeddings_index,
     ))
     hybrid = SearchHybridUseCase(
         lexical_backend=lexical,
         embedding_store=embedding,
         config=HybridSearchConfig(fusion_method="rrf", lexical_k=100, semantic_k=100, use_reranking=False),
     )
+    enable_prf = os.environ.get("SRI_ENABLE_PRF", "false").lower() in {"1", "true", "yes", "on"}
     return TwoStageRetrievalPipeline(
         hybrid_search=hybrid,
-        config=TwoStageRetrievalConfig(hybrid_candidates=100, final_results=10),
+        config=TwoStageRetrievalConfig(
+            hybrid_candidates=100,
+            final_results=10,
+            enable_prf=enable_prf,
+        ),
+        feedback_store=feedback_store,
+    )
+
+
+def _build_chunk_reader():
+    from sri_dx.adapters.stores.opensearch_chunk_reader import OpenSearchChunkReader
+    from sri_dx.adapters.stores.schemas.opensearch_chunk_reader_config import (
+        OpenSearchChunkReaderConfig,
+    )
+
+    os_host, os_port, use_ssl = _opensearch_settings()
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks"
+    )
+    return OpenSearchChunkReader(
+        OpenSearchChunkReaderConfig(
+            host=os_host,
+            port=os_port,
+            use_ssl=use_ssl,
+            index_name=chunks_index,
+        )
     )
 
 
@@ -120,11 +211,12 @@ def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _pipeline, _rag_uc, _llm_status, _os_status
+    global _pipeline, _feedback_store, _rag_uc, _llm_status, _os_status
 
     logger.info("SRI-DX API starting — building pipeline...")
     try:
-        _pipeline = _build_pipeline()
+        _feedback_store = _build_feedback_store()
+        _pipeline = _build_pipeline(_feedback_store)
         _os_status = "ready"
         logger.info("Pipeline ready.")
     except Exception as exc:
@@ -136,6 +228,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield  # app runs here
 
+    if _feedback_store is not None:
+        _feedback_store.close()
     logger.info("SRI-DX API shutting down.")
 
 
@@ -176,6 +270,16 @@ async def health():
         llm=_llm_status,
         opensearch=_os_status,
     )
+
+
+@app.get("/")
+async def root():
+    return {
+        "name": "SRI-DX Clinical Retrieval API",
+        "health": "/health",
+        "docs": "/docs",
+        "pipeline": "/pipeline",
+    }
 
 
 @app.post("/rag/parse-chart", response_model=ParseChartResponse)
@@ -224,38 +328,317 @@ async def parse_chart(file: UploadFile = File(...)):
 # ---------------------------------------------------------------------------
 
 
-def _run_web_enrichment(query: str) -> WebEnrichmentSummary:
+def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseDTO]]:
     """Triggers web search + reindexing if local results are insufficient.
 
     After this returns, _pipeline.search() will hit the enriched index.
     """
+    from sri_dx.adapters.medical_apis.europe_pmc_client import EuropePmcClient
+    from sri_dx.adapters.medical_apis.medical_api_search_service import (
+        MedicalApiSearchService,
+    )
+    from sri_dx.adapters.medical_apis.medlineplus_client import MedlinePlusClient
+    from sri_dx.adapters.medical_apis.pubmed_client import PubMedClient
+    from sri_dx.adapters.stores.opensearch_chunk_sink import OpenSearchChunksSink
+    from sri_dx.adapters.stores.opensearch_sink import (
+        OpenSearchConfig as OpenSearchIndexConfig,
+        OpenSearchIndexSink,
+    )
+    from sri_dx.adapters.stores.schemas.opensearch_chunks_config import (
+        OpenSearchChunksConfig,
+    )
+    from sri_dx.adapters.stores.sqlite_manifest import SqliteManifestStore
+    from sri_dx.modules.indexing.chunking import ChunkingConfig
+    from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
+    from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
     from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
     from sri_dx.core.config import load_config
 
     cfg = load_config()
-    use_case = SearchWebAndEnrichUseCase(pipeline=_pipeline, config=cfg.web_search)
+    if not cfg.web_search.enabled:
+        raise HTTPException(503, detail="Web search module is disabled by configuration.")
+
+    ws_cfg = cfg.web_search
+    os_host, os_port, use_ssl = _opensearch_settings()
+    docs_index = (
+        os.environ.get("SRI_OS_INDEX")
+        or os.environ.get("OPENSEARCH_DOCS_INDEX")
+        or cfg.opensearch.index_name
+    )
+    docs_alias = (
+        os.environ.get("SRI_OS_ALIAS")
+        or os.environ.get("OPENSEARCH_DOCS_ALIAS")
+        or cfg.opensearch.alias_name
+    )
+    chunks_index = (
+        os.environ.get("SRI_CHUNKS_INDEX")
+        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
+        or "clinical_chunks_v1"
+    )
+    chunks_alias = (
+        os.environ.get("SRI_CHUNKS_ALIAS")
+        or os.environ.get("OPENSEARCH_CHUNKS_ALIAS")
+        or "clinical_chunks"
+    )
+
+    api_service = MedicalApiSearchService(
+        medlineplus=MedlinePlusClient(
+            retmax=ws_cfg.retmax_medlineplus,
+            timeout=ws_cfg.http_timeout,
+        ),
+        europe_pmc=EuropePmcClient(
+            retmax=ws_cfg.retmax_europe_pmc,
+            timeout=ws_cfg.http_timeout,
+        ),
+        pubmed=PubMedClient(
+            retmax=ws_cfg.retmax_pubmed,
+            timeout=ws_cfg.http_timeout,
+        ),
+    )
+    use_case = SearchWebAndEnrichUseCase(
+        pipeline=_pipeline,
+        sufficiency_evaluator=LocalSufficiencyEvaluator.from_config(ws_cfg.sufficiency),
+        api_service=api_service,
+        delta_writer=JsonlDeltaWriter(ws_cfg.delta_dir),
+        doc_sink=OpenSearchIndexSink(OpenSearchIndexConfig(
+            host=os_host,
+            port=os_port,
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            index_name=docs_index,
+            alias_name=docs_alias,
+        )),
+        chunk_sink=OpenSearchChunksSink(OpenSearchChunksConfig(
+            host=os_host,
+            port=os_port,
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            index_name=chunks_index,
+            alias_name=chunks_alias,
+        )),
+        manifest=SqliteManifestStore(cfg.indexing.manifest_path),
+        report_dir=ws_cfg.report_dir,
+        chunk_cfg=ChunkingConfig(max_chars=1200, overlap_chars=200, min_chars=100),
+    )
     report = use_case.run(query=query)
-    return WebEnrichmentSummary(
-        triggered=report.web_search_triggered,
-        docs_added=report.indexing.docs_indexed,
-        chunks_added=report.indexing.chunks_indexed,
+    return (
+        WebEnrichmentSummary(
+            triggered=report.web_search_triggered,
+            docs_added=report.indexing.docs_indexed,
+            chunks_added=report.indexing.chunks_indexed,
+            api_retrieved=report.api_retrieval.total,
+            api_new_documents=report.deduplication.new_documents,
+            duplicates_removed=report.deduplication.duplicates_removed,
+        ),
+        _web_report_results_to_dtos(report.results),
+    )
+
+
+def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
+    """Map web-search chunk ranking to the frontend's existing result DTO."""
+    dtos: list[DiseaseDTO] = []
+    for i, result in enumerate(results, start=1):
+        rank = int(result.get("rank") or i)
+        doc_id = str(result.get("doc_id") or f"web-doc-{rank}")
+        chunk_id = str(result.get("chunk_id") or doc_id)
+        url = str(result.get("url") or "")
+        source_domain = str(result.get("source_domain") or "")
+        title = _clean_display_title(
+            str(result.get("title") or _display_title_from_url(url, source_domain, f"Resultado web #{rank}"))
+        )
+        rerank_score = float(result.get("rerank_score") or 0.0)
+        dtos.append(DiseaseDTO(
+            id=f"{doc_id}:{chunk_id}",
+            name=title,
+            description=str(result.get("chunk_text") or ""),
+            symptoms=[],
+            source=source_domain,
+            sourceUrl=url,
+            evidence_count=1,
+            rank=rank,
+            feedback_chunk_id=chunk_id,
+            feedback_doc_id=doc_id,
+            score=rerank_score,
+            doc_title=title,
+        ))
+    return dtos
+
+
+def _display_title_from_url(url: str, source_domain: str, fallback: str) -> str:
+    if source_domain:
+        parsed = urlparse(url) if url else None
+        path = parsed.path.strip("/") if parsed else ""
+        if path:
+            slug = path.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").strip()
+            if slug:
+                return f"{slug} ({source_domain})"
+        return source_domain
+    return fallback
+
+
+def _clean_display_title(title: str) -> str:
+    cleaned = re.sub(r"<[^>]+>", "", unescape(str(title or "")))
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+_SLUG_NOISE_PATTERNS = (
+    re.compile(r"^syc[\s\-_]?\d+$", re.IGNORECASE),
+    re.compile(r"^pmc\d+$", re.IGNORECASE),
+    re.compile(r"^\d+$"),
+    re.compile(r"^(symptoms?[\s\-_]causes?|causes?|symptoms?|diagnosis|treatment|prevention)$", re.IGNORECASE),
+    re.compile(r"^(health[\s\-_]topics?|article|ency|medlineplus)$", re.IGNORECASE),
+)
+
+
+def _is_noise_slug(slug: str) -> bool:
+    s = slug.replace("-", " ").replace("_", " ").strip()
+    return any(p.match(s) for p in _SLUG_NOISE_PATTERNS)
+
+
+def _title_from_url(url: str) -> str | None:
+    """Best-effort title from a URL path. Picks the most meaningful slug,
+    skipping noise like 'syc-20352557', 'PMC1234', 'symptoms-causes', etc."""
+    if not url:
+        return None
+    try:
+        path = urlparse(url).path.strip("/")
+        if not path:
+            return None
+        segments = [s for s in path.split("/") if s]
+        # Walk from end to start, pick first segment that isn't noise.
+        for seg in reversed(segments):
+            seg_clean = re.sub(r"\.(html?|aspx?|php)$", "", seg, flags=re.IGNORECASE)
+            if _is_noise_slug(seg_clean):
+                continue
+            slug = seg_clean.replace("-", " ").replace("_", " ").strip()
+            if slug:
+                return slug.title()
+        # Fallback: last segment even if noisy
+        slug = segments[-1].replace("-", " ").replace("_", " ").strip()
+        return slug.title() if slug else None
+    except Exception:
+        return None
+
+
+def _load_doc_metadata_by_id(doc_ids: list[str]) -> dict[str, dict[str, str]]:
+    """Fetch (title, url) for documents from the docs index via mget.
+
+    DiseaseEvidence does not carry the document title — only the chunk's URL.
+    Without this lookup, doc_title can only be slug-inferred which loses real
+    titles like "Acromegaly - Symptoms and Causes - Mayo Clinic". This mirrors
+    what `SearchWebAndEnrichUseCase._load_doc_records_by_id` does for web cards.
+    """
+    ids = list(dict.fromkeys(d for d in doc_ids if d))
+    if not ids:
+        return {}
+
+    from sri_dx.core.config import load_config
+    from opensearchpy import OpenSearch
+
+    try:
+        cfg = load_config()
+        os_host, os_port, use_ssl = _opensearch_settings()
+        docs_index = (
+            os.environ.get("SRI_OS_INDEX")
+            or os.environ.get("OPENSEARCH_DOCS_INDEX")
+            or cfg.opensearch.index_name
+        )
+        client = OpenSearch(
+            hosts=[{"host": os_host, "port": os_port}],
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            http_compress=True,
+            timeout=10,
+        )
+        response = client.mget(index=docs_index, body={"ids": ids})
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not load doc metadata: %s", exc)
+        return {}
+
+    out: dict[str, dict[str, str]] = {}
+    for doc in response.get("docs", []):
+        if not doc.get("found"):
+            continue
+        source = doc.get("_source") or {}
+        out[str(doc.get("_id"))] = {
+            "title": _clean_display_title(str(source.get("title") or "")),
+            "url": str(source.get("url") or "").strip(),
+        }
+    return out
+
+
+def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
+    doc_ids = [
+        d.evidence[0].doc_id for d in diseases if d.evidence and d.evidence[0].doc_id
+    ]
+    doc_meta = _load_doc_metadata_by_id(doc_ids)
+
+    dtos: list[DiseaseDTO] = []
+    for d in diseases:
+        top_ev = d.evidence[0] if d.evidence else None
+        disease_id = (
+            f"{top_ev.doc_id}:{top_ev.chunk_id}"
+            if top_ev
+            else f"{d.disease_name_display}:{d.rank}"
+        )
+        meta = doc_meta.get(top_ev.doc_id, {}) if top_ev else {}
+        url = meta.get("url") or (top_ev.url if top_ev else "")
+        title = meta.get("title") or (_title_from_url(url) if url else None)
+        dtos.append(DiseaseDTO(
+            id=disease_id,
+            name=d.disease_name_display,
+            description=top_ev.content_preview if top_ev else "",
+            symptoms=[],
+            source=url.split("/")[2] if "://" in url else "",
+            sourceUrl=url,
+            evidence_count=d.evidence_count,
+            rank=d.rank,
+            feedback_chunk_id=top_ev.chunk_id if top_ev else None,
+            feedback_doc_id=top_ev.doc_id if top_ev else None,
+            score=float(d.aggregated_score),
+            doc_title=title,
+        ))
+    return dtos
+
+
+def _diseases_to_pipeline_response(query: str, diseases: list, elapsed_seconds: float) -> PipelineResponse:
+    return PipelineResponse(
+        query=query,
+        hybrid=_diseases_to_dtos(diseases),
+        positioned=None,
+        web_enriched=None,
+        sufficiency=None,
+        elapsed_seconds=elapsed_seconds,
     )
 
 
 def _run_hybrid_diseases(query: str, k: int) -> list[DiseaseDTO]:
     diseases = _pipeline.search_diseases(query=query, final_results=k)
-    dtos: list[DiseaseDTO] = []
-    for d in diseases:
-        top_ev = d.evidence[0] if d.evidence else None
-        dtos.append(DiseaseDTO(
-            id=str(d.rank),
-            name=d.disease_name_display,
-            description=top_ev.content_preview if top_ev else "",
-            symptoms=[],
-            source=top_ev.url.split("/")[2] if top_ev and "://" in top_ev.url else "",
-            sourceUrl=top_ev.url if top_ev else "",
-            evidence_count=d.evidence_count,
-            rank=d.rank,
+    return _diseases_to_dtos(diseases)
+
+
+def _run_hybrid_chunks(query: str, k: int) -> list[HybridChunkDTO]:
+    """Run the two-stage retrieval and return raw reranked chunks (no NER aggregation)."""
+    raw = _pipeline.search(query=query, final_results=k)
+    dtos: list[HybridChunkDTO] = []
+    for r in raw:
+        meta = r.metadata or {}
+        url = str(meta.get("url") or "").strip()
+        raw_title = meta.get("title") or meta.get("doc_title") or ""
+        title = _clean_display_title(str(raw_title)) if raw_title else (_title_from_url(url) or "")
+        dtos.append(HybridChunkDTO(
+            doc_id=str(r.doc_id),
+            chunk_id=str(meta.get("chunk_id") or r.doc_id),
+            score=float(r.rerank_score),
+            rerank_score=float(r.rerank_score),
+            vector_score=float(r.vector_score) if r.vector_score is not None else None,
+            lexical_score=float(r.lexical_score) if r.lexical_score is not None else None,
+            fusion_method="cross-encoder",
+            title=title or None,
+            section_heading=str(meta.get("section_heading") or "") or None,
+            url=url or None,
+            source_domain=str(meta.get("source_domain") or "") or None,
+            chunk_text_preview=(r.content or "")[:400],
         ))
     return dtos
 
@@ -282,11 +665,14 @@ def _evaluate_sufficiency(query: str, k: int) -> SufficiencyInfo | None:
             _retrieval_results_to_chunks,
             _extract_symptoms,
         )
+        from sri_dx.core.config import load_config
 
-        raw = _pipeline.search(query)
+        raw = _pipeline.search(query, final_results=max(k, 20))
         chunks = _retrieval_results_to_chunks(raw)
         symptoms = _extract_symptoms(query)
-        evaluator = LocalSufficiencyEvaluator()
+        evaluator = LocalSufficiencyEvaluator.from_config(
+            load_config().web_search.sufficiency
+        )
         decision = evaluator.evaluate(LocalRetrievalResult(
             query=query,
             extracted_symptoms=symptoms,
@@ -313,25 +699,45 @@ def _execute_pipeline_stages(
     if _pipeline is None:
         raise HTTPException(503, detail="Retrieval pipeline not available.")
 
+    logger.info(
+        "Pipeline request: web_enrichment=%s positioning=%s generation=%s raw_hybrid=%s",
+        stages.web_enrichment, stages.positioning, stages.generation, stages.raw_hybrid,
+    )
     t0 = time.monotonic()
     web_summary: WebEnrichmentSummary | None = None
+    web_ranked_dtos: list[DiseaseDTO] | None = None
 
     if stages.web_enrichment:
         try:
-            web_summary = _run_web_enrichment(query)
-        except ImportError:
-            raise HTTPException(501, detail="Web search module not available.")
+            web_summary, web_ranked_dtos = _run_web_enrichment(query)
+        except ImportError as exc:
+            logger.exception("web enrichment import failed")
+            raise HTTPException(
+                501,
+                detail=f"Web search module not available: {exc}",
+            ) from exc
         except Exception as exc:
             logger.exception("web enrichment failed")
             raise HTTPException(500, detail=f"web enrichment: {exc}") from exc
 
-    try:
-        hybrid_dtos = _run_hybrid_diseases(query, k)
-    except Exception as exc:
-        logger.exception("hybrid retrieval failed")
-        raise HTTPException(500, detail=str(exc)) from exc
+    if web_ranked_dtos is not None:
+        hybrid_dtos = web_ranked_dtos[:k]
+    else:
+        try:
+            hybrid_dtos = _run_hybrid_diseases(query, k)
+        except Exception as exc:
+            logger.exception("hybrid retrieval failed")
+            raise HTTPException(500, detail=str(exc)) from exc
 
     positioned = _run_positioning(query, k) if stages.positioning else None
+
+    hybrid_chunks: list[HybridChunkDTO] | None = None
+    if stages.raw_hybrid:
+        try:
+            hybrid_chunks = _run_hybrid_chunks(query, k)
+        except Exception as exc:
+            logger.exception("raw hybrid retrieval failed")
+            raise HTTPException(500, detail=f"raw_hybrid: {exc}") from exc
 
     # Only evaluate sufficiency when web enrichment was NOT active (if already
     # enriched, the results are implicitly sufficient from the caller's POV).
@@ -340,6 +746,7 @@ def _execute_pipeline_stages(
     return PipelineResponse(
         query=query,
         hybrid=hybrid_dtos,
+        hybrid_chunks=hybrid_chunks,
         positioned=positioned,
         web_enriched=web_summary,
         sufficiency=sufficiency,
@@ -347,12 +754,25 @@ def _execute_pipeline_stages(
     )
 
 
+app.include_router(build_feedback_router(
+    get_pipeline=lambda: _pipeline,
+    get_feedback_store=lambda: _feedback_store,
+    get_chunk_reader=_build_chunk_reader,
+    diseases_to_response=_diseases_to_pipeline_response,
+))
+
+
 @app.post("/pipeline")
 async def pipeline(req: PipelineRequest):
     """Composable retrieval pipeline. See module docstring for stage flow."""
     # Non-streaming path
     if not req.stages.generation:
-        return _execute_pipeline_stages(req.query, req.stages, req.k)
+        return await run_in_threadpool(
+            _execute_pipeline_stages,
+            req.query,
+            req.stages,
+            req.k,
+        )
 
     # Streaming (RAG) path
     if _rag_uc is None:
@@ -361,7 +781,12 @@ async def pipeline(req: PipelineRequest):
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 
     # Execute retrieval stages first (synchronous), then stream the LLM.
-    stages_response = _execute_pipeline_stages(req.query, req.stages, req.k)
+    stages_response = await run_in_threadpool(
+        _execute_pipeline_stages,
+        req.query,
+        req.stages,
+        req.k,
+    )
 
     from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
     chart = req.chart if req.chart is not None else _PatientChart()

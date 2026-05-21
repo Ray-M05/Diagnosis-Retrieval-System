@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
+import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
+import { WebDocumentCard } from '../components/WebDocumentCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseChart, streamPipeline } from '../api/client';
 import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse, Disease } from '../types';
 import type { PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../api/client';
-import type { SearchBarMode } from '../components/SearchBar';
+import type { SearchBarModifier, SearchBarModifiers } from '../components/SearchBar';
 import { emptyChart } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -150,7 +152,7 @@ export const ClinicalRAGView: React.FC = () => {
   const [chartOpen, setChartOpen] = useState(false);
   const [chart, setChart] = useState<PatientChart>(emptyChart());
   const [query, setQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchBarMode>('standard');
+  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: false });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -211,8 +213,8 @@ export const ClinicalRAGView: React.FC = () => {
     setError(null);
   };
 
-  const handleModeToggle = (m: SearchBarMode) => {
-    setSearchMode((prev) => (prev === m ? 'standard' : m));
+  const handleModifierToggle = (m: SearchBarModifier) => {
+    setModifiers((prev) => ({ ...prev, [m]: !prev[m] }));
     clearResults();
   };
 
@@ -230,8 +232,8 @@ export const ClinicalRAGView: React.FC = () => {
         chart,
         k: 10,
         stages: {
-          web_enrichment: searchMode === 'web',
-          positioning: searchMode === 'positioned',
+          web_enrichment: modifiers.web,
+          positioning: modifiers.positioned,
           generation: true,
         },
       },
@@ -275,7 +277,7 @@ export const ClinicalRAGView: React.FC = () => {
           <FileText className="w-5 h-5 text-indigo-500 shrink-0" />
           <h2 className="font-bold text-gray-900 flex-1">Patient Chart</h2>
           <span className="text-xs text-gray-400 hidden sm:block">
-            {chartOpen ? 'Ocultar ficha' : 'Mostrar ficha del paciente'}
+            {chartOpen ? 'Hide chart' : 'Show patient chart'}
           </span>
           <ChevronDown
             className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${chartOpen ? 'rotate-180' : ''}`}
@@ -498,10 +500,10 @@ export const ClinicalRAGView: React.FC = () => {
         onClear={() => { setQuery(''); clearResults(); }}
         isLoading={isGenerating}
         placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
-        submitLabel={searchMode === 'standard' ? 'Generate' : 'Search'}
+        submitLabel={!modifiers.web && !modifiers.positioned ? 'Generate' : 'Search'}
         showModeToggles
-        mode={searchMode}
-        onModeToggle={handleModeToggle}
+        modifiers={modifiers}
+        onModifierToggle={handleModifierToggle}
       />
 
       {/* Error */}
@@ -540,10 +542,10 @@ export const ClinicalRAGView: React.FC = () => {
             )}
 
             {/* Insufficiency banner — shown when generation completed and knowledge was insufficient */}
-            {!isGenerating && sufficiency && !sufficiency.sufficient && searchMode !== 'web' && (
+            {!isGenerating && sufficiency && !sufficiency.sufficient && !modifiers.web && (
               <InsufficiencyBanner
                 sufficiency={sufficiency}
-                onActivateWeb={() => setSearchMode('web')}
+                onActivateWeb={() => setModifiers((prev) => ({ ...prev, web: true }))}
               />
             )}
 
@@ -556,15 +558,15 @@ export const ClinicalRAGView: React.FC = () => {
                   className="group inline-flex items-center gap-2 px-3 py-1.5 bg-linear-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-700 hover:from-indigo-100 hover:to-blue-100 transition-all cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  {evidenceOpen ? 'Ocultar evidencia' : 'Ver evidencia ampliada'}
+                  {evidenceOpen ? 'Hide evidence' : 'View expanded evidence'}
                   {webEnrichment?.triggered && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-600/90 text-white rounded-full text-[10px]">
-                      <Globe className="w-2.5 h-2.5" /> Web · +{webEnrichment.docs_added}
+                      <Globe className="w-2.5 h-2.5" /> Web · {webEnrichment.api_retrieved}
                     </span>
                   )}
                   {positionedResults && positionedResults.length > 0 && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-600/90 text-white rounded-full text-[10px]">
-                      <MapPin className="w-2.5 h-2.5" /> {positionedResults.length} posicionadas
+                      <MapPin className="w-2.5 h-2.5" /> {positionedResults.length} positioned
                     </span>
                   )}
                   <ChevronDown className={`w-3 h-3 transition-transform ${evidenceOpen ? 'rotate-180' : ''}`} />
@@ -583,11 +585,11 @@ export const ClinicalRAGView: React.FC = () => {
                         {positionedResults && positionedResults.length > 0 && (
                           <div className="space-y-2">
                             <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
-                              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Posicionamiento clínico
+                              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Clinical positioning
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               {positionedResults.map((r) => {
-                                const colorMap: Record<string, string> = { alta: 'bg-green-100 text-green-700', media: 'bg-amber-100 text-amber-700', baja: 'bg-gray-100 text-gray-500' };
+                                const colorMap: Record<string, string> = { high: 'bg-green-100 text-green-700', alta: 'bg-green-100 text-green-700', medium: 'bg-amber-100 text-amber-700', media: 'bg-amber-100 text-amber-700', low: 'bg-gray-100 text-gray-500', baja: 'bg-gray-100 text-gray-500' };
                                 const color = colorMap[r.relevance_label?.toLowerCase()] ?? 'bg-gray-100 text-gray-500';
                                 return (
                                   <div key={r.rank} className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs flex items-center justify-between gap-2">
@@ -603,14 +605,22 @@ export const ClinicalRAGView: React.FC = () => {
                           </div>
                         )}
 
-                        {webEnrichment?.triggered && hybridResults && hybridResults.length > 0 && (
-                          <div className="space-y-2">
+                        {webEnrichment?.triggered && (
+                          <div className="space-y-3">
                             <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
-                              <Globe className="w-3.5 h-3.5 text-blue-500" /> Documentos web indexados
+                              <Globe className="w-3.5 h-3.5 text-blue-500" /> Indexed web documents
                             </div>
-                            <p className="text-[11px] text-gray-500">
-                              {webEnrichment.docs_added} documentos · {webEnrichment.chunks_added} chunks nuevos desde PubMed / EuropePMC / MedlinePlus
-                            </p>
+                            <WebEnrichmentBanner summary={webEnrichment} />
+                            {hybridResults && hybridResults.length > 0 && webEnrichment.docs_added > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {hybridResults.map((d, idx) => (
+                                  <WebDocumentCard
+                                    key={`${d.id}|${idx}`}
+                                    disease={d}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
