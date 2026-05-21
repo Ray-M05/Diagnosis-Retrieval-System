@@ -520,7 +520,59 @@ def _title_from_url(url: str) -> str | None:
         return None
 
 
+def _load_doc_metadata_by_id(doc_ids: list[str]) -> dict[str, dict[str, str]]:
+    """Fetch (title, url) for documents from the docs index via mget.
+
+    DiseaseEvidence does not carry the document title — only the chunk's URL.
+    Without this lookup, doc_title can only be slug-inferred which loses real
+    titles like "Acromegaly - Symptoms and Causes - Mayo Clinic". This mirrors
+    what `SearchWebAndEnrichUseCase._load_doc_records_by_id` does for web cards.
+    """
+    ids = list(dict.fromkeys(d for d in doc_ids if d))
+    if not ids:
+        return {}
+
+    from sri_dx.core.config import load_config
+    from opensearchpy import OpenSearch
+
+    try:
+        cfg = load_config()
+        os_host, os_port, use_ssl = _opensearch_settings()
+        docs_index = (
+            os.environ.get("SRI_OS_INDEX")
+            or os.environ.get("OPENSEARCH_DOCS_INDEX")
+            or cfg.opensearch.index_name
+        )
+        client = OpenSearch(
+            hosts=[{"host": os_host, "port": os_port}],
+            use_ssl=use_ssl,
+            verify_certs=cfg.opensearch.verify_certs,
+            http_compress=True,
+            timeout=10,
+        )
+        response = client.mget(index=docs_index, body={"ids": ids})
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not load doc metadata: %s", exc)
+        return {}
+
+    out: dict[str, dict[str, str]] = {}
+    for doc in response.get("docs", []):
+        if not doc.get("found"):
+            continue
+        source = doc.get("_source") or {}
+        out[str(doc.get("_id"))] = {
+            "title": _clean_display_title(str(source.get("title") or "")),
+            "url": str(source.get("url") or "").strip(),
+        }
+    return out
+
+
 def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
+    doc_ids = [
+        d.evidence[0].doc_id for d in diseases if d.evidence and d.evidence[0].doc_id
+    ]
+    doc_meta = _load_doc_metadata_by_id(doc_ids)
+
     dtos: list[DiseaseDTO] = []
     for d in diseases:
         top_ev = d.evidence[0] if d.evidence else None
@@ -529,19 +581,22 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
             if top_ev
             else f"{d.disease_name_display}:{d.rank}"
         )
+        meta = doc_meta.get(top_ev.doc_id, {}) if top_ev else {}
+        url = meta.get("url") or (top_ev.url if top_ev else "")
+        title = meta.get("title") or (_title_from_url(url) if url else None)
         dtos.append(DiseaseDTO(
             id=disease_id,
             name=d.disease_name_display,
             description=top_ev.content_preview if top_ev else "",
             symptoms=[],
-            source=top_ev.url.split("/")[2] if top_ev and "://" in top_ev.url else "",
-            sourceUrl=top_ev.url if top_ev else "",
+            source=url.split("/")[2] if "://" in url else "",
+            sourceUrl=url,
             evidence_count=d.evidence_count,
             rank=d.rank,
             feedback_chunk_id=top_ev.chunk_id if top_ev else None,
             feedback_doc_id=top_ev.doc_id if top_ev else None,
             score=float(d.aggregated_score),
-            doc_title=_title_from_url(top_ev.url) if top_ev else None,
+            doc_title=title,
         ))
     return dtos
 

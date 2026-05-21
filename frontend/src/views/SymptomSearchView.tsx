@@ -5,6 +5,7 @@ import { DiseaseCard } from '../components/DiseaseCard';
 import { WebDocumentCard } from '../components/WebDocumentCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
+import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
 import { runPipeline } from '../api/client';
 import { useFeedback } from '../hooks/useFeedback';
 import type { Disease } from '../types';
@@ -208,10 +209,7 @@ export const SymptomSearchView: React.FC = () => {
         />
 
         {webEnriched?.triggered && (
-          <div className="px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2 text-xs text-blue-800 font-medium">
-            <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            Web search enabled — {webEnriched.api_retrieved} document(s) retrieved, {webEnriched.docs_added} new indexed from PubMed / EuropePMC / MedlinePlus
-          </div>
+          <WebEnrichmentBanner summary={webEnriched} />
         )}
 
         {response?.sufficiency && !response.sufficiency.sufficient && !modifiers.web && (

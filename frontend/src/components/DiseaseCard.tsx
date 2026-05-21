@@ -59,7 +59,7 @@ export const DiseaseCard: React.FC<DiseaseCardProps> = ({
             </span>
           )}
         </div>
-        {disease.doc_title && disease.doc_title.toLowerCase() !== disease.name.toLowerCase() && (
+        {disease.doc_title && (
           <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
             <FileText className="w-3 h-3 text-gray-400" />
             <span className="truncate">{disease.doc_title}</span>

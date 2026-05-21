@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
+import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
 import { WebDocumentCard } from '../components/WebDocumentCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseChart, streamPipeline } from '../api/client';
@@ -604,22 +605,22 @@ export const ClinicalRAGView: React.FC = () => {
                           </div>
                         )}
 
-                        {webEnrichment?.triggered && hybridResults && hybridResults.length > 0 && (
+                        {webEnrichment?.triggered && (
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
                               <Globe className="w-3.5 h-3.5 text-blue-500" /> Indexed web documents
                             </div>
-                            <p className="text-[11px] text-gray-500">
-                              {webEnrichment.api_retrieved} documents retrieved · {webEnrichment.docs_added} new · {webEnrichment.chunks_added} chunks indexed from PubMed / EuropePMC / MedlinePlus
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {hybridResults.map((d, idx) => (
-                                <WebDocumentCard
-                                  key={`${d.id}|${idx}`}
-                                  disease={d}
-                                />
-                              ))}
-                            </div>
+                            <WebEnrichmentBanner summary={webEnrichment} />
+                            {hybridResults && hybridResults.length > 0 && webEnrichment.docs_added > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {hybridResults.map((d, idx) => (
+                                  <WebDocumentCard
+                                    key={`${d.id}|${idx}`}
+                                    disease={d}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
