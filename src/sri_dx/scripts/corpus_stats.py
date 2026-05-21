@@ -131,9 +131,6 @@ class CorpusStats:
         dup_docs = sum(c for c in self.content_hashes.values() if c > 1)
         dup_unique = sum(1 for c in self.content_hashes.values() if c > 1)
 
-        domains_full = dict(self.by_domain.most_common())
-        headings_full = dict(self.heading_counter.most_common())
-
         out = {
             "total_docs": self.total_docs,
 

@@ -224,11 +224,7 @@ class ClinicalBERTAdapter:
 
         return torch.from_numpy(result).float()
 
-    def encode(
-        self,
-        texts: Union[str, List[str]],
-        show_progress: bool = False
-    ) -> "torch.Tensor":
+    def encode(self, texts: Union[str, List[str]]) -> "torch.Tensor":
         """Returns embeddings for one or more texts. Shape: (n_texts, 768)."""
         self._load_model()
 
