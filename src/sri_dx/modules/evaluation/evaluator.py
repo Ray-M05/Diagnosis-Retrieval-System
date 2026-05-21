@@ -80,31 +80,55 @@ class EvaluationReport:
         }
 
 
-def _extract_disease_names_from_dtos(dtos: list[Any]) -> list[str]:
-    """Pull normalized disease names from a list of DiseaseDTO objects."""
-    out: list[str] = []
+def _get(item: Any, *keys: str) -> Any:
+    """Read attribute or dict key, returning None if missing."""
+    for key in keys:
+        val = getattr(item, key, None) if not isinstance(item, dict) else item.get(key)
+        if val:
+            return val
+    return None
+
+
+def _extract_disease_aliases_from_dtos(dtos: list[Any]) -> list[list[str]]:
+    """For each DTO, return a list of normalized aliases to match against qrels.
+
+    Aliases include the NER-aggregated disease name AND the title of the top
+    evidence document (when present). Either alias is sufficient for a hit.
+    Empty aliases are filtered out.
+    """
+    out: list[list[str]] = []
     for d in dtos:
-        # DiseaseDTO has .name; tolerate dict too (for positioned-as-dict path).
-        name = getattr(d, "name", None) or (d.get("name") if isinstance(d, dict) else None)
-        if not name and isinstance(d, dict):
-            name = d.get("disease_name_display") or d.get("disease_name")
+        name = _get(d, "name", "disease_name_display", "disease_name")
+        title = _get(d, "doc_title", "title")
+        aliases: list[str] = []
         if name:
-            out.append(normalize_disease_name(str(name)))
+            aliases.append(normalize_disease_name(str(name)))
+        if title:
+            aliases.append(normalize_disease_name(str(title)))
+        if aliases:
+            out.append(aliases)
     return out
 
 
-def _extract_disease_names_from_positioned(positioned: list[Any]) -> list[str]:
-    """Positioned results are a list of dict-like objects with disease_name."""
-    out: list[str] = []
+def _extract_disease_aliases_from_positioned(positioned: list[Any]) -> list[list[str]]:
+    """Positioned results carry disease_name (and optionally a title)."""
+    out: list[list[str]] = []
     for r in positioned or []:
-        name = None
-        if isinstance(r, dict):
-            name = r.get("disease_name_display") or r.get("disease_name")
-        else:
-            name = getattr(r, "disease_name_display", None) or getattr(r, "disease_name", None)
+        name = _get(r, "disease_name_display", "disease_name", "name")
+        title = _get(r, "doc_title", "title")
+        aliases: list[str] = []
         if name:
-            out.append(normalize_disease_name(str(name)))
+            aliases.append(normalize_disease_name(str(name)))
+        if title:
+            aliases.append(normalize_disease_name(str(title)))
+        if aliases:
+            out.append(aliases)
     return out
+
+
+def _primary_names(aliases_list: list[list[str]]) -> list[str]:
+    """For persistence/UI: keep only the first alias per rank (the NER name)."""
+    return [aliases[0] for aliases in aliases_list if aliases]
 
 
 def _extract_chunk_ids(chunks: list[Any]) -> list[str]:
@@ -126,8 +150,8 @@ def _extract_doc_ids(items: list[Any]) -> list[str]:
 
 
 def _disease_metrics(
-    retrieved: list[str],
-    relevant: set[str],
+    retrieved: list[list[str]],
+    relevant: list[str],
     k: int,
     corpus_size: int,
 ) -> dict[str, float]:
@@ -140,6 +164,8 @@ def _disease_metrics(
         "ndcg_at_k": M.ndcg_at_k(retrieved, relevant, k),
         "fallout_at_k": M.fallout_at_k(retrieved, relevant, k, corpus_size),
         "r_precision": M.r_precision(retrieved, relevant),
+        "top_1_hit": M.hit_at_k(retrieved, relevant, 1),
+        "top_3_hit": M.hit_at_k(retrieved, relevant, 3),
     }
 
 
@@ -184,23 +210,21 @@ class BatchEvaluator:
         stages = self._stages_for_mode()
         response = self._execute_stages(entry.query, stages, self.k)
 
-        # Disease-level retrieved IDs depend on the mode.
+        # Disease-level retrieved aliases depend on the mode. Each rank carries
+        # both the NER-aggregated disease name AND the title of the top
+        # evidence document — either alias is enough for a hit.
         if self.mode == "hybrid":
-            # In hybrid mode the user is looking at raw chunks. Disease-level
-            # eval still uses the NER-aggregated `response.hybrid` so the
-            # comparison is meaningful, but the headline metric is chunk-level.
-            disease_retrieved = _extract_disease_names_from_dtos(response.hybrid or [])
+            disease_aliases = _extract_disease_aliases_from_dtos(response.hybrid or [])
         elif self.mode == "positioned":
-            disease_retrieved = _extract_disease_names_from_positioned(response.positioned or [])
-            if not disease_retrieved:
-                # Fall back to hybrid disease list if positioning was unavailable
-                disease_retrieved = _extract_disease_names_from_dtos(response.hybrid or [])
+            disease_aliases = _extract_disease_aliases_from_positioned(response.positioned or [])
+            if not disease_aliases:
+                disease_aliases = _extract_disease_aliases_from_dtos(response.hybrid or [])
         else:  # diagnostic, web
-            disease_retrieved = _extract_disease_names_from_dtos(response.hybrid or [])
+            disease_aliases = _extract_disease_aliases_from_dtos(response.hybrid or [])
 
-        relevant_set = set(entry.relevant_disease_names)
+        disease_retrieved = _primary_names(disease_aliases)
         disease_metrics = _disease_metrics(
-            disease_retrieved, relevant_set, self.k, self.corpus_size
+            disease_aliases, entry.relevant_disease_names, self.k, self.corpus_size
         )
 
         # Chunk-level metrics — only when the qrels entry provides chunk or doc IDs.
@@ -237,8 +261,8 @@ class BatchEvaluator:
 
             if chunk_retrieved is not None and chunk_relevant is not None:
                 chunk_metrics = _disease_metrics(
-                    chunk_retrieved,
-                    set(chunk_relevant),
+                    [[c] for c in chunk_retrieved],
+                    chunk_relevant,
                     self.k,
                     self.corpus_size,
                 )

@@ -1,1109 +1,1109 @@
-# Casos de Prueba — Diagnosis Retrieval System
+# Test Cases — Diagnosis Retrieval System
 
-> Documento de pruebas reproducibles para el sistema RAG clínico. Cada enfermedad incluye:
-> - **Consulta sin chart** (sólo párrafo de síntomas, como un médico general describiría al paciente).
-> - **Chart de paciente Hombre** y **Chart de paciente Mujer** (realistas, no obvios).
-> - **Salida esperada (Top-1)** y diagnósticos diferenciales plausibles.
-> - **Notas críticas** sobre lo que se pone a prueba.
+> Reproducible test document for the clinical RAG system. Each disease includes:
+> - **Query without chart** (symptom paragraph only, as a general practitioner would describe the patient).
+> - **Male patient chart** and **Female patient chart** (realistic, not obvious).
+> - **Expected output (Top-1)** and plausible differential diagnoses.
+> - **Critical notes** on what is being stress-tested.
 >
-> **Cómo usar:** copiar el "Chief Complaint" en el formulario *Patient Chart*, llenar los campos del chart, y pegar la **Consulta** en la barra de búsqueda. Probar primero **sin chart** (sólo la consulta) y luego **con chart**.
+> **How to use:** copy the "Chief Complaint" into the *Patient Chart* form, fill in the chart fields, and paste the **query** into the search bar. Test first **without chart** (query only) and then **with chart**.
 >
-> **Idioma del usuario:** español (médico general, no especialista).
+> **User language:** English (general practitioner, not specialist).
 
 ---
 
-## Índice
+## Index
 
-1. [Acromegalia](#1-acromegalia)
-2. [Acidosis Láctica](#2-acidosis-láctica)
-3. [Hipertiroidismo](#3-hipertiroidismo)
-4. [Hipotiroidismo Congénito](#4-hipotiroidismo-congénito)
-5. [Anemia Hemolítica](#5-anemia-hemolítica)
-6. [Arteriosclerosis / Aterosclerosis](#6-arteriosclerosis--aterosclerosis)
-7. [Artrosis](#7-artrosis)
-8. [Casos Críticos con Negación](#8-casos-críticos-con-negación)
-9. [Casos Críticos con Ambigüedad y Solapamiento](#9-casos-críticos-con-ambigüedad-y-solapamiento)
-10. [Casos donde el Chart puede Influir Negativamente](#10-casos-donde-el-chart-puede-influir-negativamente)
-11. [Enfermedades Adicionales](#11-enfermedades-adicionales)
-    - 11.1 [Diabetes Mellitus tipo 2](#111-diabetes-mellitus-tipo-2)
-    - 11.2 [Embolia Pulmonar](#112-embolia-pulmonar)
-    - 11.3 [Enfermedad de Addison (Insuficiencia Suprarrenal Primaria)](#113-enfermedad-de-addison-insuficiencia-suprarrenal-primaria)
-    - 11.4 [Síndrome de Cushing](#114-síndrome-de-cushing)
-    - 11.5 [Enfermedad de Parkinson](#115-enfermedad-de-parkinson)
-    - 11.6 [Esclerosis Múltiple](#116-esclerosis-múltiple)
-    - 11.7 [Lupus Eritematoso Sistémico](#117-lupus-eritematoso-sistémico)
-    - 11.8 [Insuficiencia Cardíaca Congestiva](#118-insuficiencia-cardíaca-congestiva)
-    - 11.9 [Pancreatitis Aguda](#119-pancreatitis-aguda)
-    - 11.10 [Feocromocitoma](#1110-feocromocitoma)
+1. [Acromegaly](#1-acromegaly)
+2. [Lactic Acidosis](#2-lactic-acidosis)
+3. [Hyperthyroidism](#3-hyperthyroidism)
+4. [Congenital Hypothyroidism](#4-congenital-hypothyroidism)
+5. [Hemolytic Anemia](#5-hemolytic-anemia)
+6. [Arteriosclerosis / Atherosclerosis](#6-arteriosclerosis--atherosclerosis)
+7. [Osteoarthritis](#7-osteoarthritis)
+8. [Critical Cases with Negation](#8-critical-cases-with-negation)
+9. [Critical Cases with Ambiguity and Overlap](#9-critical-cases-with-ambiguity-and-overlap)
+10. [Cases where the Chart may Influence Negatively](#10-cases-where-the-chart-may-influence-negatively)
+11. [Additional Diseases](#11-additional-diseases)
+    - 11.1 [Type 2 Diabetes Mellitus](#111-type-2-diabetes-mellitus)
+    - 11.2 [Pulmonary Embolism](#112-pulmonary-embolism)
+    - 11.3 [Addison's Disease (Primary Adrenal Insufficiency)](#113-addisons-disease-primary-adrenal-insufficiency)
+    - 11.4 [Cushing's Syndrome](#114-cushings-syndrome)
+    - 11.5 [Parkinson's Disease](#115-parkinsons-disease)
+    - 11.6 [Multiple Sclerosis](#116-multiple-sclerosis)
+    - 11.7 [Systemic Lupus Erythematosus](#117-systemic-lupus-erythematosus)
+    - 11.8 [Congestive Heart Failure](#118-congestive-heart-failure)
+    - 11.9 [Acute Pancreatitis](#119-acute-pancreatitis)
+    - 11.10 [Pheochromocytoma](#1110-pheochromocytoma)
 
 ---
 
-## 1. Acromegalia
+## 1. Acromegaly
 
 ### 1.1 Consulta sin chart (RAG simple)
 
 ```
-Paciente que desde hace varios años ha notado que su talla de zapatos ha aumentado y que los anillos ya no le entran. Refiere que sus rasgos faciales se han vuelto más toscos, con la mandíbula más prominente y separación de los dientes. Se queja de dolor de cabeza persistente, hormigueo en las manos compatible con túnel carpiano, sudoración excesiva y ronquidos intensos con apnea del sueño. Además presenta dolor articular generalizado y disminución de la libido.
+Patient who for several years has noticed that his shoe size has increased and that his rings no longer fit. He reports that his facial features have become coarser, with a more prominent jaw and separation of the teeth. He complains of persistent headache, tingling in the hands compatible with carpal tunnel syndrome, excessive sweating, and intense snoring with sleep apnea. He also has generalized joint pain and decreased libido.
 ```
 
-### 1.2 Chart — Paciente HOMBRE
+### 1.2 Chart — Male Patient
 
 - **Age:** 47
 - **Sex:** M
-- **Comorbidities:** hipertensión arterial, intolerancia a la glucosa, síndrome de apnea del sueño
-- **Chief Complaint:** Cambio progresivo de talla de zapatos y anillos en los últimos 4 años, con cefalea diaria
+- **Comorbidities:** arterial hypertension, glucose intolerance, sleep apnea syndrome
+- **Chief Complaint:** Progressive change in shoe and ring size over the last 4 years, with daily headache
 - **Vital Signs:** HR 78 · BP 148/92 · RR 14 · SpO2 96 · Temp 36.7
-- **Physical Findings:** Manos y pies aumentados de tamaño, rasgos faciales toscos, prognatismo, macroglosia leve, piel engrosada con hiperhidrosis. Signo de Tinel positivo bilateral.
-- **Lab Results:** Glucosa en ayunas 128 mg/dL, HbA1c 6.7%. No se han solicitado IGF-1 ni GH.
-- **Imaging:** Ninguna disponible.
-- **Current Medications:** enalapril 20 mg/día, ibuprofeno PRN
+- **Physical Findings:** Enlarged hands and feet, coarse facial features, prognathism, mild macroglossia, thickened skin with hyperhidrosis. Bilateral positive Tinel's sign.
+- **Lab Results:** Fasting glucose 128 mg/dL, HbA1c 6.7%. IGF-1 and GH not requested.
+- **Imaging:** None available.
+- **Current Medications:** enalapril 20 mg/day, ibuprofen PRN
 - **Allergies:** NKDA
-- **Social History:** No fumador, alcohol social, conductor de camión
-- **Family History:** Padre con HTA. Sin antecedentes endocrinos conocidos.
-- **Additional Notes:** Refiere que su esposa nota que ronca cada vez más fuerte y que ha tenido que cambiar la alianza matrimonial dos veces.
+- **Social History:** Non-smoker, social drinker, truck driver
+- **Family History:** Father with hypertension. No known endocrine conditions.
+- **Additional Notes:** Reports his wife notices he snores louder and louder, and that he has had to change his wedding ring twice.
 
-### 1.3 Chart — Paciente MUJER
+### 1.3 Chart — Female Patient
 
 - **Age:** 52
 - **Sex:** F
-- **Comorbidities:** bocio multinodular, diabetes tipo 2
-- **Chief Complaint:** Dolor articular generalizado, parestesias en manos y cambio en la voz
+- **Comorbidities:** multinodular goiter, type 2 diabetes
+- **Chief Complaint:** Generalized joint pain, paresthesias in hands, and voice changes
 - **Vital Signs:** HR 82 · BP 142/88 · RR 16 · SpO2 97 · Temp 36.8
-- **Physical Findings:** Voz ronca y grave, facies tosca, arcos superciliares prominentes, manos grandes con dedos en salchicha. Bocio palpable.
-- **Lab Results:** Glucosa 156 mg/dL, HbA1c 7.4%, TSH 1.2 mUI/L (normal). No IGF-1.
-- **Imaging:** Ecografía tiroidea con nódulos múltiples benignos.
-- **Current Medications:** metformina 1g BID
+- **Physical Findings:** Hoarse and deep voice, coarse facies, prominent supraciliary arches, large hands with sausage-shaped fingers. Palpable goiter.
+- **Lab Results:** Glucose 156 mg/dL, HbA1c 7.4%, TSH 1.2 mIU/L (normal). No IGF-1.
+- **Imaging:** Thyroid ultrasound with multiple benign nodules.
+- **Current Medications:** metformin 1g BID
 - **Allergies:** NKDA
-- **Social History:** Ama de casa, no fuma
-- **Family History:** Madre con DM2 e hipertensión
-- **Additional Notes:** Refiere amenorrea desde hace 8 meses (atribuida a menopausia) y galactorrea ocasional.
+- **Social History:** Housewife, non-smoker
+- **Family History:** Mother with T2DM and hypertension
+- **Additional Notes:** Reports amenorrhea for 8 months (attributed to menopause) and occasional galactorrhea.
 
 ### 1.4 Salida esperada
 
-- **Top-1 esperado:** Acromegalia
-- **Diferenciales plausibles:** Hipotiroidismo (por voz ronca / facies), gigantismo (descartar por edad adulta), síndrome de túnel carpiano idiopático, artrosis primaria.
+- **Top-1 esperado:** Acromegaly
+- **Diferenciales plausibles:** Hypothyroidism (due to hoarse voice / facies), gigantism (ruled out by adult age), idiopathic carpal tunnel syndrome, primary osteoarthritis.
 - **Notas críticas:**
-  - La paciente mujer tiene comorbilidades (bocio, DM2) que **distraen** hacia hipertiroidismo/hipotiroidismo. El sistema debe priorizar la acromegalia por la facies + manos grandes + galactorrea.
-  - El hombre tiene chart "obvio endocrinológico" sin que el médico haya pedido IGF-1 — prueba que el sistema sugiera el diagnóstico correcto y la prueba diagnóstica adecuada.
+  - The female patient has comorbidities (goiter, T2DM) that **distract** toward hyperthyroidism/hypothyroidism. The system should prioritize acromegaly because of the facies + large hands + galactorrhea.
+  - The male has an "obvious endocrine" chart without the physician having requested IGF-1 — tests whether the system suggests the correct diagnosis and the appropriate diagnostic test.
 
 ---
 
-## 2. Acidosis Láctica
+## 2. Lactic Acidosis
 
 ### 2.1 Consulta sin chart
 
 ```
-Paciente que llega a urgencias con dolor abdominal intenso, náuseas y vómitos. Presenta respiración rápida y profunda, somnolencia y confusión. Refiere haber tomado más medicación de la habitual en los últimos días por sentirse mal. La gasometría muestra pH 7.18 y lactato sérico de 7.2 mmol/L.
+Patient arriving at the emergency department with severe abdominal pain, nausea, and vomiting. Presents with rapid deep breathing, drowsiness, and confusion. Reports having taken more medication than usual over the last few days because of feeling unwell. Blood gas shows pH 7.18 and serum lactate of 7.2 mmol/L.
 ```
 
-### 2.2 Chart — Paciente HOMBRE
+### 2.2 Chart — Male Patient
 
 - **Age:** 64
 - **Sex:** M
-- **Comorbidities:** diabetes tipo 2 de larga evolución, enfermedad renal crónica estadio 3b, hipertensión
-- **Chief Complaint:** Dolor abdominal, náuseas y respiración agitada de 24 horas de evolución
+- **Comorbidities:** long-standing type 2 diabetes, stage 3b chronic kidney disease, hypertension
+- **Chief Complaint:** Abdominal pain, nausea, and rapid breathing of 24 hours' evolution
 - **Vital Signs:** HR 118 · BP 92/58 · RR 32 · SpO2 95 · Temp 36.2
-- **Physical Findings:** Letárgico, mucosas secas, respiración de Kussmaul, abdomen difusamente doloroso sin signos peritoneales.
-- **Lab Results:** pH 7.17, HCO3 9 mEq/L, lactato 8.1 mmol/L, glucosa 142 mg/dL (sin cetonas), creatinina 2.8 mg/dL, K 5.6.
-- **Imaging:** Rx abdomen sin hallazgos agudos.
-- **Current Medications:** metformina 1g BID, enalapril 20 mg, atorvastatina 40 mg
+- **Physical Findings:** Lethargic, dry mucous membranes, Kussmaul respiration, diffusely tender abdomen without peritoneal signs.
+- **Lab Results:** pH 7.17, HCO3 9 mEq/L, lactate 8.1 mmol/L, glucose 142 mg/dL (no ketones), creatinine 2.8 mg/dL, K 5.6.
+- **Imaging:** Abdominal X-ray with no acute findings.
+- **Current Medications:** metformin 1g BID, enalapril 20 mg, atorvastatin 40 mg
 - **Allergies:** NKDA
-- **Social History:** Jubilado, bebedor moderado
-- **Family History:** Padre fallecido por IAM
-- **Additional Notes:** En la última semana tuvo gastroenteritis con disminución de la ingesta hídrica.
+- **Social History:** Retired, moderate drinker
+- **Family History:** Father deceased from MI
+- **Additional Notes:** Had gastroenteritis with decreased fluid intake during the past week.
 
-### 2.3 Chart — Paciente MUJER
+### 2.3 Chart — Female Patient
 
 - **Age:** 38
 - **Sex:** F
-- **Comorbidities:** ninguna conocida
-- **Chief Complaint:** Vómitos persistentes, dolor de estómago y dificultad para respirar
+- **Comorbidities:** none known
+- **Chief Complaint:** Persistent vomiting, stomach pain, and shortness of breath
 - **Vital Signs:** HR 124 · BP 88/52 · RR 34 · SpO2 94 · Temp 38.6
-- **Physical Findings:** Diaforesis, palidez, taquipnea con respiración profunda, abdomen blando con leve dolor difuso. Sin focalidad neurológica.
-- **Lab Results:** pH 7.20, HCO3 10, lactato 6.8 mmol/L, glucosa 88 mg/dL, leucocitos 18.500 con neutrofilia, PCR 220, hemocultivos pendientes.
-- **Imaging:** Rx tórax con infiltrado basal derecho.
-- **Current Medications:** anticonceptivo oral
-- **Allergies:** penicilina
-- **Social History:** Profesora, no fumadora, alcohol ocasional
-- **Family History:** Sin relevancia
-- **Additional Notes:** Hace 3 días con fiebre y tos productiva, automedicación con paracetamol e ibuprofeno.
+- **Physical Findings:** Diaphoresis, pallor, tachypnea with deep breathing, soft abdomen with mild diffuse tenderness. No neurological focal signs.
+- **Lab Results:** pH 7.20, HCO3 10, lactate 6.8 mmol/L, glucose 88 mg/dL, leukocytes 18,500 with neutrophilia, CRP 220, blood cultures pending.
+- **Imaging:** Chest X-ray with right basal infiltrate.
+- **Current Medications:** oral contraceptive
+- **Allergies:** penicillin
+- **Social History:** Teacher, non-smoker, occasional alcohol
+- **Family History:** Unremarkable
+- **Additional Notes:** 3 days of fever and productive cough, self-medicated with paracetamol and ibuprofen.
 
 ### 2.4 Salida esperada
 
-- **Top-1 esperado:** Acidosis láctica
-- **Diferenciales plausibles:** Cetoacidosis diabética (descartar por ausencia de cetonas en hombre), sepsis (mujer — coexiste), shock séptico, intoxicación por salicilatos.
+- **Top-1 esperado:** Lactic acidosis
+- **Diferenciales plausibles:** Diabetic ketoacidosis (ruled out by absence of ketones in male), sepsis (female — coexisting), septic shock, salicylate intoxication.
 - **Notas críticas:**
-  - **Hombre:** chart fuerza al sistema a no pasar por alto la metformina + ERC (factor desencadenante clásico).
-  - **Mujer:** la sepsis es **causa** de la acidosis láctica — el sistema no debe dar "neumonía" como Top-1 sino reconocer la acidosis láctica con sepsis como factor desencadenante.
+  - **Male:** chart forces the system not to overlook metformin + CKD (classic precipitating factor).
+  - **Female:** sepsis is the **cause** of the lactic acidosis — the system should not give "pneumonia" as Top-1 but recognize the lactic acidosis with sepsis as a triggering factor.
 
 ---
 
-## 3. Hipertiroidismo
+## 3. Hyperthyroidism
 
 ### 3.1 Consulta sin chart
 
 ```
-Paciente que refiere desde hace 3 meses pérdida de peso a pesar de comer más, nerviosismo, temblor fino en las manos, palpitaciones y sudoración excesiva. Tolera mal el calor, tiene tendencia a la diarrea y duerme mal. Al examen presenta taquicardia y un bocio difuso. Refiere también caída de cabello y alteraciones menstruales.
+Patient who for the past 3 months reports weight loss despite eating more, nervousness, fine tremor in the hands, palpitations, and excessive sweating. Tolerates heat poorly, tends to have diarrhea, and sleeps poorly. On examination presents tachycardia and a diffuse goiter. Also reports hair loss and menstrual disturbances.
 ```
 
-### 3.2 Chart — Paciente HOMBRE
+### 3.2 Chart — Male Patient
 
 - **Age:** 41
 - **Sex:** M
-- **Comorbidities:** trastorno de ansiedad generalizada (diagnóstico previo)
-- **Chief Complaint:** Pérdida de 8 kg en 2 meses, palpitaciones e insomnio
+- **Comorbidities:** generalized anxiety disorder (prior diagnosis)
+- **Chief Complaint:** 8 kg weight loss in 2 months, palpitations, and insomnia
 - **Vital Signs:** HR 112 · BP 138/72 · RR 18 · SpO2 98 · Temp 37.4
-- **Physical Findings:** Piel caliente y húmeda, temblor distal fino, mirada brillante con leve protrusión ocular, bocio difuso no doloroso, reflejos vivos.
-- **Lab Results:** TSH < 0.01 mUI/L, T4L 3.8 ng/dL (elevada), T3L 9.2 pg/mL (elevada).
-- **Imaging:** Pendiente ecografía tiroidea.
-- **Current Medications:** sertralina 50 mg/día, alprazolam PRN
+- **Physical Findings:** Warm and moist skin, fine distal tremor, bright stare with mild ocular protrusion, diffuse non-tender goiter, brisk reflexes.
+- **Lab Results:** TSH < 0.01 mIU/L, free T4 3.8 ng/dL (elevated), free T3 9.2 pg/mL (elevated).
+- **Imaging:** Thyroid ultrasound pending.
+- **Current Medications:** sertraline 50 mg/day, alprazolam PRN
 - **Allergies:** NKDA
-- **Social History:** Fumador 1 paquete/día, ingeniero, alcohol social
-- **Family History:** Hermana con tiroiditis de Hashimoto
-- **Additional Notes:** Inicialmente atribuyó los síntomas a una crisis de ansiedad y aumentó alprazolam, sin mejoría.
+- **Social History:** Smoker 1 pack/day, engineer, social alcohol
+- **Family History:** Sister with Hashimoto's thyroiditis
+- **Additional Notes:** Initially attributed the symptoms to an anxiety crisis and increased alprazolam, without improvement.
 
-### 3.3 Chart — Paciente MUJER
+### 3.3 Chart — Female Patient
 
 - **Age:** 29
 - **Sex:** F
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Sensación constante de calor, pérdida de peso y ciclos menstruales irregulares
+- **Comorbidities:** none
+- **Chief Complaint:** Constant feeling of heat, weight loss, and irregular menstrual cycles
 - **Vital Signs:** HR 108 · BP 128/68 · RR 16 · SpO2 99 · Temp 37.2
-- **Physical Findings:** Bocio difuso simétrico, exoftalmos leve bilateral, piel fina y caliente, eritema pretibial discreto.
-- **Lab Results:** TSH < 0.01, T4L elevada, T3L elevada, anticuerpos TSI positivos.
-- **Imaging:** Ecografía tiroidea con glándula aumentada e hipervascularizada.
-- **Current Medications:** ninguna
+- **Physical Findings:** Symmetric diffuse goiter, mild bilateral exophthalmos, thin and warm skin, mild pretibial erythema.
+- **Lab Results:** TSH < 0.01, elevated free T4, elevated free T3, positive TSI antibodies.
+- **Imaging:** Thyroid ultrasound with enlarged and hypervascular gland.
+- **Current Medications:** none
 - **Allergies:** NKDA
-- **Social History:** Diseñadora gráfica, no fuma, alcohol ocasional
-- **Family History:** Madre con enfermedad de Graves, abuela con vitíligo
-- **Additional Notes:** Embarazo descartado (β-hCG negativa).
+- **Social History:** Graphic designer, non-smoker, occasional alcohol
+- **Family History:** Mother with Graves' disease, grandmother with vitiligo
+- **Additional Notes:** Pregnancy ruled out (β-hCG negative).
 
 ### 3.4 Salida esperada
 
-- **Top-1 esperado:** Hipertiroidismo (Enfermedad de Graves para la mujer dado el exoftalmos + TSI+; primario para el hombre)
-- **Diferenciales plausibles:** Ansiedad/trastorno de pánico (en hombre, distractor por antecedente), feocromocitoma, bocio multinodular tóxico, tirotoxicosis facticia.
+- **Top-1 esperado:** Hyperthyroidism (Graves' disease for the female given the exophthalmos + TSI+; primary for the male)
+- **Diferenciales plausibles:** Anxiety/panic disorder (in male, distractor due to history), pheochromocytoma, toxic multinodular goiter, factitious thyrotoxicosis.
 - **Notas críticas:**
-  - **Hombre:** chart con ansiedad previa pone a prueba si el sistema "se queda" con la explicación psiquiátrica o reconoce el patrón endocrino con TSH suprimida.
-  - **Mujer:** caso de libro — el reto es que el Top-1 sea suficientemente específico ("Enfermedad de Graves") y no quede sólo en "hipertiroidismo".
+  - **Male:** chart with previous anxiety tests whether the system "sticks" with the psychiatric explanation or recognizes the endocrine pattern with suppressed TSH.
+  - **Female:** textbook case — the challenge is for the Top-1 to be specific enough ("Graves' disease") and not stay at "hyperthyroidism" only.
 
 ---
 
-## 4. Hipotiroidismo Congénito
+## 4. Congenital Hypothyroidism
 
 ### 4.1 Consulta sin chart
 
 ```
-Recién nacido de 3 semanas de vida que la madre trae a consulta porque "no se despierta para comer", llora poco y mama con dificultad. Presenta ictericia prolongada, estreñimiento desde el nacimiento, hernia umbilical y abdomen distendido. Al examen tiene fontanela posterior amplia, hipotonía y lengua prominente. No se realizó tamiz neonatal por parto domiciliario.
+3-week-old newborn brought to consultation by the mother because "he doesn't wake up to feed", cries little, and sucks with difficulty. Presents with prolonged jaundice, constipation since birth, umbilical hernia, and distended abdomen. On examination has a wide posterior fontanelle, hypotonia, and a prominent tongue. Neonatal screening was not performed due to home delivery.
 ```
 
-### 4.2 Chart — Paciente HOMBRE (lactante)
+### 4.2 Chart — Male Patient (infant)
 
-- **Age:** 0 (28 días de vida)
+- **Age:** 0 (28 days of life)
 - **Sex:** M
-- **Comorbidities:** ninguna conocida
-- **Chief Complaint:** Letargia, succión débil y estreñimiento desde el nacimiento
+- **Comorbidities:** none known
+- **Chief Complaint:** Lethargy, weak suck, and constipation since birth
 - **Vital Signs:** HR 102 · BP 70/40 · RR 32 · SpO2 97 · Temp 36.1
-- **Physical Findings:** Ictericia persistente, fontanela posterior amplia, macroglosia, hernia umbilical, hipotonía generalizada, llanto ronco.
-- **Lab Results:** Bilirrubina total 9 mg/dL (mayor indirecta), Hb normal, TSH y T4 no realizadas.
-- **Imaging:** Ninguna.
-- **Current Medications:** ninguna
-- **Allergies:** desconocidas
-- **Social History:** Parto domiciliario atendido por partera, no recibió tamiz metabólico neonatal
-- **Family History:** Madre con tiroiditis postparto en embarazo anterior
-- **Additional Notes:** Madre refiere que el bebé duerme casi todo el día y debe ser despertado para alimentarse.
+- **Physical Findings:** Persistent jaundice, wide posterior fontanelle, macroglossia, umbilical hernia, generalized hypotonia, hoarse cry.
+- **Lab Results:** Total bilirubin 9 mg/dL (mainly indirect), normal Hb, TSH and T4 not performed.
+- **Imaging:** None.
+- **Current Medications:** none
+- **Allergies:** unknown
+- **Social History:** Home delivery attended by a midwife, did not receive neonatal metabolic screening
+- **Family History:** Mother with postpartum thyroiditis in a previous pregnancy
+- **Additional Notes:** Mother reports that the baby sleeps almost all day and must be awakened to feed.
 
-### 4.3 Chart — Paciente MUJER (lactante)
+### 4.3 Chart — Female Patient (infant)
 
-- **Age:** 0 (2 meses)
+- **Age:** 0 (2 months)
 - **Sex:** F
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Escaso aumento de peso y constipación
+- **Comorbidities:** none
+- **Chief Complaint:** Poor weight gain and constipation
 - **Vital Signs:** HR 110 · BP 72/42 · RR 36 · SpO2 98 · Temp 36.3
-- **Physical Findings:** Piel seca y fría, llanto ronco, hipotonía, lengua que protruye, abdomen prominente con hernia umbilical. Reflejos disminuidos.
-- **Lab Results:** TSH del tamiz neonatal "alterada" (informe verbal de la madre, sin papel). No se realizó confirmación.
-- **Imaging:** Ninguna.
-- **Current Medications:** ninguna
-- **Allergies:** desconocidas
-- **Social History:** Lactancia materna exclusiva
-- **Family History:** Sin antecedentes tiroideos conocidos
-- **Additional Notes:** Ganancia ponderal de 280 g en el último mes (subóptima).
+- **Physical Findings:** Dry and cold skin, hoarse cry, hypotonia, protruding tongue, prominent abdomen with umbilical hernia. Diminished reflexes.
+- **Lab Results:** TSH from neonatal screening "abnormal" (verbal report from mother, no paper). Confirmation not performed.
+- **Imaging:** None.
+- **Current Medications:** none
+- **Allergies:** unknown
+- **Social History:** Exclusive breastfeeding
+- **Family History:** No known thyroid history
+- **Additional Notes:** Weight gain of 280 g in the past month (suboptimal).
 
 ### 4.4 Salida esperada
 
-- **Top-1 esperado:** Hipotiroidismo congénito
-- **Diferenciales plausibles:** Síndrome de Down (por hipotonía + macroglosia), enfermedad de Hirschsprung (por estreñimiento), ictericia neonatal prolongada por leche materna, atresia de vías biliares.
+- **Top-1 esperado:** Congenital hypothyroidism
+- **Diferenciales plausibles:** Down syndrome (due to hypotonia + macroglossia), Hirschsprung disease (due to constipation), prolonged neonatal jaundice from breast milk, biliary atresia.
 - **Notas críticas:**
-  - Caso especialmente sensible a **edad** del paciente — el sistema debe usar la edad del chart para inferir que se trata de la forma congénita, no del hipotiroidismo del adulto.
-  - El antecedente de "tiroiditis postparto materna" en el hombre es un distractor que puede empujar hacia "hipotiroidismo neonatal transitorio por anticuerpos maternos" — diferencial válido pero no el Top-1.
+  - Case especially sensitive to **patient age** — the system must use the chart age to infer that this is the congenital form, not adult hypothyroidism.
+  - The history of "maternal postpartum thyroiditis" in the male is a distractor that may push toward "transient neonatal hypothyroidism from maternal antibodies" — a valid differential but not the Top-1.
 
 ---
 
-## 5. Anemia Hemolítica
+## 5. Hemolytic Anemia
 
 ### 5.1 Consulta sin chart
 
 ```
-Paciente que consulta por cansancio progresivo desde hace 2 semanas, palidez intensa, dolor de cabeza y dificultad para respirar al subir escaleras. En los últimos días ha notado que la piel y los ojos se le han puesto amarillentos y que la orina es muy oscura, casi como Coca-Cola. Al examen presenta esplenomegalia palpable.
+Patient consulting for progressive fatigue over the past 2 weeks, intense pallor, headache, and difficulty breathing on climbing stairs. In the last few days has noticed that the skin and eyes have turned yellowish and that the urine is very dark, almost like Coca-Cola. On examination shows palpable splenomegaly.
 ```
 
-### 5.2 Chart — Paciente HOMBRE
+### 5.2 Chart — Male Patient
 
 - **Age:** 22
 - **Sex:** M
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Astenia, ictericia y orina oscura desde hace 5 días
+- **Comorbidities:** none
+- **Chief Complaint:** Fatigue, jaundice, and dark urine for 5 days
 - **Vital Signs:** HR 110 · BP 110/68 · RR 20 · SpO2 96 · Temp 36.9
-- **Physical Findings:** Palidez mucocutánea, ictericia escleral, esplenomegalia 3 cm bajo reborde costal, sin adenopatías.
-- **Lab Results:** Hb 7.2 g/dL, VCM 96, reticulocitos 11%, LDH 980, bilirrubina indirecta 4.2 mg/dL, haptoglobina < 10, Coombs directo negativo. G6PD pendiente.
-- **Imaging:** Ecografía abdominal con esplenomegalia homogénea.
-- **Current Medications:** ninguna habitual. **Hace 4 días tomó trimetoprim-sulfametoxazol** por infección urinaria.
+- **Physical Findings:** Mucocutaneous pallor, scleral icterus, splenomegaly 3 cm below the costal margin, no lymphadenopathy.
+- **Lab Results:** Hb 7.2 g/dL, MCV 96, reticulocytes 11%, LDH 980, indirect bilirubin 4.2 mg/dL, haptoglobin < 10, direct Coombs negative. G6PD pending.
+- **Imaging:** Abdominal ultrasound with homogeneous splenomegaly.
+- **Current Medications:** none regular. **4 days ago took trimethoprim-sulfamethoxazole** for a urinary tract infection.
 - **Allergies:** NKDA
-- **Social History:** Origen mediterráneo, estudiante universitario
-- **Family History:** Tío materno con "anemia rara" desde la infancia
-- **Additional Notes:** Comió habas en una reunión familiar la semana pasada.
+- **Social History:** Mediterranean origin, university student
+- **Family History:** Maternal uncle with "rare anemia" since childhood
+- **Additional Notes:** Ate fava beans at a family gathering last week.
 
-### 5.3 Chart — Paciente MUJER
+### 5.3 Chart — Female Patient
 
 - **Age:** 34
 - **Sex:** F
-- **Comorbidities:** lupus eritematoso sistémico
-- **Chief Complaint:** Debilidad, palidez y disnea de esfuerzo progresiva
+- **Comorbidities:** systemic lupus erythematosus
+- **Chief Complaint:** Weakness, pallor, and progressive exertional dyspnea
 - **Vital Signs:** HR 116 · BP 102/64 · RR 22 · SpO2 95 · Temp 37.1
-- **Physical Findings:** Palidez intensa, ictericia leve, esplenomegalia, sin adenopatías.
-- **Lab Results:** Hb 6.8 g/dL, VCM 102, reticulocitos 13%, LDH 1100, bilirrubina indirecta 3.8, haptoglobina indetectable, Coombs directo POSITIVO (IgG).
-- **Imaging:** Ecografía con esplenomegalia.
-- **Current Medications:** hidroxicloroquina 200 mg/día, prednisona 5 mg/día
-- **Allergies:** sulfas
-- **Social History:** Trabaja en oficina
-- **Family History:** Madre con artritis reumatoide
-- **Additional Notes:** Refiere brote articular reciente y aparición de aftas orales.
+- **Physical Findings:** Intense pallor, mild jaundice, splenomegaly, no lymphadenopathy.
+- **Lab Results:** Hb 6.8 g/dL, MCV 102, reticulocytes 13%, LDH 1100, indirect bilirubin 3.8, undetectable haptoglobin, direct Coombs POSITIVE (IgG).
+- **Imaging:** Ultrasound with splenomegaly.
+- **Current Medications:** hydroxychloroquine 200 mg/day, prednisone 5 mg/day
+- **Allergies:** sulfa drugs
+- **Social History:** Office worker
+- **Family History:** Mother with rheumatoid arthritis
+- **Additional Notes:** Reports recent joint flare and appearance of oral aphthae.
 
 ### 5.4 Salida esperada
 
 - **Top-1 esperado:**
-  - **Hombre:** Anemia hemolítica por déficit de G6PD (favismo / fármaco desencadenante).
-  - **Mujer:** Anemia hemolítica autoinmune por anticuerpos calientes (IgG) asociada a LES.
-- **Diferenciales plausibles:** Hepatitis aguda (por ictericia + orina oscura), síndrome hemolítico urémico, anemia por sangrado oculto, anemia megaloblástica.
+  - **Male:** Hemolytic anemia due to G6PD deficiency (favism / drug trigger).
+  - **Female:** Autoimmune hemolytic anemia due to warm antibodies (IgG) associated with SLE.
+- **Diferenciales plausibles:** Acute hepatitis (due to jaundice + dark urine), hemolytic uremic syndrome, anemia from occult bleeding, megaloblastic anemia.
 - **Notas críticas:**
-  - **Hombre:** los datos del chart (origen mediterráneo, habas, sulfas) son claves diagnósticas que sin chart NO están en la consulta. **Excelente caso para comparar RAG con vs. sin chart.**
-  - **Mujer:** Coombs+ y LES sólo aparecen en chart. Sin chart, el sistema sólo puede llegar a "anemia hemolítica"; con chart debe especificar el subtipo autoinmune.
+  - **Male:** chart data (Mediterranean origin, fava beans, sulfa drugs) are key diagnostic clues that without chart are NOT in the query. **Excellent case to compare RAG with vs. without chart.**
+  - **Female:** Coombs+ and SLE appear only in the chart. Without chart, the system can only reach "hemolytic anemia"; with chart it should specify the autoimmune subtype.
 
 ---
 
-## 6. Arteriosclerosis / Aterosclerosis
+## 6. Arteriosclerosis / Atherosclerosis
 
 ### 6.1 Consulta sin chart
 
 ```
-Paciente que refiere desde hace varios meses dolor opresivo en el pecho que aparece al caminar deprisa o subir cuestas y cede con el reposo en pocos minutos. También nota calambres en las pantorrillas tras caminar dos cuadras que mejoran al pararse. Ha notado los pies fríos y le cuesta cicatrizar una pequeña herida en el dedo gordo.
+Patient who for several months has experienced oppressive chest pain that appears when walking briskly or climbing hills and resolves with rest within a few minutes. Also notices cramps in the calves after walking two blocks that improve on stopping. Has noticed cold feet and difficulty healing a small wound on the big toe.
 ```
 
-### 6.2 Chart — Paciente HOMBRE
+### 6.2 Chart — Male Patient
 
 - **Age:** 68
 - **Sex:** M
-- **Comorbidities:** hipertensión arterial, dislipidemia, diabetes tipo 2, EPOC leve
-- **Chief Complaint:** Dolor torácico de esfuerzo y claudicación intermitente a 100 metros
+- **Comorbidities:** arterial hypertension, dyslipidemia, type 2 diabetes, mild COPD
+- **Chief Complaint:** Exertional chest pain and intermittent claudication at 100 meters
 - **Vital Signs:** HR 76 · BP 158/92 · RR 16 · SpO2 95 · Temp 36.6
-- **Physical Findings:** Soplo carotídeo derecho, pulsos pedios disminuidos bilateralmente, úlcera superficial en primer ortejo derecho, piel atrófica y brillante en piernas.
-- **Lab Results:** LDL 168, HDL 32, triglicéridos 220, glucosa 152, HbA1c 7.8%, creatinina 1.2.
-- **Imaging:** ECG con ondas Q en cara inferior (antiguas, no documentadas previamente).
-- **Current Medications:** enalapril 20 mg, metformina 1g BID, AAS 100 mg
+- **Physical Findings:** Right carotid bruit, bilaterally diminished pedal pulses, superficial ulcer on right first toe, atrophic and shiny skin on the legs.
+- **Lab Results:** LDL 168, HDL 32, triglycerides 220, glucose 152, HbA1c 7.8%, creatinine 1.2.
+- **Imaging:** ECG with Q waves in inferior leads (old, not previously documented).
+- **Current Medications:** enalapril 20 mg, metformin 1g BID, ASA 100 mg
 - **Allergies:** NKDA
-- **Social History:** Fumador 40 paquetes-año (activo), sedentario, dieta rica en grasas
-- **Family History:** Padre IAM a los 55, hermano con bypass coronario
-- **Additional Notes:** Refiere disfunción eréctil progresiva de 2 años de evolución.
+- **Social History:** Smoker 40 pack-years (active), sedentary, fatty diet
+- **Family History:** Father MI at 55, brother with coronary bypass
+- **Additional Notes:** Reports progressive erectile dysfunction over the past 2 years.
 
-### 6.3 Chart — Paciente MUJER
+### 6.3 Chart — Female Patient
 
 - **Age:** 72
 - **Sex:** F
-- **Comorbidities:** hipertensión, dislipidemia, artritis reumatoide
-- **Chief Complaint:** Calambres en piernas al caminar y dolor torácico ocasional
+- **Comorbidities:** hypertension, dyslipidemia, rheumatoid arthritis
+- **Chief Complaint:** Cramps in the legs when walking and occasional chest pain
 - **Vital Signs:** HR 82 · BP 162/88 · RR 18 · SpO2 96 · Temp 36.5
-- **Physical Findings:** Pulsos tibiales posteriores disminuidos, soplo abdominal, xantelasmas palpebrales, deformidades articulares en manos.
-- **Lab Results:** LDL 184, HDL 48, triglicéridos 198, glucosa 108, HbA1c 5.9%, VSG 38, PCR 12.
-- **Imaging:** Ecodoppler de carótidas con placas bilaterales y estenosis del 50% derecha.
-- **Current Medications:** losartán 50 mg, metotrexate 15 mg/semana, ácido fólico, prednisona 5 mg
+- **Physical Findings:** Diminished posterior tibial pulses, abdominal bruit, palpebral xanthelasmas, joint deformities in hands.
+- **Lab Results:** LDL 184, HDL 48, triglycerides 198, glucose 108, HbA1c 5.9%, ESR 38, CRP 12.
+- **Imaging:** Carotid Doppler with bilateral plaques and 50% right-sided stenosis.
+- **Current Medications:** losartan 50 mg, methotrexate 15 mg/week, folic acid, prednisone 5 mg
 - **Allergies:** NKDA
-- **Social History:** Ex-fumadora (dejó hace 10 años), camina poco por dolor articular
-- **Family History:** Madre con ictus a los 70
-- **Additional Notes:** En los últimos meses ha notado pérdida de visión transitoria en el ojo derecho ("como si bajara una cortina").
+- **Social History:** Ex-smoker (quit 10 years ago), walks little due to joint pain
+- **Family History:** Mother with stroke at 70
+- **Additional Notes:** In the last few months has noticed transient vision loss in the right eye ("as if a curtain came down").
 
 ### 6.4 Salida esperada
 
-- **Top-1 esperado:** Aterosclerosis (con enfermedad arterial periférica + cardiopatía isquémica).
-- **Diferenciales plausibles:** Arteriosclerosis de Mönckeberg (descartar — usualmente asintomática), arteritis de Takayasu, tromboangeítis obliterante (Buerger), insuficiencia venosa crónica, estenosis raquídea (claudicación neurógena).
+- **Top-1 esperado:** Atherosclerosis (with peripheral arterial disease + ischemic heart disease).
+- **Diferenciales plausibles:** Mönckeberg arteriosclerosis (rule out — usually asymptomatic), Takayasu arteritis, thromboangiitis obliterans (Buerger), chronic venous insufficiency, spinal stenosis (neurogenic claudication).
 - **Notas críticas:**
-  - El sistema debe **distinguir arteriosclerosis (general) de aterosclerosis (específica)** — el chart provee LDL alto, factores de riesgo y placas, que apuntan al subtipo aterosclerótico.
-  - **Mujer:** el episodio de amaurosis fugax sugiere émbolo carotídeo — el sistema debe captarlo aunque no esté en la pregunta.
-  - **Hombre:** las ondas Q antiguas en ECG sugieren IAM silente — riesgo de que el sistema se desvíe hacia "cardiopatía isquémica crónica" como Top-1 en lugar de la enfermedad subyacente.
+  - The system must **distinguish arteriosclerosis (general) from atherosclerosis (specific)** — the chart provides high LDL, risk factors and plaques, pointing to the atherosclerotic subtype.
+  - **Female:** the amaurosis fugax episode suggests carotid embolus — the system should pick it up even though it is not in the question.
+  - **Male:** old Q waves on ECG suggest silent MI — risk that the system drifts to "chronic ischemic heart disease" as Top-1 instead of the underlying disease.
 
 ---
 
-## 7. Artrosis
+## 7. Osteoarthritis
 
 ### 7.1 Consulta sin chart
 
 ```
-Paciente de edad avanzada con dolor en ambas rodillas que aparece al caminar y al bajar escaleras, mejora con el reposo, y que se ha ido haciendo más intenso en los últimos 2 años. Refiere rigidez matutina breve (menos de 15 minutos), crepitación al moverlas y ocasional inflamación. No hay enrojecimiento ni fiebre.
+Elderly patient with pain in both knees that appears when walking and going down stairs, improves with rest, and has been getting worse over the last 2 years. Reports brief morning stiffness (less than 15 minutes), crepitus on movement, and occasional swelling. No redness or fever.
 ```
 
-### 7.2 Chart — Paciente HOMBRE
+### 7.2 Chart — Male Patient
 
 - **Age:** 71
 - **Sex:** M
-- **Comorbidities:** obesidad grado II (IMC 34), HTA
-- **Chief Complaint:** Dolor mecánico en rodilla derecha de 3 años de evolución, ahora con deformidad en varo
+- **Comorbidities:** grade II obesity (BMI 34), hypertension
+- **Chief Complaint:** Mechanical pain in right knee of 3 years' evolution, now with varus deformity
 - **Vital Signs:** HR 72 · BP 138/82 · RR 14 · SpO2 97 · Temp 36.5
-- **Physical Findings:** Rodilla derecha con crepitación, arcos de movimiento limitados (flexión 100°), deformidad en varo evidente. Sin signos inflamatorios agudos.
-- **Lab Results:** PCR 4 (normal), VSG 18, ácido úrico 6.2 (normal), FR negativo.
-- **Imaging:** Rx rodilla derecha con pinzamiento del compartimento medial, osteofitos marginales, esclerosis subcondral y quistes pequeños.
+- **Physical Findings:** Right knee with crepitus, limited range of motion (flexion 100°), evident varus deformity. No acute inflammatory signs.
+- **Lab Results:** CRP 4 (normal), ESR 18, uric acid 6.2 (normal), RF negative.
+- **Imaging:** Right knee X-ray with medial compartment joint space narrowing, marginal osteophytes, subchondral sclerosis, and small cysts.
 - **Current Medications:** enalapril, paracetamol PRN
 - **Allergies:** NKDA
-- **Social History:** Albañil jubilado, antecedente de trabajos de carga durante 40 años
-- **Family History:** Madre con artrosis de manos
-- **Additional Notes:** Refiere fractura de meseta tibial derecha hace 25 años tratada conservadoramente.
+- **Social History:** Retired bricklayer, history of heavy lifting work for 40 years
+- **Family History:** Mother with hand osteoarthritis
+- **Additional Notes:** Reports right tibial plateau fracture 25 years ago treated conservatively.
 
-### 7.3 Chart — Paciente MUJER
+### 7.3 Chart — Female Patient
 
 - **Age:** 64
 - **Sex:** F
-- **Comorbidities:** obesidad, hipotiroidismo en tratamiento
-- **Chief Complaint:** Dolor y deformidad progresiva en articulaciones interfalángicas distales de las manos
+- **Comorbidities:** obesity, hypothyroidism under treatment
+- **Chief Complaint:** Progressive pain and deformity in distal interphalangeal joints of the hands
 - **Vital Signs:** HR 70 · BP 132/78 · RR 14 · SpO2 98 · Temp 36.4
-- **Physical Findings:** Nódulos de Heberden en IFD, nódulos de Bouchard en IFP, sin sinovitis caliente. Rodillas con crepitación bilateral.
-- **Lab Results:** PCR < 3, VSG 14, FR negativo, anti-CCP negativo, ácido úrico normal.
-- **Imaging:** Rx manos con pinzamiento de IFD, osteofitos, sin erosiones.
-- **Current Medications:** levotiroxina 75 mcg, paracetamol
-- **Allergies:** AINEs (gastritis)
-- **Social History:** Costurera retirada
-- **Family History:** Madre y abuela con "dedos torcidos" en la vejez
-- **Additional Notes:** Refiere que sus dedos se ven cada vez más deformes pero no tiene rigidez matutina prolongada.
+- **Physical Findings:** Heberden's nodes at DIP, Bouchard's nodes at PIP, no warm synovitis. Knees with bilateral crepitus.
+- **Lab Results:** CRP < 3, ESR 14, RF negative, anti-CCP negative, uric acid normal.
+- **Imaging:** Hand X-ray with DIP joint space narrowing, osteophytes, no erosions.
+- **Current Medications:** levothyroxine 75 mcg, paracetamol
+- **Allergies:** NSAIDs (gastritis)
+- **Social History:** Retired seamstress
+- **Family History:** Mother and grandmother with "twisted fingers" in old age
+- **Additional Notes:** Reports that her fingers look increasingly deformed but she has no prolonged morning stiffness.
 
 ### 7.4 Salida esperada
 
-- **Top-1 esperado:** Artrosis (osteoartritis)
-- **Diferenciales plausibles:** Artritis reumatoide (descartada por FR/anti-CCP negativos, ausencia de sinovitis), artritis psoriásica, gota (descartada por úrico normal), condrocalcinosis.
+- **Top-1 esperado:** Osteoarthritis
+- **Diferenciales plausibles:** Rheumatoid arthritis (ruled out by negative RF/anti-CCP, absence of synovitis), psoriatic arthritis, gout (ruled out by normal uric acid), chondrocalcinosis.
 - **Notas críticas:**
-  - El chart de la mujer es **muy específico** para nódulos de Heberden/Bouchard — el sistema debe nombrar la artrosis nodal (de manos).
-  - El antecedente de fractura del hombre apunta a artrosis postraumática — diagnóstico más específico que "artrosis primaria".
+  - The female chart is **very specific** for Heberden/Bouchard nodes — the system must name nodal (hand) osteoarthritis.
+  - The male's fracture history points to post-traumatic osteoarthritis — a more specific diagnosis than "primary osteoarthritis".
 
 ---
 
-## 8. Casos Críticos con Negación
+## 8. Critical Cases with Negation
 
-> Estos casos prueban si el sistema maneja correctamente la **negación explícita** en la consulta y el chart. El test es: el sistema NO debe usar el síntoma negado como evidencia a favor.
+> These cases test whether the system correctly handles **explicit negation** in the query and chart. The test: the system must NOT use the negated symptom as evidence in favor.
 
-### 8.1 Negación en consulta — Acidosis SIN cetonas (excluye CAD)
+### 8.1 Negation in query — Acidosis WITHOUT ketones (rules out DKA)
 
-**Consulta:**
+**Query:**
 ```
-Paciente diabético con respiración rápida y profunda, dolor abdominal y confusión. La glucosa está en 140 mg/dL, NO hay cetonas en orina ni en sangre, y el lactato está elevado en 7 mmol/L.
-```
-
-- **Chart:** ver caso 2.2 (hombre con metformina y ERC).
-- **Top-1 esperado:** Acidosis láctica (asociada a metformina + ERC).
-- **Lo que NO debe salir como Top-1:** Cetoacidosis diabética.
-- **Crítico:** si el sistema responde CAD ignora completamente la negación de cetonas.
-
-### 8.2 Negación en consulta — Bocio SIN hipertiroidismo
-
-**Consulta:**
-```
-Mujer con bocio difuso palpable, cansancio, aumento de peso, intolerancia al frío y piel seca. NO presenta nerviosismo, NO tiene palpitaciones, NO tiene pérdida de peso ni temblor.
+Diabetic patient with rapid deep breathing, abdominal pain, and confusion. Glucose is 140 mg/dL, there are NO ketones in urine or blood, and lactate is elevated at 7 mmol/L.
 ```
 
-- **Top-1 esperado:** Hipotiroidismo (probable tiroiditis de Hashimoto).
-- **Lo que NO debe salir:** Hipertiroidismo / enfermedad de Graves (aunque "bocio" es palabra clave compartida).
-- **Crítico:** prueba si el sistema sobrepondera el término "bocio" sin considerar las negaciones del resto del cuadro.
+- **Chart:** see case 2.2 (male with metformin and CKD).
+- **Top-1 esperado:** Lactic acidosis (associated with metformin + CKD).
+- **Must NOT come out as Top-1:** Diabetic ketoacidosis.
+- **Critical:** if the system answers DKA it completely ignores the negation of ketones.
 
-### 8.3 Negación en chart — Dolor articular SIN signos inflamatorios
+### 8.2 Negation in query — Goiter WITHOUT hyperthyroidism
 
-**Consulta:**
+**Query:**
 ```
-Mujer de 58 años con dolor poliarticular en manos de varios años de evolución y rigidez. Quiero descartar artritis reumatoide.
-```
-
-- **Chart (clave):** PCR normal, VSG normal, FR negativo, anti-CCP negativo, **NO hay sinovitis ni signos inflamatorios**, nódulos de Heberden presentes.
-- **Top-1 esperado:** Artrosis nodal de manos.
-- **Lo que NO debe salir:** Artritis reumatoide.
-- **Crítico:** el médico **pregunta por AR**, pero la negación de marcadores y signos inflamatorios + nódulos óseos debe llevar al sistema a la artrosis.
-
-### 8.4 Negación en consulta — Anemia SIN sangrado ni déficit nutricional
-
-**Consulta:**
-```
-Hombre de 22 años con anemia severa, ictericia y orina oscura. NO hay sangrado digestivo, NO hay melenas ni hematuria, dieta normal sin déficit de hierro ni B12.
+Woman with palpable diffuse goiter, fatigue, weight gain, cold intolerance, and dry skin. Does NOT present nervousness, does NOT have palpitations, does NOT have weight loss or tremor.
 ```
 
-- **Top-1 esperado:** Anemia hemolítica.
-- **Lo que NO debe salir:** Anemia ferropénica, anemia por sangrado digestivo, anemia megaloblástica.
-- **Crítico:** las negaciones eliminan las causas más frecuentes — el sistema debe llegar a la causa hemolítica.
+- **Top-1 esperado:** Hypothyroidism (probable Hashimoto's thyroiditis).
+- **Must NOT come out:** Hyperthyroidism / Graves' disease (although "goiter" is a shared keyword).
+- **Critical:** tests whether the system overweights the term "goiter" without considering the negations in the rest of the picture.
+
+### 8.3 Negation in chart — Joint pain WITHOUT inflammatory signs
+
+**Query:**
+```
+58-year-old woman with polyarticular hand pain of several years' evolution and stiffness. I want to rule out rheumatoid arthritis.
+```
+
+- **Chart (key):** normal CRP, normal ESR, RF negative, anti-CCP negative, **no synovitis or inflammatory signs**, Heberden's nodes present.
+- **Top-1 esperado:** Nodal hand osteoarthritis.
+- **Must NOT come out:** Rheumatoid arthritis.
+- **Critical:** the physician **asks about RA**, but the negation of markers and inflammatory signs + bony nodes should lead the system to osteoarthritis.
+
+### 8.4 Negation in query — Anemia WITHOUT bleeding or nutritional deficiency
+
+**Query:**
+```
+22-year-old man with severe anemia, jaundice, and dark urine. There is NO digestive bleeding, NO melena or hematuria, normal diet with no iron or B12 deficiency.
+```
+
+- **Top-1 esperado:** Hemolytic anemia.
+- **Must NOT come out:** Iron deficiency anemia, anemia from digestive bleeding, megaloblastic anemia.
+- **Critical:** the negations rule out the most frequent causes — the system must reach the hemolytic cause.
 
 ---
 
-## 9. Casos Críticos con Ambigüedad y Solapamiento
+## 9. Critical Cases with Ambiguity and Overlap
 
-> Casos donde dos o más enfermedades del corpus comparten síntomas y el sistema debe discriminar.
+> Cases where two or more diseases in the corpus share symptoms and the system must discriminate.
 
-### 9.1 Hipertiroidismo vs. Acromegalia (síntomas compartidos: sudoración, bocio, fatiga)
+### 9.1 Hyperthyroidism vs. Acromegaly (shared symptoms: sweating, goiter, fatigue)
 
-**Consulta:**
+**Query:**
 ```
-Paciente que refiere sudoración profusa, fatiga, dolor articular y bocio palpable. Ha notado que ya no le entran los anillos y que su voz es más grave.
-```
-
-- **Top-1 esperado:** Acromegalia (los anillos + voz grave son el diferenciador).
-- **Diferencial cercano:** Hipertiroidismo (por sudoración + bocio).
-- **Notas:** Sin chart con IGF-1 o TSH, el sistema debe inclinarse por acromegalia por la especificidad del "no entran los anillos" + voz.
-
-### 9.2 Acidosis láctica vs. Cetoacidosis (respiración de Kussmaul compartida)
-
-**Consulta:**
-```
-Diabético tipo 2 en tratamiento, llega con respiración rápida y profunda, dolor abdominal y deshidratación. pH 7.18.
+Patient reporting profuse sweating, fatigue, joint pain, and palpable goiter. Has noticed that rings no longer fit and that the voice is deeper.
 ```
 
-- **Sin más datos, ambos son plausibles** — el sistema debería listarlos como diferenciales y pedir cetonas y lactato.
-- **Con chart 2.2 (metformina + ERC, sin cetonas, lactato alto):** Top-1 acidosis láctica.
-- **Con chart alternativo (glucosa 480, cetonuria +++, lactato normal):** Top-1 cetoacidosis diabética.
-- **Crítico:** test ideal para evaluar el peso del chart en la decisión.
+- **Top-1 esperado:** Acromegaly (the rings + deep voice are the differentiator).
+- **Close differential:** Hyperthyroidism (due to sweating + goiter).
+- **Notes:** Without a chart with IGF-1 or TSH, the system must lean toward acromegaly because of the specificity of "rings no longer fit" + voice.
 
-### 9.3 Arteriosclerosis vs. Estenosis raquídea (claudicación)
+### 9.2 Lactic acidosis vs. Ketoacidosis (shared Kussmaul respiration)
 
-**Consulta:**
+**Query:**
 ```
-Hombre mayor con dolor en piernas al caminar que mejora con el reposo.
-```
-
-- **Sin chart:** ambiguo entre claudicación vascular y neurógena.
-- **Chart vascular (caso 6.2):** Top-1 aterosclerosis / EAP.
-- **Chart alternativo con dolor que mejora al inclinarse hacia adelante, pulsos conservados:** debería virar a estenosis raquídea (NO está en corpus → caso de **insuficiencia** del sistema, debe activar web).
-
-### 9.4 Anemia hemolítica autoinmune vs. por G6PD
-
-**Consulta:**
-```
-Joven con anemia, ictericia, orina oscura y esplenomegalia, sin sangrado.
+Type 2 diabetic on treatment, arrives with rapid deep breathing, abdominal pain, and dehydration. pH 7.18.
 ```
 
-- **Sin chart:** Top-1 "anemia hemolítica" genérica.
-- **Con chart 5.2 (origen mediterráneo + habas + sulfas):** subtipo G6PD.
-- **Con chart 5.3 (LES + Coombs+):** subtipo autoinmune por anticuerpos calientes.
-- **Crítico:** mismo "Top-1 genérico" debe especificarse según chart.
+- **Without further data, both are plausible** — the system should list them as differentials and request ketones and lactate.
+- **With chart 2.2 (metformin + CKD, no ketones, high lactate):** Top-1 lactic acidosis.
+- **With alternative chart (glucose 480, ketonuria +++, normal lactate):** Top-1 diabetic ketoacidosis.
+- **Critical:** ideal test to evaluate the weight of the chart in the decision.
 
-### 9.5 Hipotiroidismo congénito vs. síndrome de Down
+### 9.3 Arteriosclerosis vs. Spinal stenosis (claudication)
 
-**Consulta:**
+**Query:**
 ```
-Lactante de 6 semanas con hipotonía, lengua grande, hernia umbilical e ictericia prolongada.
+Older man with leg pain on walking that improves with rest.
 ```
 
-- **Top-1 esperado por corpus:** Hipotiroidismo congénito.
-- **Diferencial clínico real:** Síndrome de Down (no está en corpus — caso de **insuficiencia**, web debe activarse).
-- **Crítico:** prueba que el sistema **no fuerce** una respuesta del corpus si el cuadro tiene rasgos extras (rasgos faciales típicos, pliegue palmar único — que se podrían añadir al chart para hacer el test más exigente).
+- **Without chart:** ambiguous between vascular and neurogenic claudication.
+- **Vascular chart (case 6.2):** Top-1 atherosclerosis / PAD.
+- **Alternative chart with pain that improves on leaning forward, preserved pulses:** should switch to spinal stenosis (NOT in corpus → case of system **insufficiency**, should trigger web).
+
+### 9.4 Autoimmune hemolytic anemia vs. G6PD
+
+**Query:**
+```
+Young person with anemia, jaundice, dark urine, and splenomegaly, no bleeding.
+```
+
+- **Without chart:** Top-1 generic "hemolytic anemia".
+- **With chart 5.2 (Mediterranean origin + fava beans + sulfa drugs):** G6PD subtype.
+- **With chart 5.3 (SLE + Coombs+):** warm antibody autoimmune subtype.
+- **Critical:** the same "generic Top-1" must be specified according to the chart.
+
+### 9.5 Congenital hypothyroidism vs. Down syndrome
+
+**Query:**
+```
+6-week-old infant with hypotonia, large tongue, umbilical hernia, and prolonged jaundice.
+```
+
+- **Top-1 esperado por corpus:** Congenital hypothyroidism.
+- **Real clinical differential:** Down syndrome (not in corpus — **insufficiency** case, web should trigger).
+- **Critical:** tests that the system **does not force** an answer from the corpus if the picture has additional features (typical facial features, single palmar crease — which could be added to the chart to make the test more demanding).
 
 ---
 
-## 10. Casos donde el Chart puede Influir Negativamente
+## 10. Cases where the Chart may Influence Negatively
 
-> Estos casos están diseñados para que el chart contenga información **realista pero distractora** que podría desviar al sistema del diagnóstico correcto.
+> These cases are designed so that the chart contains **realistic but distracting** information that could divert the system from the correct diagnosis.
 
-### 10.1 Chart de Acromegalia con bocio prominente — riesgo de hipertiroidismo
+### 10.1 Acromegaly chart with prominent goiter — risk of hyperthyroidism
 
-**Consulta:**
+**Query:**
 ```
-Mujer de 52 años con dolor articular generalizado, parestesias en manos y cambios en la voz.
-```
-
-- **Chart 1.3** (acromegalia mujer): incluye **bocio multinodular, DM2, TSH normal**.
-- **Riesgo:** el sistema puede dar Top-1 hipotiroidismo subclínico o bocio multinodular, en vez de acromegalia.
-- **Indicador correcto:** facies tosca, manos grandes, galactorrea, amenorrea → acromegalia con compresión hipofisaria.
-- **Crítico:** evalúa si el chart **suma señales relevantes** sin **silenciar el cuadro principal**.
-
-### 10.2 Chart de Hipertiroidismo con antecedente de ansiedad — riesgo de "atribución psiquiátrica"
-
-**Consulta:**
-```
-Hombre de 41 años con palpitaciones, insomnio, pérdida de peso y nerviosismo.
+52-year-old woman with generalized joint pain, paresthesias in the hands, and changes in voice.
 ```
 
-- **Chart 3.2:** ansiedad previa, en tratamiento con sertralina y alprazolam.
-- **Riesgo:** el sistema puede inclinarse a "crisis de ansiedad / trastorno de pánico".
-- **Indicador correcto en chart:** TSH < 0.01, T4L elevada, bocio difuso.
-- **Crítico:** el sistema debe **priorizar evidencia bioquímica sobre antecedente psiquiátrico**.
+- **Chart 1.3** (acromegaly female): includes **multinodular goiter, T2DM, normal TSH**.
+- **Risk:** the system may give Top-1 subclinical hypothyroidism or multinodular goiter, instead of acromegaly.
+- **Correct indicator:** coarse facies, large hands, galactorrhea, amenorrhea → acromegaly with pituitary compression.
+- **Critical:** evaluates whether the chart **adds relevant signals** without **silencing the main picture**.
 
-### 10.3 Chart de Acidosis Láctica con cuadro infeccioso — riesgo de Top-1 "Sepsis/Neumonía"
+### 10.2 Hyperthyroidism chart with history of anxiety — risk of "psychiatric attribution"
 
-**Consulta:**
+**Query:**
 ```
-Mujer de 38 años con vómitos, dolor abdominal y dificultad respiratoria.
-```
-
-- **Chart 2.3:** fiebre, leucocitosis, PCR alta, infiltrado pulmonar.
-- **Riesgo:** Top-1 "neumonía bacteriana" o "sepsis" (ninguna en corpus → respuesta web).
-- **Esperado correcto:** Top-1 acidosis láctica (con sepsis como causa subyacente, mencionada como factor desencadenante).
-- **Crítico:** el sistema debe distinguir **causa primaria del corpus (acidosis láctica)** vs. **factor precipitante**.
-
-### 10.4 Chart de Anemia Hemolítica con LES — riesgo de "Lupus" como Top-1
-
-**Consulta:**
-```
-Mujer de 34 años con palidez, debilidad y disnea.
+41-year-old man with palpitations, insomnia, weight loss, and nervousness.
 ```
 
-- **Chart 5.3:** LES en tratamiento, brote articular, aftas orales.
-- **Riesgo:** Top-1 "lupus eritematoso sistémico" (no en corpus → respuesta menos pertinente).
-- **Esperado correcto:** Top-1 anemia hemolítica autoinmune (manifestación hematológica del LES).
-- **Crítico:** evalúa si el sistema **clasifica la queja principal hematológica** sin "abandonarla" por la comorbilidad de fondo.
+- **Chart 3.2:** prior anxiety, on sertraline and alprazolam.
+- **Risk:** the system may lean toward "anxiety attack / panic disorder".
+- **Correct indicator in chart:** TSH < 0.01, elevated free T4, diffuse goiter.
+- **Critical:** the system must **prioritize biochemical evidence over psychiatric history**.
 
-### 10.5 Chart de Artrosis con sospecha de AR planteada por el médico
+### 10.3 Lactic acidosis chart with infectious picture — risk of "Sepsis/Pneumonia" Top-1
 
-**Consulta:**
+**Query:**
 ```
-Mujer de 58 años con dolor poliarticular en manos. ¿Podría ser artritis reumatoide?
-```
-
-- **Chart 7.3:** FR negativo, anti-CCP negativo, PCR normal, nódulos de Heberden.
-- **Riesgo:** el sistema sigue al médico y devuelve "artritis reumatoide" o "AR seronegativa".
-- **Esperado correcto:** Top-1 artrosis nodal de manos. Mencionar que la AR es razonablemente descartada por la negatividad serológica + ausencia de signos inflamatorios.
-- **Crítico:** mide la **resistencia al sesgo de confirmación** del clínico.
-
-### 10.6 Chart con medicación que es CAUSA de la enfermedad
-
-**Consulta:**
-```
-Hombre de 22 años con anemia aguda e ictericia.
+38-year-old woman with vomiting, abdominal pain, and respiratory difficulty.
 ```
 
-- **Chart 5.2:** ingesta reciente de **trimetoprim-sulfametoxazol** + consumo de habas.
-- **Riesgo:** el sistema lista la anemia hemolítica genérica sin identificar el desencadenante.
-- **Esperado correcto:** Top-1 anemia hemolítica por déficit de G6PD desencadenada por sulfas/favismo.
-- **Crítico:** mide si el sistema **integra la medicación del chart como agente etiológico**, no solo como contexto.
+- **Chart 2.3:** fever, leukocytosis, high CRP, pulmonary infiltrate.
+- **Risk:** Top-1 "bacterial pneumonia" or "sepsis" (none in corpus → web response).
+- **Correct expected:** Top-1 lactic acidosis (with sepsis as underlying cause, mentioned as triggering factor).
+- **Critical:** the system must distinguish **primary cause from the corpus (lactic acidosis)** vs. **precipitating factor**.
+
+### 10.4 Hemolytic anemia chart with SLE — risk of "Lupus" as Top-1
+
+**Query:**
+```
+34-year-old woman with pallor, weakness, and dyspnea.
+```
+
+- **Chart 5.3:** SLE under treatment, joint flare, oral aphthae.
+- **Risk:** Top-1 "systemic lupus erythematosus" (not in corpus → less pertinent response).
+- **Correct expected:** Top-1 autoimmune hemolytic anemia (hematologic manifestation of SLE).
+- **Critical:** evaluates whether the system **classifies the main hematologic complaint** without "abandoning" it for the background comorbidity.
+
+### 10.5 Osteoarthritis chart with RA suspicion raised by the physician
+
+**Query:**
+```
+58-year-old woman with polyarticular hand pain. Could it be rheumatoid arthritis?
+```
+
+- **Chart 7.3:** RF negative, anti-CCP negative, normal CRP, Heberden's nodes.
+- **Risk:** the system follows the physician and returns "rheumatoid arthritis" or "seronegative RA".
+- **Correct expected:** Top-1 nodal hand osteoarthritis. Mention that RA is reasonably ruled out by serological negativity + absence of inflammatory signs.
+- **Critical:** measures **resistance to the clinician's confirmation bias**.
+
+### 10.6 Chart with medication that is CAUSE of the disease
+
+**Query:**
+```
+22-year-old man with acute anemia and jaundice.
+```
+
+- **Chart 5.2:** recent intake of **trimethoprim-sulfamethoxazole** + fava bean consumption.
+- **Risk:** the system lists generic hemolytic anemia without identifying the trigger.
+- **Correct expected:** Top-1 G6PD deficiency hemolytic anemia triggered by sulfa drugs/favism.
+- **Critical:** measures whether the system **integrates the chart medication as etiologic agent**, not just as context.
 
 ---
 
-## 11. Enfermedades Adicionales
+## 11. Additional Diseases
 
-> Estas enfermedades **no están en `casos.txt`** pero son de alta prevalencia clínica y útiles para probar la cobertura del corpus + la activación del modo web cuando el corpus es insuficiente. Información clínica basada en guías estándar (ADA, ESC, NICE, UpToDate).
+> These diseases are **not in `casos.txt`** but are highly clinically prevalent and useful to test the corpus coverage + activation of web mode when the corpus is insufficient. Clinical information based on standard guidelines (ADA, ESC, NICE, UpToDate).
 
 ---
 
-### 11.1 Diabetes Mellitus tipo 2
+### 11.1 Type 2 Diabetes Mellitus
 
 #### Consulta sin chart
 
 ```
-Paciente que en los últimos meses ha bajado 6 kilos sin proponérselo, tiene mucha sed, orina varias veces durante la noche y refiere visión borrosa intermitente. Le han aparecido infecciones en la piel que tardan en curar y tiene hormigueo en los pies.
+Patient who in the last few months has lost 6 kilos without trying, has great thirst, urinates several times during the night, and reports intermittent blurry vision. Skin infections have appeared that take a long time to heal, and there is tingling in the feet.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 54
 - **Sex:** M
-- **Comorbidities:** obesidad central, hipertensión, dislipidemia mixta
-- **Chief Complaint:** Poliuria, polidipsia y pérdida ponderal de 6 kg en 3 meses
+- **Comorbidities:** central obesity, hypertension, mixed dyslipidemia
+- **Chief Complaint:** Polyuria, polydipsia, and weight loss of 6 kg in 3 months
 - **Vital Signs:** HR 84 · BP 148/90 · RR 14 · SpO2 98 · Temp 36.6
-- **Physical Findings:** Acantosis nigricans cervical, perímetro abdominal 112 cm, candidiasis interdigital en pies, hipoestesia en calcetín bilateral.
-- **Lab Results:** Glucosa en ayunas 198 mg/dL, HbA1c 9.2%, LDL 158, triglicéridos 280, creatinina 1.1, microalbuminuria 80 mg/g.
-- **Imaging:** No relevante.
-- **Current Medications:** losartán 50 mg
+- **Physical Findings:** Cervical acanthosis nigricans, abdominal circumference 112 cm, interdigital candidiasis on feet, bilateral stocking hypoesthesia.
+- **Lab Results:** Fasting glucose 198 mg/dL, HbA1c 9.2%, LDL 158, triglycerides 280, creatinine 1.1, microalbuminuria 80 mg/g.
+- **Imaging:** Not relevant.
+- **Current Medications:** losartan 50 mg
 - **Allergies:** NKDA
-- **Social History:** Comercial, sedentario, consume bebidas azucaradas a diario
-- **Family History:** Padre con DM2 e IAM a los 60
-- **Additional Notes:** Su esposa refiere que ronca y a veces deja de respirar (sospecha SAHOS).
+- **Social History:** Salesperson, sedentary, consumes sugary drinks daily
+- **Family History:** Father with T2DM and MI at 60
+- **Additional Notes:** His wife reports that he snores and sometimes stops breathing (suspected OSA).
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 46
 - **Sex:** F
-- **Comorbidities:** síndrome de ovario poliquístico, hígado graso no alcohólico
-- **Chief Complaint:** Cansancio intenso, infecciones urinarias recurrentes y prurito vulvar
+- **Comorbidities:** polycystic ovary syndrome, non-alcoholic fatty liver disease
+- **Chief Complaint:** Intense fatigue, recurrent urinary infections, and vulvar pruritus
 - **Vital Signs:** HR 88 · BP 134/82 · RR 16 · SpO2 98 · Temp 36.7
-- **Physical Findings:** IMC 32, acantosis nigricans en cuello y axilas, hirsutismo leve.
-- **Lab Results:** Glucosa 168, HbA1c 8.1%, perfil lipídico alterado, transaminasas elevadas (ALT 68).
-- **Imaging:** Ecografía abdominal con esteatosis hepática grado II.
-- **Current Medications:** anticonceptivo combinado (suspendido hace 1 año)
+- **Physical Findings:** BMI 32, acanthosis nigricans on neck and axillae, mild hirsutism.
+- **Lab Results:** Glucose 168, HbA1c 8.1%, altered lipid profile, elevated transaminases (ALT 68).
+- **Imaging:** Abdominal ultrasound with grade II hepatic steatosis.
+- **Current Medications:** combined oral contraceptive (discontinued 1 year ago)
 - **Allergies:** NKDA
-- **Social History:** Trabaja desde casa, dieta alta en hidratos refinados
-- **Family History:** Madre DM2, abuela materna DM2
-- **Additional Notes:** Antecedente de diabetes gestacional en su segundo embarazo (hace 8 años).
+- **Social History:** Works from home, diet high in refined carbohydrates
+- **Family History:** Mother T2DM, maternal grandmother T2DM
+- **Additional Notes:** History of gestational diabetes in her second pregnancy (8 years ago).
 
 #### Salida esperada
 
-- **Top-1 esperado:** Diabetes mellitus tipo 2.
-- **Diferenciales plausibles:** Diabetes tipo 1 (descartar por edad/contexto), LADA, diabetes secundaria a Cushing, diabetes inducida por fármacos.
+- **Top-1 esperado:** Type 2 diabetes mellitus.
+- **Diferenciales plausibles:** Type 1 diabetes (ruled out by age/context), LADA, secondary diabetes from Cushing's, drug-induced diabetes.
 - **Notas críticas:**
-  - Mujer: SOP + diabetes gestacional previa son factores de riesgo claros — el sistema debe integrarlos.
-  - **Probable activación de Web** si el corpus no cubre DM2.
+  - Female: PCOS + prior gestational diabetes are clear risk factors — the system must integrate them.
+  - **Likely Web activation** if the corpus does not cover T2DM.
 
 ---
 
-### 11.2 Embolia Pulmonar
+### 11.2 Pulmonary Embolism
 
 #### Consulta sin chart
 
 ```
-Paciente que de forma brusca presenta dolor en el costado derecho del pecho, dificultad para respirar y tos con un poco de sangre. Está taquicárdica y con saturación baja. Hace una semana tuvo una operación de rodilla y ha estado en reposo.
+Patient who suddenly presents with pain in the right side of the chest, difficulty breathing, and cough with some blood. Tachycardic with low saturation. A week ago underwent knee surgery and has been on bed rest.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 62
 - **Sex:** M
-- **Comorbidities:** cáncer de próstata en tratamiento hormonal, HTA
-- **Chief Complaint:** Disnea súbita y dolor torácico pleurítico de 6 horas
-- **Vital Signs:** HR 124 · BP 96/62 · RR 28 · SpO2 88 (aire ambiente) · Temp 37.4
-- **Physical Findings:** Taquipnea, ingurgitación yugular leve, edema y dolor en pantorrilla izquierda con signo de Homans+.
-- **Lab Results:** D-dímero 5800 ng/mL, troponina I 0.08 (levemente elevada), gasometría con hipoxemia y alcalosis respiratoria.
-- **Imaging:** Angio-TC tórax con defectos de repleción en arterias segmentarias del lóbulo inferior derecho. Eco-Doppler MMII con trombosis en vena femoral superficial izquierda.
+- **Comorbidities:** prostate cancer on hormonal therapy, hypertension
+- **Chief Complaint:** Sudden dyspnea and pleuritic chest pain for 6 hours
+- **Vital Signs:** HR 124 · BP 96/62 · RR 28 · SpO2 88 (room air) · Temp 37.4
+- **Physical Findings:** Tachypnea, mild jugular venous distension, edema and pain in left calf with positive Homans' sign.
+- **Lab Results:** D-dimer 5800 ng/mL, troponin I 0.08 (slightly elevated), blood gas with hypoxemia and respiratory alkalosis.
+- **Imaging:** Chest angio-CT with filling defects in segmental arteries of the right lower lobe. Lower limb Doppler ultrasound with thrombosis in the left superficial femoral vein.
 - **Current Medications:** leuprolide, enalapril
 - **Allergies:** NKDA
-- **Social History:** Jubilado, sedentario en el último mes por dolor lumbar
-- **Family History:** Hermano con TVP
-- **Additional Notes:** Refiere viaje en autobús de 14 horas hace 4 días.
+- **Social History:** Retired, sedentary in the last month due to lower back pain
+- **Family History:** Brother with DVT
+- **Additional Notes:** Reports a 14-hour bus trip 4 days ago.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 34
 - **Sex:** F
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Disnea progresiva y dolor torácico izquierdo de 12 horas, con un episodio de síncope
+- **Comorbidities:** none
+- **Chief Complaint:** Progressive dyspnea and left chest pain of 12 hours, with one syncopal episode
 - **Vital Signs:** HR 118 · BP 102/68 · RR 26 · SpO2 91 · Temp 37.0
-- **Physical Findings:** Pierna derecha con edema asimétrico y dolor a la palpación de pantorrilla.
-- **Lab Results:** D-dímero 4200, troponina y BNP levemente elevados.
-- **Imaging:** Angio-TC con embolia pulmonar bilateral submasiva. Ecocardio: dilatación de VD.
-- **Current Medications:** anticonceptivo oral combinado
+- **Physical Findings:** Right leg with asymmetric edema and tenderness on calf palpation.
+- **Lab Results:** D-dimer 4200, troponin and BNP slightly elevated.
+- **Imaging:** Angio-CT with bilateral submassive pulmonary embolism. Echocardiogram: RV dilation.
+- **Current Medications:** combined oral contraceptive
 - **Allergies:** NKDA
-- **Social History:** Fumadora 10 cigarrillos/día, vuelo trasatlántico hace 2 días
-- **Family History:** Madre con TVP postparto
-- **Additional Notes:** Pareja refiere que palideció y casi se desmaya al levantarse del baño.
+- **Social History:** Smoker 10 cigarettes/day, transatlantic flight 2 days ago
+- **Family History:** Mother with postpartum DVT
+- **Additional Notes:** Partner reports she became pale and almost fainted on getting up from the toilet.
 
 #### Salida esperada
 
-- **Top-1 esperado:** Embolia pulmonar (TEP).
-- **Diferenciales plausibles:** Síndrome coronario agudo, neumonía con derrame, neumotórax, disección aórtica, pericarditis.
+- **Top-1 esperado:** Pulmonary embolism (PE).
+- **Diferenciales plausibles:** Acute coronary syndrome, pneumonia with effusion, pneumothorax, aortic dissection, pericarditis.
 - **Notas críticas:**
-  - Combinaciones de **factores de riesgo del chart (anticonceptivo + vuelo + tabaco; o cáncer + inmovilización)** deben elevar la probabilidad pre-test (criterios de Wells implícitos).
+  - Combinations of **chart risk factors (contraceptive + flight + tobacco; or cancer + immobilization)** should raise the pre-test probability (implicit Wells criteria).
 
 ---
 
-### 11.3 Enfermedad de Addison (Insuficiencia Suprarrenal Primaria)
+### 11.3 Addison's Disease (Primary Adrenal Insufficiency)
 
 #### Consulta sin chart
 
 ```
-Paciente que desde hace meses presenta cansancio extremo, pérdida de peso, dolor abdominal vago, náuseas y mareo al ponerse de pie. Ha notado que la piel se le ha oscurecido, sobre todo en pliegues, codos y encías. Tiene antojo de cosas saladas.
+Patient who for months has presented extreme fatigue, weight loss, vague abdominal pain, nausea, and dizziness on standing up. Has noticed that the skin has darkened, especially in folds, elbows, and gums. Craves salty foods.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 36
 - **Sex:** M
-- **Comorbidities:** vitíligo
-- **Chief Complaint:** Astenia, hipotensión postural y pérdida de 9 kg en 4 meses
-- **Vital Signs:** HR 102 (de pie) · BP 92/56 (acostado) → 78/48 (de pie) · RR 16 · SpO2 98 · Temp 36.4
-- **Physical Findings:** Hiperpigmentación en pliegues palmares, codos, mucosa oral; manchas acrómicas dispersas (vitíligo).
-- **Lab Results:** Na 128, K 5.6, glucosa 68, urea normal, cortisol matutino 2.1 µg/dL, ACTH 480 pg/mL (elevadísima).
-- **Imaging:** TC abdomen con suprarrenales atróficas.
-- **Current Medications:** ninguna
+- **Comorbidities:** vitiligo
+- **Chief Complaint:** Fatigue, postural hypotension, and 9 kg weight loss in 4 months
+- **Vital Signs:** HR 102 (standing) · BP 92/56 (lying) → 78/48 (standing) · RR 16 · SpO2 98 · Temp 36.4
+- **Physical Findings:** Hyperpigmentation in palmar creases, elbows, oral mucosa; scattered achromic patches (vitiligo).
+- **Lab Results:** Na 128, K 5.6, glucose 68, urea normal, morning cortisol 2.1 µg/dL, ACTH 480 pg/mL (extremely elevated).
+- **Imaging:** Abdominal CT with atrophic adrenal glands.
+- **Current Medications:** none
 - **Allergies:** NKDA
-- **Social History:** Profesor, no fumador
-- **Family History:** Hermana con tiroiditis de Hashimoto, tía con diabetes tipo 1
-- **Additional Notes:** Episodio de "lipotimia" hace 1 mes en una boda.
+- **Social History:** Teacher, non-smoker
+- **Family History:** Sister with Hashimoto's thyroiditis, aunt with type 1 diabetes
+- **Additional Notes:** "Lipothymia" episode 1 month ago at a wedding.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 48
 - **Sex:** F
-- **Comorbidities:** hipotiroidismo autoinmune en tratamiento
-- **Chief Complaint:** Náuseas, vómitos y dolor abdominal de inicio insidioso, sensación de "no poder más"
+- **Comorbidities:** autoimmune hypothyroidism under treatment
+- **Chief Complaint:** Nausea, vomiting, and abdominal pain of insidious onset, "I can't do this anymore" sensation
 - **Vital Signs:** HR 110 · BP 86/52 · RR 18 · SpO2 97 · Temp 37.2
-- **Physical Findings:** Mucosas hiperpigmentadas, lengua con bordes oscuros, deshidratación leve.
-- **Lab Results:** Na 124, K 5.9, glucosa 62, cortisol < 1, ACTH 720, anticuerpos anti-21-hidroxilasa positivos.
-- **Imaging:** Suprarrenales atróficas en TC.
-- **Current Medications:** levotiroxina 100 mcg
+- **Physical Findings:** Hyperpigmented mucous membranes, tongue with dark edges, mild dehydration.
+- **Lab Results:** Na 124, K 5.9, glucose 62, cortisol < 1, ACTH 720, positive anti-21-hydroxylase antibodies.
+- **Imaging:** Atrophic adrenals on CT.
+- **Current Medications:** levothyroxine 100 mcg
 - **Allergies:** NKDA
-- **Social History:** Auxiliar administrativa
-- **Family History:** Madre con enfermedad celíaca, hermano con DM1
-- **Additional Notes:** Episodio de hipotensión grave durante una gastroenteritis hace 2 semanas (sospecha de crisis adrenal).
+- **Social History:** Administrative assistant
+- **Family History:** Mother with celiac disease, brother with T1D
+- **Additional Notes:** Episode of severe hypotension during gastroenteritis 2 weeks ago (suspected adrenal crisis).
 
 #### Salida esperada
 
-- **Top-1 esperado:** Enfermedad de Addison (insuficiencia suprarrenal primaria autoinmune, en el contexto de síndrome poliglandular autoinmune tipo II).
-- **Diferenciales plausibles:** Insuficiencia suprarrenal secundaria (descartada por ACTH alta), depresión mayor, anorexia, sepsis crónica, hemocromatosis.
+- **Top-1 esperado:** Addison's disease (primary autoimmune adrenal insufficiency, in the context of autoimmune polyglandular syndrome type II).
+- **Diferenciales plausibles:** Secondary adrenal insufficiency (ruled out by high ACTH), major depression, anorexia, chronic sepsis, hemochromatosis.
 - **Notas críticas:**
-  - Hiperpigmentación + Na bajo + K alto + ACTH alta = patrón muy específico.
-  - El antecedente de vitíligo / Hashimoto orienta a etiología autoinmune (síndrome poliglandular).
+  - Hyperpigmentation + low Na + high K + high ACTH = highly specific pattern.
+  - The history of vitiligo / Hashimoto orients toward autoimmune etiology (polyglandular syndrome).
 
 ---
 
-### 11.4 Síndrome de Cushing
+### 11.4 Cushing's Syndrome
 
 #### Consulta sin chart
 
 ```
-Paciente con aumento de peso en los últimos 18 meses concentrado en cara y tronco, con brazos y piernas adelgazadas. Ha aparecido cara redondeada y rojiza, joroba en la espalda, estrías rojo-vinosas anchas en el abdomen, hematomas fáciles, debilidad muscular en muslos y elevación de la presión arterial. La paciente refiere también ciclos menstruales irregulares y aumento del vello facial.
+Patient with weight gain over the past 18 months concentrated in the face and trunk, with thinning arms and legs. A rounded reddish face has appeared, hump on the back, wide red-violet stretch marks on the abdomen, easy bruising, muscle weakness in the thighs, and elevated blood pressure. The patient also reports irregular menstrual cycles and increased facial hair.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 44
 - **Sex:** M
-- **Comorbidities:** HTA de difícil control, diabetes recién diagnosticada, osteoporosis a edad joven
-- **Chief Complaint:** Aumento de peso central, debilidad para subir escaleras y cambios en la piel
+- **Comorbidities:** difficult-to-control hypertension, newly diagnosed diabetes, osteoporosis at young age
+- **Chief Complaint:** Central weight gain, weakness when climbing stairs, and skin changes
 - **Vital Signs:** HR 86 · BP 168/102 · RR 14 · SpO2 97 · Temp 36.5
-- **Physical Findings:** Facies de luna llena, plétora facial, giba dorsal, atrofia de musculatura proximal, estrías violáceas abdominales > 1 cm, hematomas en antebrazos.
-- **Lab Results:** Cortisol libre urinario 24h elevado x4, cortisol salival nocturno elevado, test de supresión con 1 mg de dexametasona sin supresión, ACTH 85 pg/mL.
-- **Imaging:** RM hipófisis con microadenoma de 6 mm.
-- **Current Medications:** amlodipino, hidroclorotiazida, metformina
+- **Physical Findings:** Moon facies, facial plethora, dorsal hump, atrophy of proximal musculature, violet abdominal striae > 1 cm, forearm bruises.
+- **Lab Results:** 24h urinary free cortisol elevated x4, elevated nocturnal salivary cortisol, 1 mg dexamethasone suppression test without suppression, ACTH 85 pg/mL.
+- **Imaging:** Pituitary MRI with 6 mm microadenoma.
+- **Current Medications:** amlodipine, hydrochlorothiazide, metformin
 - **Allergies:** NKDA
-- **Social History:** Contador
-- **Family History:** Sin relevancia
-- **Additional Notes:** Hace 6 meses fractura por estrés en pie sin trauma claro.
+- **Social History:** Accountant
+- **Family History:** Unremarkable
+- **Additional Notes:** 6 months ago stress fracture in foot without clear trauma.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 52
 - **Sex:** F
-- **Comorbidities:** asma bronquial
-- **Chief Complaint:** Aumento de peso, debilidad y cambios en el rostro
+- **Comorbidities:** bronchial asthma
+- **Chief Complaint:** Weight gain, weakness, and facial changes
 - **Vital Signs:** HR 80 · BP 152/94 · RR 16 · SpO2 98 · Temp 36.6
-- **Physical Findings:** Cushingoide, hirsutismo facial, acné, estrías rojas, equimosis múltiples.
-- **Lab Results:** Cortisol urinario libre elevado, ACTH suprimida (<5), test de supresión sin respuesta.
-- **Imaging:** TC abdomen con masa suprarrenal derecha de 3.5 cm.
-- **Current Medications:** **prednisona 20 mg/día crónica** por asma severa desde hace 3 años, salbutamol, budesonida inhalada.
-- **Allergies:** AINEs
-- **Social History:** Ama de casa
-- **Family History:** Sin relevancia
-- **Additional Notes:** *Distractor real:* la paciente usa corticoides crónicos, pero los estudios bioquímicos muestran ACTH suprimida con masa suprarrenal → **Cushing endógeno suprarrenal coexistente con Cushing iatrogénico**.
+- **Physical Findings:** Cushingoid, facial hirsutism, acne, red striae, multiple ecchymoses.
+- **Lab Results:** Elevated urinary free cortisol, suppressed ACTH (<5), suppression test without response.
+- **Imaging:** Abdominal CT with 3.5 cm right adrenal mass.
+- **Current Medications:** **chronic prednisone 20 mg/day** for severe asthma for 3 years, salbutamol, inhaled budesonide.
+- **Allergies:** NSAIDs
+- **Social History:** Housewife
+- **Family History:** Unremarkable
+- **Additional Notes:** *Real distractor:* the patient uses chronic corticosteroids, but biochemical studies show suppressed ACTH with adrenal mass → **endogenous adrenal Cushing's coexisting with iatrogenic Cushing's**.
 
 #### Salida esperada
 
 - **Top-1 esperado:**
-  - **Hombre:** Enfermedad de Cushing (adenoma hipofisario ACTH-dependiente).
-  - **Mujer:** Síndrome de Cushing iatrogénico (por corticoides) — pero el hallazgo de la masa suprarrenal con ACTH suprimida debe alertar de Cushing endógeno suprarrenal.
-- **Diferenciales plausibles:** Síndrome metabólico, pseudo-Cushing por depresión/alcohol, hipotiroidismo, obesidad simple con HTA, hiperplasia suprarrenal congénita.
+  - **Male:** Cushing's disease (ACTH-dependent pituitary adenoma).
+  - **Female:** Iatrogenic Cushing's syndrome (from corticosteroids) — but the finding of the adrenal mass with suppressed ACTH should alert to endogenous adrenal Cushing's.
+- **Diferenciales plausibles:** Metabolic syndrome, pseudo-Cushing from depression/alcohol, hypothyroidism, simple obesity with hypertension, congenital adrenal hyperplasia.
 - **Notas críticas:**
-  - Mujer: caso especialmente complejo para evaluar si el sistema **diferencia las dos etiologías coexistentes**.
+  - Female: especially complex case to evaluate whether the system **differentiates the two coexisting etiologies**.
 
 ---
 
-### 11.5 Enfermedad de Parkinson
+### 11.5 Parkinson's Disease
 
 #### Consulta sin chart
 
 ```
-Paciente de 68 años que en los últimos dos años ha desarrollado temblor en una mano que aparece en reposo y desaparece al moverla, lentitud al caminar con pasos cortos, dificultad para iniciar la marcha y rigidez en brazo derecho. Su esposa refiere que se ha vuelto inexpresivo, habla más bajo y se le cae la saliva por la noche. También nota que ha perdido el olfato.
+68-year-old patient who over the last two years has developed a tremor in one hand that appears at rest and disappears with movement, slowness of gait with short steps, difficulty initiating gait, and rigidity in right arm. His wife reports that he has become expressionless, speaks more softly, and drools at night. He has also noticed loss of smell.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 68
 - **Sex:** M
-- **Comorbidities:** HTA, depresión leve en seguimiento
-- **Chief Complaint:** Temblor en mano derecha y enlentecimiento progresivo de 2 años
-- **Vital Signs:** HR 72 · BP 138/82 (acostado) → 116/72 (de pie) · RR 14 · SpO2 97 · Temp 36.6
-- **Physical Findings:** Bradicinesia, hipomimia, temblor en reposo derecho (4-6 Hz), rigidez en rueda dentada derecha, marcha con pasos cortos, pérdida del braceo derecho. Reflejo glabelar no inhibido.
-- **Lab Results:** Bioquímica básica normal, TSH normal, B12 normal.
-- **Imaging:** RM cerebral con atrofia inespecífica, sin lesiones isquémicas significativas. DaT-SCAN: hipocaptación en putamen izquierdo.
-- **Current Medications:** enalapril, sertralina 50 mg
+- **Comorbidities:** hypertension, mild depression in follow-up
+- **Chief Complaint:** Right-hand tremor and progressive slowing of 2 years
+- **Vital Signs:** HR 72 · BP 138/82 (lying) → 116/72 (standing) · RR 14 · SpO2 97 · Temp 36.6
+- **Physical Findings:** Bradykinesia, hypomimia, right resting tremor (4-6 Hz), right cogwheel rigidity, short-stepped gait, loss of right arm swing. Non-inhibited glabellar reflex.
+- **Lab Results:** Basic biochemistry normal, TSH normal, B12 normal.
+- **Imaging:** Brain MRI with nonspecific atrophy, no significant ischemic lesions. DaT-SCAN: left putamen hypocaptation.
+- **Current Medications:** enalapril, sertraline 50 mg
 - **Allergies:** NKDA
-- **Social History:** Jubilado, no fuma, alcohol ocasional
-- **Family History:** Padre con "temblor en la vejez", hermano sin antecedentes
-- **Additional Notes:** Su esposa refiere que tiene sueños vívidos donde "actúa" lo que sueña (sospecha de RBD), y que ha perdido el olfato desde hace años.
+- **Social History:** Retired, non-smoker, occasional alcohol
+- **Family History:** Father with "tremor in old age", brother without history
+- **Additional Notes:** His wife reports that he has vivid dreams in which he "acts out" what he dreams (suspected RBD), and that he has lost his sense of smell for years.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 73
 - **Sex:** F
-- **Comorbidities:** osteoporosis, estreñimiento crónico
-- **Chief Complaint:** Caídas y dificultad para escribir
+- **Comorbidities:** osteoporosis, chronic constipation
+- **Chief Complaint:** Falls and difficulty writing
 - **Vital Signs:** HR 70 · BP 128/76 · RR 14 · SpO2 98 · Temp 36.5
-- **Physical Findings:** Micrografía evidente, bradicinesia, rigidez axial, postura en flexión, marcha festinante. Sin afectación oculomotora.
+- **Physical Findings:** Evident micrographia, bradykinesia, axial rigidity, flexed posture, festinating gait. No oculomotor involvement.
 - **Lab Results:** Normal.
-- **Imaging:** TC craneal sin lesiones; DaT-SCAN positivo.
-- **Current Medications:** calcio + vit D, alendronato semanal, lactulosa
+- **Imaging:** Brain CT without lesions; positive DaT-SCAN.
+- **Current Medications:** calcium + vit D, weekly alendronate, lactulose
 - **Allergies:** NKDA
-- **Social History:** Vive sola, costurera retirada
-- **Family History:** Sin antecedentes neurológicos
-- **Additional Notes:** Estreñimiento severo desde hace 10 años (síntoma prodrómico clásico).
+- **Social History:** Lives alone, retired seamstress
+- **Family History:** No neurological history
+- **Additional Notes:** Severe constipation for 10 years (classic prodromal symptom).
 
 #### Salida esperada
 
-- **Top-1 esperado:** Enfermedad de Parkinson idiopática.
-- **Diferenciales plausibles:** Parkinsonismo vascular, atrofia multisistémica (AMS), parálisis supranuclear progresiva (PSP), parkinsonismo inducido por fármacos, temblor esencial.
+- **Top-1 esperado:** Idiopathic Parkinson's disease.
+- **Diferenciales plausibles:** Vascular parkinsonism, multiple system atrophy (MSA), progressive supranuclear palsy (PSP), drug-induced parkinsonism, essential tremor.
 - **Notas críticas:**
-  - El RBD + anosmia + estreñimiento son **síntomas premotores característicos** — si el sistema los integra, debe priorizar Parkinson sobre temblor esencial.
+  - RBD + anosmia + constipation are **characteristic premotor symptoms** — if the system integrates them, it should prioritize Parkinson's over essential tremor.
 
 ---
 
-### 11.6 Esclerosis Múltiple
+### 11.6 Multiple Sclerosis
 
 #### Consulta sin chart
 
 ```
-Mujer joven que hace 6 meses presentó pérdida de visión en un ojo con dolor al moverlo, que se recuperó en semanas. Ahora consulta porque desde hace 10 días tiene hormigueo y debilidad en la pierna derecha que va empeorando, sensación de descarga eléctrica en la espalda al flexionar el cuello, y problemas para controlar la vejiga.
+Young woman who 6 months ago presented vision loss in one eye with pain on moving it, which recovered in weeks. Now consults because for 10 days she has had tingling and weakness in the right leg that is worsening, electric shock sensation in the back on flexing the neck, and problems controlling the bladder.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 32
 - **Sex:** M
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Diplopía e inestabilidad de la marcha de 2 semanas
+- **Comorbidities:** none
+- **Chief Complaint:** Diplopia and gait instability of 2 weeks
 - **Vital Signs:** HR 76 · BP 122/78 · RR 14 · SpO2 99 · Temp 36.7
-- **Physical Findings:** Oftalmoplejía internuclear izquierda, hiperreflexia 4/4 en MID, Babinski derecho positivo, signo de Lhermitte+.
-- **Lab Results:** Hemograma normal, B12 normal, VIH negativo, función tiroidea normal.
-- **Imaging:** RM cerebral y medular con múltiples lesiones T2 hiperintensas periventriculares, yuxtacorticales y en cuerpo calloso ("dedos de Dawson"). Lesión activa con realce en gadolinio.
-- **Current Medications:** ninguna
+- **Physical Findings:** Left internuclear ophthalmoplegia, 4/4 hyperreflexia in right lower limb, positive right Babinski, positive Lhermitte's sign.
+- **Lab Results:** Normal blood count, normal B12, negative HIV, normal thyroid function.
+- **Imaging:** Brain and spinal MRI with multiple T2 hyperintense periventricular, juxtacortical, and corpus callosum lesions ("Dawson's fingers"). Active gadolinium-enhancing lesion.
+- **Current Medications:** none
 - **Allergies:** NKDA
-- **Social History:** Ingeniero, vive en latitud norte (vitamina D baja por estilo de vida)
-- **Family History:** Tía materna con "enfermedad neurológica que la dejó en silla de ruedas"
-- **Additional Notes:** LCR con bandas oligoclonales positivas, no presentes en suero.
+- **Social History:** Engineer, lives at northern latitude (low vitamin D due to lifestyle)
+- **Family History:** Maternal aunt with "neurological disease that left her in a wheelchair"
+- **Additional Notes:** CSF with positive oligoclonal bands, not present in serum.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 28
 - **Sex:** F
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Parestesias en hemicuerpo derecho y disfunción vesical
+- **Comorbidities:** none
+- **Chief Complaint:** Paresthesias in right hemibody and bladder dysfunction
 - **Vital Signs:** HR 78 · BP 118/72 · RR 14 · SpO2 99 · Temp 36.6
-- **Physical Findings:** Hipoestesia táctil hemicorporal derecha por debajo de D8, ataxia leve, urgencia miccional.
-- **Lab Results:** Bioquímica normal, anti-AQP4 negativos, anti-MOG negativos, bandas oligoclonales positivas en LCR.
-- **Imaging:** RM con lesiones desmielinizantes diseminadas en tiempo y espacio.
-- **Current Medications:** anticonceptivo oral
+- **Physical Findings:** Right hemibody tactile hypoesthesia below T8, mild ataxia, urinary urgency.
+- **Lab Results:** Normal biochemistry, negative anti-AQP4, negative anti-MOG, positive oligoclonal bands in CSF.
+- **Imaging:** MRI with demyelinating lesions disseminated in time and space.
+- **Current Medications:** oral contraceptive
 - **Allergies:** NKDA
-- **Social History:** Diseñadora, no fumadora
-- **Family History:** Sin enfermedades autoinmunes conocidas
-- **Additional Notes:** Hace 6 meses neuritis óptica del ojo izquierdo que se recuperó parcialmente.
+- **Social History:** Designer, non-smoker
+- **Family History:** No known autoimmune diseases
+- **Additional Notes:** 6 months ago optic neuritis of the left eye that partially recovered.
 
 #### Salida esperada
 
-- **Top-1 esperado:** Esclerosis múltiple recurrente-remitente.
-- **Diferenciales plausibles:** Neuromielitis óptica (NMO/Devic — descartada por anti-AQP4 negativo), encefalomielitis aguda diseminada (ADEM), enfermedad por anti-MOG, sarcoidosis neurológica, déficit de B12, vasculitis del SNC.
+- **Top-1 esperado:** Relapsing-remitting multiple sclerosis.
+- **Diferenciales plausibles:** Neuromyelitis optica (NMO/Devic — ruled out by negative anti-AQP4), acute disseminated encephalomyelitis (ADEM), anti-MOG disease, neurosarcoidosis, B12 deficiency, CNS vasculitis.
 - **Notas críticas:**
-  - Lhermitte + neuritis óptica + lesiones en RM con dedos de Dawson + bandas oligoclonales = criterios de McDonald para EM.
+  - Lhermitte + optic neuritis + MRI lesions with Dawson's fingers + oligoclonal bands = McDonald criteria for MS.
 
 ---
 
-### 11.7 Lupus Eritematoso Sistémico
+### 11.7 Systemic Lupus Erythematosus
 
 #### Consulta sin chart
 
 ```
-Mujer joven con cansancio extremo, dolor en articulaciones de manos y muñecas sin deformidad, erupción rojiza en mejillas que respeta los surcos nasogenianos y empeora con el sol, aftas en boca, caída de cabello, episodios de palidez y dolor en los dedos al frío. Refiere también dolor torácico que mejora al inclinarse hacia adelante.
+Young woman with extreme fatigue, joint pain in hands and wrists without deformity, reddish rash on cheeks that spares the nasolabial folds and worsens with sun, oral aphthae, hair loss, episodes of pallor and pain in the fingers when cold. Also reports chest pain that improves on leaning forward.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 29
 - **Sex:** M
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Poliartritis, fiebre y pérdida de peso de 2 meses
+- **Comorbidities:** none
+- **Chief Complaint:** Polyarthritis, fever, and weight loss for 2 months
 - **Vital Signs:** HR 96 · BP 138/86 · RR 18 · SpO2 97 · Temp 37.9
-- **Physical Findings:** Eritema malar tenue, úlceras palatinas indoloras, derrame pleural derecho leve, edema maleolar.
-- **Lab Results:** ANA 1:1280 patrón homogéneo, anti-dsDNA positivos altos, anti-Sm positivos, C3/C4 bajos, Coombs+, proteinuria 2.1 g/24h, sedimento con cilindros hemáticos.
-- **Imaging:** Rx tórax con derrame pleural derecho. Ecocardio con derrame pericárdico leve.
-- **Current Medications:** ninguna
+- **Physical Findings:** Tenuous malar erythema, painless palatal ulcers, mild right pleural effusion, malleolar edema.
+- **Lab Results:** ANA 1:1280 homogeneous pattern, high positive anti-dsDNA, positive anti-Sm, low C3/C4, Coombs+, proteinuria 2.1 g/24h, sediment with red cell casts.
+- **Imaging:** Chest X-ray with right pleural effusion. Echocardiogram with mild pericardial effusion.
+- **Current Medications:** none
 - **Allergies:** NKDA
-- **Social History:** Estudiante de doctorado
-- **Family History:** Hermana con tiroiditis autoinmune
-- **Additional Notes:** Biopsia renal pendiente (sospecha de nefritis lúpica clase IV).
+- **Social History:** PhD student
+- **Family History:** Sister with autoimmune thyroiditis
+- **Additional Notes:** Pending renal biopsy (suspected class IV lupus nephritis).
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 26
 - **Sex:** F
-- **Comorbidities:** ninguna
-- **Chief Complaint:** Erupción facial, dolor articular y fatiga de 4 meses
+- **Comorbidities:** none
+- **Chief Complaint:** Facial rash, joint pain, and fatigue of 4 months
 - **Vital Signs:** HR 90 · BP 124/78 · RR 16 · SpO2 98 · Temp 37.4
-- **Physical Findings:** Eritema malar en "alas de mariposa" que respeta surcos nasogenianos, alopecia difusa, fenómeno de Raynaud trifásico en manos.
-- **Lab Results:** ANA 1:640, anti-dsDNA positivos, anti-Ro positivos, C3 bajo, leucopenia 3200, linfopenia, plaquetas 95.000.
-- **Imaging:** Sin hallazgos.
-- **Current Medications:** anticonceptivo combinado (a suspender)
-- **Allergies:** sulfas
-- **Social History:** Diseñadora, expuesta a sol intenso por hobby
-- **Family History:** Tía con artritis reumatoide
-- **Additional Notes:** Antecedente de 2 abortos espontáneos en primer trimestre (descartar SAF asociado: anticoagulante lúpico pendiente).
+- **Physical Findings:** Malar erythema in "butterfly wings" sparing nasolabial folds, diffuse alopecia, triphasic Raynaud phenomenon in hands.
+- **Lab Results:** ANA 1:640, positive anti-dsDNA, positive anti-Ro, low C3, leukopenia 3200, lymphopenia, platelets 95,000.
+- **Imaging:** No findings.
+- **Current Medications:** combined oral contraceptive (to discontinue)
+- **Allergies:** sulfa drugs
+- **Social History:** Designer, exposed to intense sun due to hobby
+- **Family History:** Aunt with rheumatoid arthritis
+- **Additional Notes:** History of 2 first-trimester miscarriages (rule out associated APS: lupus anticoagulant pending).
 
 #### Salida esperada
 
-- **Top-1 esperado:** Lupus eritematoso sistémico (criterios EULAR/ACR 2019).
-- **Diferenciales plausibles:** Artritis reumatoide, dermatomiositis, enfermedad mixta del tejido conectivo, síndrome de Sjögren, lupus inducido por fármacos.
+- **Top-1 esperado:** Systemic lupus erythematosus (EULAR/ACR 2019 criteria).
+- **Diferenciales plausibles:** Rheumatoid arthritis, dermatomyositis, mixed connective tissue disease, Sjögren's syndrome, drug-induced lupus.
 - **Notas críticas:**
-  - Hombre: presentación atípica por género — el sistema **no** debe descartar LES por ser varón (representa ~10% de casos).
+  - Male: atypical presentation due to gender — the system **should not** rule out SLE because the patient is male (represents ~10% of cases).
 
 ---
 
-### 11.8 Insuficiencia Cardíaca Congestiva
+### 11.8 Congestive Heart Failure
 
 #### Consulta sin chart
 
 ```
-Paciente que en las últimas semanas presenta dificultad para respirar al hacer esfuerzos cada vez menores, debe dormir con varias almohadas porque al acostarse se ahoga y se despierta de noche con falta de aire que mejora al sentarse. Tiene los tobillos hinchados, ha aumentado 4 kilos sin cambios en la dieta y nota palpitaciones.
+Patient who in the last few weeks presents difficulty breathing on increasingly smaller efforts, must sleep with several pillows because when lying down he suffocates and wakes up at night short of breath that improves on sitting. Has swollen ankles, has gained 4 kilos without dietary changes, and notices palpitations.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 70
 - **Sex:** M
-- **Comorbidities:** IAM hace 5 años con stent en DA, HTA, DM2, fibrilación auricular permanente
-- **Chief Complaint:** Disnea de pequeños esfuerzos, ortopnea de 3 almohadas y edemas
+- **Comorbidities:** MI 5 years ago with LAD stent, hypertension, T2DM, permanent atrial fibrillation
+- **Chief Complaint:** Small-effort dyspnea, 3-pillow orthopnea, and edema
 - **Vital Signs:** HR 104 (irregular) · BP 102/68 · RR 24 · SpO2 92 · Temp 36.5
-- **Physical Findings:** Ingurgitación yugular, crepitantes bibasales, edema con fóvea hasta rodillas, hepatomegalia dolorosa, reflujo hepatoyugular+.
-- **Lab Results:** BNP 1850 pg/mL, troponina negativa, creatinina 1.7, Na 132, K 4.4.
-- **Imaging:** Rx tórax con cardiomegalia, redistribución vascular y derrame pleural bilateral. Ecocardio: FEVI 28%, dilatación de cavidades izquierdas, IM moderada.
-- **Current Medications:** AAS, atorvastatina, carvedilol, enalapril, furosemida, dapagliflozina, apixabán
+- **Physical Findings:** Jugular venous distension, bibasal crackles, pitting edema up to the knees, painful hepatomegaly, positive hepatojugular reflux.
+- **Lab Results:** BNP 1850 pg/mL, negative troponin, creatinine 1.7, Na 132, K 4.4.
+- **Imaging:** Chest X-ray with cardiomegaly, vascular redistribution, and bilateral pleural effusion. Echocardiogram: LVEF 28%, dilation of left chambers, moderate MR.
+- **Current Medications:** ASA, atorvastatin, carvedilol, enalapril, furosemide, dapagliflozin, apixaban
 - **Allergies:** NKDA
-- **Social History:** Jubilado, ex-fumador
-- **Family History:** Padre IC, hermano IAM
-- **Additional Notes:** Refiere haber dejado de tomar furosemida hace 1 semana por "ir mucho al baño".
+- **Social History:** Retired, ex-smoker
+- **Family History:** Father HF, brother MI
+- **Additional Notes:** Reports having stopped taking furosemide 1 week ago because "I had to go to the bathroom too much".
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 78
 - **Sex:** F
-- **Comorbidities:** HTA de larga evolución, obesidad, DM2, ERC estadio 3
-- **Chief Complaint:** Disnea progresiva y aumento del perímetro abdominal
+- **Comorbidities:** long-standing hypertension, obesity, T2DM, stage 3 CKD
+- **Chief Complaint:** Progressive dyspnea and increased abdominal girth
 - **Vital Signs:** HR 88 · BP 168/92 · RR 22 · SpO2 93 · Temp 36.4
-- **Physical Findings:** Crepitantes bibasales, edemas, ascitis leve, IY visible.
-- **Lab Results:** BNP 720, creatinina 1.6, función tiroidea normal.
-- **Imaging:** Ecocardio: **FEVI 60% conservada**, hipertrofia VI severa, disfunción diastólica grado III, dilatación AI.
-- **Current Medications:** losartán, amlodipino, metformina, espironolactona
+- **Physical Findings:** Bibasal crackles, edema, mild ascites, visible JVD.
+- **Lab Results:** BNP 720, creatinine 1.6, normal thyroid function.
+- **Imaging:** Echocardiogram: **preserved LVEF 60%**, severe LV hypertrophy, grade III diastolic dysfunction, LA dilation.
+- **Current Medications:** losartan, amlodipine, metformin, spironolactone
 - **Allergies:** NKDA
-- **Social History:** Vive con su hija
-- **Family History:** HTA materna
-- **Additional Notes:** Caso de IC con fracción de eyección preservada (HFpEF), patrón cada vez más frecuente en mujeres mayores con HTA.
+- **Social History:** Lives with her daughter
+- **Family History:** Maternal hypertension
+- **Additional Notes:** Case of HF with preserved ejection fraction (HFpEF), an increasingly frequent pattern in older women with hypertension.
 
 #### Salida esperada
 
-- **Top-1 esperado:** Insuficiencia cardíaca (HFrEF en el hombre, HFpEF en la mujer).
-- **Diferenciales plausibles:** EPOC reagudizada, embolia pulmonar crónica, anemia, hipotiroidismo, síndrome nefrótico, cirrosis hepática.
+- **Top-1 esperado:** Heart failure (HFrEF in the male, HFpEF in the female).
+- **Diferenciales plausibles:** Exacerbated COPD, chronic pulmonary embolism, anemia, hypothyroidism, nephrotic syndrome, liver cirrhosis.
 - **Notas críticas:**
-  - El sistema debe **distinguir HFrEF vs HFpEF** según FEVI del chart — implicaciones terapéuticas distintas.
+  - The system must **distinguish HFrEF vs HFpEF** according to chart LVEF — different therapeutic implications.
 
 ---
 
-### 11.9 Pancreatitis Aguda
+### 11.9 Acute Pancreatitis
 
 #### Consulta sin chart
 
 ```
-Paciente que tras una comida copiosa con alcohol presenta dolor intenso en epigastrio que irradia hacia la espalda en cinturón, acompañado de náuseas, vómitos persistentes y distensión abdominal. El dolor mejora al inclinarse hacia adelante y empeora al acostarse.
+Patient who after a copious meal with alcohol presents intense pain in the epigastrium radiating to the back in a belt pattern, accompanied by nausea, persistent vomiting, and abdominal distension. The pain improves on leaning forward and worsens on lying down.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 52
 - **Sex:** M
-- **Comorbidities:** dislipidemia (triglicéridos elevados), alcoholismo crónico
-- **Chief Complaint:** Dolor epigástrico irradiado a espalda, vómitos y fiebre de 18 horas
+- **Comorbidities:** dyslipidemia (elevated triglycerides), chronic alcoholism
+- **Chief Complaint:** Epigastric pain radiating to back, vomiting, and fever of 18 hours
 - **Vital Signs:** HR 118 · BP 96/58 · RR 24 · SpO2 94 · Temp 38.4
-- **Physical Findings:** Abdomen distendido y doloroso en epigastrio, signo de Grey-Turner incipiente, sin defensa peritoneal franca. Equimosis periumbilical (Cullen) ausente.
-- **Lab Results:** Amilasa 1840, lipasa 4200, leucocitos 18.000, calcio 7.2, LDH 480, AST 320, glucosa 220, triglicéridos 1.850 mg/dL, PCR 280.
-- **Imaging:** TC abdomen con páncreas aumentado, áreas de necrosis < 30%, líquido peripancreático (Balthazar D).
-- **Current Medications:** ninguna habitual
+- **Physical Findings:** Distended and tender abdomen in epigastrium, incipient Grey-Turner sign, no frank peritoneal defense. Cullen periumbilical ecchymosis absent.
+- **Lab Results:** Amylase 1840, lipase 4200, leukocytes 18,000, calcium 7.2, LDH 480, AST 320, glucose 220, triglycerides 1,850 mg/dL, CRP 280.
+- **Imaging:** Abdominal CT with enlarged pancreas, necrosis areas < 30%, peripancreatic fluid (Balthazar D).
+- **Current Medications:** none regular
 - **Allergies:** NKDA
-- **Social History:** Bebedor de 6-8 cervezas/día durante 20 años, fumador
-- **Family History:** Sin relevancia
-- **Additional Notes:** Episodio previo de pancreatitis leve hace 2 años.
+- **Social History:** Drinker of 6-8 beers/day for 20 years, smoker
+- **Family History:** Unremarkable
+- **Additional Notes:** Previous episode of mild pancreatitis 2 years ago.
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 58
 - **Sex:** F
-- **Comorbidities:** colelitiasis conocida (no operada)
-- **Chief Complaint:** Dolor abdominal súbito en epigastrio postprandial, vómitos
+- **Comorbidities:** known cholelithiasis (not operated)
+- **Chief Complaint:** Sudden postprandial abdominal pain in epigastrium, vomiting
 - **Vital Signs:** HR 102 · BP 122/78 · RR 18 · SpO2 96 · Temp 37.6
-- **Physical Findings:** Ictericia leve, dolor a la palpación en hipocondrio derecho y epigastrio, Murphy positivo.
-- **Lab Results:** Amilasa 1620, lipasa 3800, bilirrubina total 4.8 (directa 3.6), ALT 380, AST 290, FA 420, GGT 380, leucocitos 14.500.
-- **Imaging:** Eco abdominal con vesícula litiásica, vía biliar dilatada (8 mm), coledocolitiasis sospechada. TC con páncreas edematoso sin necrosis.
-- **Current Medications:** losartán
+- **Physical Findings:** Mild jaundice, tenderness on palpation in right hypochondrium and epigastrium, positive Murphy's sign.
+- **Lab Results:** Amylase 1620, lipase 3800, total bilirubin 4.8 (direct 3.6), ALT 380, AST 290, ALP 420, GGT 380, leukocytes 14,500.
+- **Imaging:** Abdominal ultrasound with lithiasic gallbladder, dilated bile duct (8 mm), suspected choledocholithiasis. CT with edematous pancreas without necrosis.
+- **Current Medications:** losartan
 - **Allergies:** NKDA
-- **Social History:** No bebe, no fuma
-- **Family History:** Madre colecistectomizada
-- **Additional Notes:** No es bebedora — la pancreatitis es de **origen biliar**.
+- **Social History:** Non-drinker, non-smoker
+- **Family History:** Mother cholecystectomized
+- **Additional Notes:** Non-drinker — the pancreatitis is of **biliary origin**.
 
 #### Salida esperada
 
-- **Top-1 esperado:** Pancreatitis aguda (alcohólica/hipertrigliceridémica en hombre; biliar en mujer).
-- **Diferenciales plausibles:** Úlcera péptica perforada, colecistitis aguda, infarto agudo de miocardio inferior, isquemia mesentérica, aneurisma aórtico.
+- **Top-1 esperado:** Acute pancreatitis (alcoholic/hypertriglyceridemic in male; biliary in female).
+- **Diferenciales plausibles:** Perforated peptic ulcer, acute cholecystitis, inferior myocardial infarction, mesenteric ischemia, aortic aneurysm.
 - **Notas críticas:**
-  - El sistema debe **identificar la etiología** según chart (alcohol/TG vs. biliar) — afecta el manejo (CPRE urgente en biliar).
-  - Mujer: dolor irradiado al hombro derecho podría confundir con colecistitis pura — la lipasa altísima define pancreatitis.
+  - The system must **identify the etiology** according to the chart (alcohol/TG vs. biliary) — affects management (urgent ERCP in biliary).
+  - Female: pain radiating to right shoulder could be confused with pure cholecystitis — extremely high lipase defines pancreatitis.
 
 ---
 
-### 11.10 Feocromocitoma
+### 11.10 Pheochromocytoma
 
 #### Consulta sin chart
 
 ```
-Paciente con episodios paroxísticos de cefalea intensa, sudoración profusa y palpitaciones, asociados a picos de presión arterial muy altos que aparecen y desaparecen. Entre los episodios se siente bien. Refiere ansiedad, pérdida de peso y palidez durante las crisis. Un episodio se desencadenó al hacer fuerza en el baño.
+Patient with paroxysmal episodes of intense headache, profuse sweating, and palpitations, associated with very high spikes in blood pressure that come and go. Between episodes feels well. Reports anxiety, weight loss, and pallor during the crises. One episode was triggered while straining in the bathroom.
 ```
 
-#### Chart — HOMBRE
+#### Chart — Male
 
 - **Age:** 42
 - **Sex:** M
-- **Comorbidities:** HTA de difícil control (3 fármacos sin control)
-- **Chief Complaint:** Cefaleas paroxísticas con cifras tensionales de 220/130 mmHg
+- **Comorbidities:** difficult-to-control hypertension (3 drugs without control)
+- **Chief Complaint:** Paroxysmal headaches with BP figures of 220/130 mmHg
 - **Vital Signs (intercrisis):** HR 88 · BP 154/96 · RR 14 · SpO2 98 · Temp 36.7
-- **Vital Signs (crisis):** HR 138 · BP 230/132 · diaforesis profusa
-- **Physical Findings:** Palidez durante la crisis, sin masas palpables abdominales, fondo de ojo con retinopatía hipertensiva grado II.
-- **Lab Results:** Metanefrinas plasmáticas libres 3.8 nmol/L (muy elevadas), normetanefrinas urinarias 24h x6 el límite, cromogranina A elevada.
-- **Imaging:** TC abdomen con masa suprarrenal derecha de 4.5 cm heterogénea. MIBG con captación intensa en la masa.
-- **Current Medications:** amlodipino, losartán, hidroclorotiazida (suspender betabloqueante por riesgo de crisis)
+- **Vital Signs (crisis):** HR 138 · BP 230/132 · profuse diaphoresis
+- **Physical Findings:** Pallor during the crisis, no palpable abdominal masses, fundus with grade II hypertensive retinopathy.
+- **Lab Results:** Plasma free metanephrines 3.8 nmol/L (very elevated), 24h urinary normetanephrines x6 the limit, elevated chromogranin A.
+- **Imaging:** Abdominal CT with 4.5 cm heterogeneous right adrenal mass. MIBG with intense uptake in the mass.
+- **Current Medications:** amlodipine, losartan, hydrochlorothiazide (discontinue beta-blocker due to risk of crisis)
 - **Allergies:** NKDA
-- **Social History:** Empresario
-- **Family History:** Padre con HTA. Sin antecedentes de NEM o von Hippel-Lindau conocidos (pero pendiente estudio genético).
-- **Additional Notes:** Episodio de edema agudo de pulmón hace 3 meses atribuido a "crisis hipertensiva".
+- **Social History:** Businessman
+- **Family History:** Father with hypertension. No known MEN or von Hippel-Lindau history (but pending genetic study).
+- **Additional Notes:** Episode of acute pulmonary edema 3 months ago attributed to "hypertensive crisis".
 
-#### Chart — MUJER
+#### Chart — Female
 
 - **Age:** 38
 - **Sex:** F
-- **Comorbidities:** ninguna conocida; antecedente familiar de hemangioblastomas cerebelosos
-- **Chief Complaint:** Crisis de palpitaciones, cefalea y sudoración con HTA súbita
+- **Comorbidities:** none known; family history of cerebellar hemangioblastomas
+- **Chief Complaint:** Episodes of palpitations, headache, and sweating with sudden hypertension
 - **Vital Signs (intercrisis):** HR 80 · BP 132/82 · RR 14 · SpO2 99 · Temp 36.5
-- **Physical Findings:** Sin focalidad, fondo de ojo con angiomas retinianos (von Hippel-Lindau).
-- **Lab Results:** Metanefrinas plasmáticas elevadas, glucosa 138 en crisis.
-- **Imaging:** RM abdomen con masas suprarrenales bilaterales pequeñas (1.8 y 2.2 cm). RM cerebral con hemangioblastoma cerebeloso.
-- **Current Medications:** ninguna
+- **Physical Findings:** No focal signs, fundus with retinal angiomas (von Hippel-Lindau).
+- **Lab Results:** Elevated plasma metanephrines, glucose 138 in crisis.
+- **Imaging:** Abdominal MRI with small bilateral adrenal masses (1.8 and 2.2 cm). Brain MRI with cerebellar hemangioblastoma.
+- **Current Medications:** none
 - **Allergies:** NKDA
-- **Social History:** Investigadora
-- **Family History:** Padre y hermano con enfermedad de von Hippel-Lindau confirmada
-- **Additional Notes:** Estudio genético confirma mutación VHL — feocromocitoma bilateral en el contexto sindrómico.
+- **Social History:** Researcher
+- **Family History:** Father and brother with confirmed von Hippel-Lindau disease
+- **Additional Notes:** Genetic study confirms VHL mutation — bilateral pheochromocytoma in the syndromic context.
 
 #### Salida esperada
 
-- **Top-1 esperado:** Feocromocitoma.
-- **Diferenciales plausibles:** HTA esencial resistente, crisis de pánico, hipertiroidismo, síndrome carcinoide, abuso de cocaína/anfetaminas, hipoglucemia con respuesta adrenérgica.
+- **Top-1 esperado:** Pheochromocytoma.
+- **Diferenciales plausibles:** Resistant essential hypertension, panic crisis, hyperthyroidism, carcinoid syndrome, cocaine/amphetamine abuse, hypoglycemia with adrenergic response.
 - **Notas críticas:**
-  - Mujer: caso en el contexto de **von Hippel-Lindau** — el sistema debe reconocer que los feocromocitomas bilaterales jóvenes obligan a buscar síndrome genético.
-  - Distractor importante: **trastorno de pánico** comparte síntomas — el chart debe inclinar hacia feocromocitoma por las metanefrinas y la imagen.
+  - Female: case in the context of **von Hippel-Lindau** — the system must recognize that bilateral pheochromocytomas in young patients mandate searching for a genetic syndrome.
+  - Important distractor: **panic disorder** shares symptoms — the chart should lean toward pheochromocytoma due to metanephrines and imaging.
 
 ---
 
-## Apéndice — Plantilla de Registro de Resultados
+## Appendix — Results Recording Template
 
-Para cada caso, registrar:
+For each case, record:
 
 ```
-Caso: [nombre]
-Modo: [sin chart | con chart hombre | con chart mujer]
+Case: [name]
+Mode: [no chart | with male chart | with female chart]
 Search mode: [standard | web | positioned]
 
-Top-1 obtenido: ___________________
-Top-3 obtenidos: ___________________
-¿Coincide con esperado? [sí | no | parcial]
-¿Citaciones válidas? [sí | no]
-¿Activó banner de insuficiencia? [sí | no]
-¿Activó web enrichment? [sí | no]
+Top-1 obtained: ___________________
+Top-3 obtained: ___________________
+Matches expected? [yes | no | partial]
+Valid citations? [yes | no]
+Did it trigger the insufficiency banner? [yes | no]
+Did it trigger web enrichment? [yes | no]
 
-Observaciones:
-- 
-- 
+Observations:
+-
+-
 ```

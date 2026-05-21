@@ -47,6 +47,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
   const [qrelsName, setQrelsName] = useState<string>('');
   const [k, setK] = useState<number>(10);
   const [isRunning, setIsRunning] = useState(false);
+  const [isLoadingSeed, setIsLoadingSeed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<EvaluationReport | null>(null);
   const [pastRuns, setPastRuns] = useState<EvaluationRunSummary[]>([]);
@@ -70,13 +71,17 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
   };
 
   const onLoadSeed = async () => {
+    if (isLoadingSeed) return;
     try {
+      setIsLoadingSeed(true);
       setError(null);
       const text = await fetchSeedQrels();
       setQrelsContent(text);
       setQrelsName('test_cases.jsonl (default)');
     } catch (e: any) {
       setError(e?.message ?? 'Could not load seed qrels');
+    } finally {
+      setIsLoadingSeed(false);
     }
   };
 
@@ -148,10 +153,15 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
             <button
               type="button"
               onClick={onLoadSeed}
-              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 hover:border-indigo-300 transition-colors"
+              disabled={isLoadingSeed}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 hover:border-indigo-300 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
-              <Download className="w-3.5 h-3.5" />
-              Cargar seed
+              {isLoadingSeed ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              {isLoadingSeed ? 'Cargando…' : 'Cargar seed'}
             </button>
           </div>
         </div>
