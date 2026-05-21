@@ -11,40 +11,40 @@ class ChunkDocument:
     Diseñado para trazabilidad Completa.
     """
     chunk_id: str             # {doc_id}:{section_index}:{chunk_index}
-    doc_id: str               # Documento padre
+    doc_id: str               # Parent document
 
-    # Trazabilidad y Origen
+    # Traceability and origin
     url: str
     source_domain: str
-    fetched_at: str           # ISO-8601 UTC string de la adquisición
+    fetched_at: str           # ISO-8601 UTC string of the acquisition timestamp
     mime_type: str
 
-    # Metadatos de Crawling (Mantenidos desde AcquiredDocument)
+    # Crawling metadata (preserved from AcquiredDocument)
     seed_group: str
     seed_id: str
     depth: int
 
-    # Contexto de la sección
+    # Section context
     section_heading: str
     section_index: int
-    chunk_index: int          # Orden dentro de la sección
+    chunk_index: int          # Order within the section
 
-    # Offsets dentro del texto original de la SECCIÓN
+    # Character offsets within the original SECTION text
     start_char: int
     end_char: int
 
-    # Contenido
+    # Content
     chunk_text: str
     language: Optional[str] = None
-    
-    # Hashes para control de cambios
-    content_hash: Optional[str] = None  # Hash del doc completo
-    chunk_hash: Optional[str] = None    # Hash solo del texto de este chunk
 
-    # Enriquecimiento (Módulo 4: Conceptos / Módulo 4: Embeddings)
+    # Hashes for change detection
+    content_hash: Optional[str] = None  # Hash of the full document
+    chunk_hash: Optional[str] = None    # Hash of this chunk's text only
+
+    # Enrichment (Module 4: Concepts / Module 4: Embeddings)
     concept_ids: List[str] = field(default_factory=list)
     ner_entities: List[NerEntity] = field(default_factory=list)
 
-    # Vector Search (kNN)
+    # Vector search (kNN)
     embedding: Optional[List[float]] = None
 

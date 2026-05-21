@@ -15,9 +15,9 @@ def _drop_none(d: dict) -> dict:
 
 class OpenSearchChunksSink:
     """
-    Sink para indexar fragmentos (chunks) en OpenSearch.
-    - Maneja la creación del índice con soporte kNN.
-    - Realiza inserciones en bloque (bulk).
+    Sink for indexing chunks in OpenSearch.
+    - Handles index creation with kNN support.
+    - Performs bulk insertions.
     """
 
     def __init__(self, cfg: OpenSearchChunksConfig) -> None:
@@ -31,7 +31,7 @@ class OpenSearchChunksSink:
         )
 
     def ensure_index(self) -> None:
-        """Asegura que el índice de chunks existe y el alias apunta a él."""
+        """Ensures the chunks index exists and the alias points to it."""
         if not self.client.indices.exists(index=self.cfg.index_name):
             body = build_chunks_index_body(
                 vector_dim=self.cfg.vector_dim,
@@ -40,17 +40,17 @@ class OpenSearchChunksSink:
             )
             self.client.indices.create(index=self.cfg.index_name, body=body)
 
-        # Verificar alias
+        # Verify alias
         try:
             aliases = self.client.indices.get_alias(index=self.cfg.index_name)
             if self.cfg.alias_name not in aliases.get(self.cfg.index_name, {}).get("aliases", {}):
                 self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
         except Exception:
-            # Si el índice es nuevo o no tiene alias, lo ponemos
+            # If the index is new or has no alias, create one
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
 
     def set_refresh_interval(self, interval: str) -> None:
-        """Cambia el refresh_interval del índice. Usar '-1' durante bulk masivo."""
+        """Changes the index refresh_interval. Use '-1' during bulk indexing."""
         self.client.indices.put_settings(
             index=self.cfg.index_name,
             body={"index": {"refresh_interval": interval}},
@@ -58,8 +58,8 @@ class OpenSearchChunksSink:
 
     def bulk_upsert(self, chunks: Iterable[ChunkDocument], *, refresh: bool = False) -> int:
         """
-        Indexa una lista de chunks en bloque.
-        Devuelve el número de documentos indexados con éxito.
+        Indexes a list of chunks in bulk.
+        Returns the number of successfully indexed documents.
         """
         def actions():
             for c in chunks:

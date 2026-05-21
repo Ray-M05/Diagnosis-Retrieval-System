@@ -1,5 +1,5 @@
 # adapters/stores/opensearch_chunk_reader.py
-"""Adaptador para leer chunks desde OpenSearch."""
+"""Adapter for reading chunks from OpenSearch."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 class OpenSearchChunkReader:
     """
-    Lee chunks desde OpenSearch para procesamiento de embeddings.
-    
-    Uso:
+    Reads chunks from OpenSearch for embedding processing.
+
+    Usage:
         reader = OpenSearchChunkReader(config)
         for batch in reader.iter_chunks_batched(batch_size=100):
             process(batch)
@@ -39,13 +39,13 @@ class OpenSearchChunkReader:
         )
     
     def get_total_chunks(self, filters: Optional[Dict[str, Any]] = None) -> int:
-        """Obtiene el número total de chunks en el índice."""
+        """Returns the total number of chunks in the index."""
         query = self._build_query(filters)
         response = self.client.count(index=self.cfg.index_name, body=query)
         return response.get("count", 0)
     
     def get_chunk_by_id(self, chunk_id: str) -> Optional[ChunkDocument]:
-        """Obtiene un chunk por su ID."""
+        """Retrieves a chunk by its ID."""
         try:
             response = self.client.get(index=self.cfg.index_name, id=chunk_id)
             if response.get("found"):
@@ -56,7 +56,7 @@ class OpenSearchChunkReader:
             return None
     
     def get_chunks_by_ids(self, chunk_ids: List[str]) -> Dict[str, ChunkDocument]:
-        """Obtiene múltiples chunks por IDs."""
+        """Retrieves multiple chunks by their IDs."""
         if not chunk_ids:
             return {}
         
@@ -79,18 +79,18 @@ class OpenSearchChunkReader:
         exclude_with_embedding: bool = False
     ) -> Iterator[ChunkDocument]:
         """
-        Itera sobre todos los chunks del índice.
-        
+        Iterates over all chunks in the index.
+
         Args:
-            filters: Filtros adicionales (seed_group, source_domain, etc.)
-            exclude_with_embedding: Si True, excluye chunks que ya tienen embedding
-            
+            filters: Additional filters (seed_group, source_domain, etc.)
+            exclude_with_embedding: If True, excludes chunks that already have an embedding
+
         Yields:
-            ChunkDocument uno a uno
+            ChunkDocument one at a time
         """
         query = self._build_query(filters, exclude_with_embedding)
-        
-        # Iniciar scroll
+
+        # Start scroll
         response = self.client.search(
             index=self.cfg.index_name,
             body=query,
@@ -106,7 +106,7 @@ class OpenSearchChunkReader:
                 for hit in hits:
                     yield self._parse_chunk(hit["_source"])
                 
-                # Obtener siguiente batch
+                # Fetch next batch
                 response = self.client.scroll(
                     scroll_id=scroll_id,
                     scroll=self.cfg.scroll_timeout,
@@ -114,13 +114,13 @@ class OpenSearchChunkReader:
                 scroll_id = response.get("_scroll_id")
                 hits = response.get("hits", {}).get("hits", [])
         finally:
-            # Limpiar scroll
+            # Clear scroll context
             if scroll_id:
                 try:
                     self.client.clear_scroll(scroll_id=scroll_id)
                 except Exception:
                     pass
-    
+
     def iter_chunks_batched(
         self,
         batch_size: int = 100,
@@ -128,15 +128,15 @@ class OpenSearchChunkReader:
         exclude_with_embedding: bool = False
     ) -> Iterator[List[ChunkDocument]]:
         """
-        Itera sobre chunks en batches.
-        
+        Iterates over chunks in batches.
+
         Args:
-            batch_size: Tamaño del batch
-            filters: Filtros adicionales
-            exclude_with_embedding: Excluir chunks con embedding existente
-            
+            batch_size: Batch size
+            filters: Additional filters
+            exclude_with_embedding: Exclude chunks that already have an embedding
+
         Yields:
-            Lista de chunks (batch)
+            List of chunks (one batch)
         """
         batch = []
         for chunk in self.iter_chunks(filters, exclude_with_embedding):
@@ -150,12 +150,12 @@ class OpenSearchChunkReader:
             yield batch
     
     def get_chunk_ids_and_hashes(
-        self, 
+        self,
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, str]:
         """
-        Obtiene mapping chunk_id -> chunk_hash para verificar re-embedding.
-        
+        Returns a chunk_id -> chunk_hash mapping for re-embedding verification.
+
         Returns:
             Dict mapping chunk_id -> chunk_hash
         """
@@ -195,23 +195,23 @@ class OpenSearchChunkReader:
         return result
     
     def _build_query(
-        self, 
+        self,
         filters: Optional[Dict[str, Any]] = None,
         exclude_with_embedding: bool = False
     ) -> Dict[str, Any]:
-        """Construye la query con filtros."""
+        """Builds the query with optional filters."""
         must = []
         must_not = []
-        
+
         if filters:
             for field, value in filters.items():
                 if isinstance(value, list):
                     must.append({"terms": {field: value}})
                 else:
                     must.append({"term": {field: value}})
-        
+
         if exclude_with_embedding:
-            # Excluir chunks que ya tienen embedding
+            # Exclude chunks that already have an embedding
             must_not.append({"exists": {"field": "embedding"}})
         
         if not must and not must_not:
@@ -227,7 +227,7 @@ class OpenSearchChunkReader:
         }
     
     def _parse_chunk(self, source: Dict[str, Any]) -> ChunkDocument:
-        """Convierte documento de OpenSearch a ChunkDocument."""
+        """Converts an OpenSearch document to a ChunkDocument."""
         return ChunkDocument(
             chunk_id=source.get("chunk_id", ""),
             doc_id=source.get("doc_id", ""),

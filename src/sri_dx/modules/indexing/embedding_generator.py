@@ -38,18 +38,18 @@ class EmbeddingGenerator:
         bert_adapter: Optional["ClinicalBERTAdapter"] = None
     ):
         """
-        Inicializa el generador.
-        
+        Initialises the generator.
+
         Args:
-            config: Configuración del generador
-            bert_adapter: Adaptador BERT (si None, crea uno)
+            config: Generator configuration
+            bert_adapter: BERT adapter (if None, one is created)
         """
         self.config = config or EmbeddingGeneratorConfig()
         self._bert_adapter = bert_adapter
     
     @property
     def bert_adapter(self) -> "ClinicalBERTAdapter":
-        """Acceso lazy al adaptador BERT."""
+        """Lazy access to the BERT adapter."""
         if self._bert_adapter is None:
             from sri_dx.adapters.embeddings.clinical_bert_adapter import (
                 ClinicalBERTAdapter,
@@ -68,25 +68,22 @@ class EmbeddingGenerator:
         chunks: List[ChunkDocument]
     ) -> List[EmbeddingDocument]:
         """
-        Genera embeddings para una lista de chunks.
-        
+        Generates embeddings for a list of chunks.
+
         Args:
-            chunks: Lista de chunks a procesar
-            
+            chunks: List of chunks to process
+
         Returns:
-            Lista de EmbeddingDocument con vectores
+            List of EmbeddingDocument with vectors
         """
         if not chunks:
             return []
-        
-        # Extraer textos
+
         texts = [self._get_chunk_text(chunk) for chunk in chunks]
-        
-        # Generar embeddings en batch
-        logger.debug(f"Generando embeddings para {len(texts)} chunks...")
+
+        logger.debug(f"Generating embeddings for {len(texts)} chunks...")
         vectors = self.bert_adapter.encode(texts)
-        
-        # Crear documentos de embedding
+
         embeddings = []
         now = datetime.now(timezone.utc).isoformat()
         
@@ -113,21 +110,21 @@ class EmbeddingGenerator:
             )
             embeddings.append(embedding_doc)
         
-        logger.debug(f"Generados {len(embeddings)} embeddings")
+        logger.debug(f"Generated {len(embeddings)} embeddings")
         return embeddings
     
     def _get_chunk_text(self, chunk: ChunkDocument) -> str:
-        """Extrae el texto del chunk para embedding."""
+        """Extracts chunk text for embedding."""
         text = chunk.chunk_text or ""
-        
-        # Opcionalmente agregar contexto (heading)
+
+        # Optionally prepend section heading as context
         if chunk.section_heading:
             text = f"{chunk.section_heading}: {text}"
         
         return text.strip()
     
     def _get_text_preview(self, chunk: ChunkDocument) -> str:
-        """Genera preview del texto para metadata."""
+        """Generates a text preview for metadata."""
         text = chunk.chunk_text or ""
         max_len = self.config.text_preview_length
         
@@ -137,12 +134,12 @@ class EmbeddingGenerator:
         return text[:max_len].rsplit(" ", 1)[0] + "..."
     
     def _generate_embedding_id(self, chunk: ChunkDocument) -> str:
-        """Genera ID único para el embedding."""
-        # Combinar chunk_id + model para permitir múltiples modelos
+        """Generates a unique ID for the embedding."""
+        # Combine chunk_id + model to support multiple models
         unique_str = f"{chunk.chunk_id}:{self.config.model_name}:{self.config.model_version}"
         hash_suffix = hashlib.sha256(unique_str.encode()).hexdigest()[:8]
         return f"emb_{chunk.chunk_id}_{hash_suffix}"
     
     def get_embedding_dim(self) -> int:
-        """Retorna la dimensión de los embeddings."""
+        """Returns the embedding dimension."""
         return self.config.embedding_dim

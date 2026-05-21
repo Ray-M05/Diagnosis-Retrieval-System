@@ -1,17 +1,17 @@
-"""Entity Extraction Module - Extracción de Entidades Clínicas
+"""Entity Extraction Module - Clinical Entity Extraction
 
-Módulo para identificar y extraer entidades médicas del texto.
+Module for identifying and extracting medical entities from text.
 
-Implementaciones disponibles:
-- ClinicalBERTEntityExtractor: NER usando Bio_ClinicalBERT
+Available implementations:
+- ClinicalBERTEntityExtractor: NER using Bio_ClinicalBERT
 
-Tipos de entidades soportadas:
-- PROBLEM: Síntomas, diagnósticos, condiciones
-- TREATMENT: Medicamentos, procedimientos, terapias  
-- TEST: Pruebas diagnósticas, laboratorios
-- ANATOMY: Partes del cuerpo, órganos
+Supported entity types:
+- PROBLEM: Symptoms, diagnoses, conditions
+- TREATMENT: Medications, procedures, therapies
+- TEST: Diagnostic tests, laboratory tests
+- ANATOMY: Body parts, organs
 
-Estado: ✅ IMPLEMENTADO
+Status: ✅ IMPLEMENTED
 """
 
 from .biomedical_ner_extractor import BiomedicalNEREntityExtractor

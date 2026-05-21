@@ -1,14 +1,7 @@
 """
-Two-Stage Retrieval Pipeline.
-
-Pipeline que integra búsqueda híbrida con reranking mediante cross-encoder.
-
-Etapas:
-1. Búsqueda híbrida (léxica + semántica) → top-100 candidatos
-2. Cross-encoder reranking → top-10 resultados finales
-
-Uso:
-    python -m sri_dx.usecases.search.two_stage_retrieval_pipeline
+Two-stage retrieval pipeline: hybrid search (BM25 + kNN) followed by
+cross-encoder reranking. Optionally performs NER on reranked chunks and
+aggregates results by disease entity.
 """
 
 from __future__ import annotations
@@ -34,34 +27,32 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TwoStageRetrievalConfig:
-    """Configuración del pipeline de dos etapas."""
-    
+    """Configuration for the two-stage retrieval pipeline."""
+
     # Stage 1: Hybrid Search
-    hybrid_candidates: int = 100  # Número de candidatos de búsqueda híbrida
-    
+    hybrid_candidates: int = 100
+
     # Stage 2: Reranking
-    final_results: int = 10  # Número de resultados finales tras reranking
-    
-    # Cross-encoder config
+    final_results: int = 10
+
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     device: str = "cpu"
     batch_size: int = 32
-    score_threshold: Optional[float] = None  # Filtro opcional por score
-    
-    # Content extraction
-    content_field: str = "content"  # Campo en metadata con el texto del documento
+    score_threshold: Optional[float] = None
+
+    content_field: str = "content"
 
     # Disease aggregation
-    min_ner_score: float = 0.5  # Confianza mínima de NER
-    max_diseases: int = 10  # Máximo de enfermedades a retornar
-    positioned_results: int = 10  # Máximo de condiciones posicionadas a retornar
+    min_ner_score: float = 0.5
+    max_diseases: int = 10
+    positioned_results: int = 10
     enable_synonym_expansion: bool = True
     enable_prf: bool = False
 
 
 @dataclass
 class RetrievalResult:
-    """Resultado final del pipeline con información enriquecida."""
+    """Final pipeline result with enriched scoring information."""
     
     doc_id: str
     rerank_score: float
@@ -80,7 +71,6 @@ class RetrievalResult:
     content: Optional[str] = None
     
     def __str__(self) -> str:
-        """Representación legible del resultado."""
         lines = [
             f"#{self.final_position + 1} - Doc ID: {self.doc_id}",
             f"  Rerank Score: {self.rerank_score:.4f}",
@@ -102,24 +92,7 @@ class RetrievalResult:
 
 @dataclass
 class TwoStageRetrievalPipeline:
-    """
-    Pipeline de búsqueda en dos etapas.
-    
-    Combina búsqueda híbrida rápida con reranking preciso usando cross-encoder.
-    
-    Flujo:
-    1. Stage 1: Búsqueda híbrida (BM25 + kNN) → top-100 candidatos
-    2. Stage 2: Cross-encoder reranking → top-10 finales
-    
-    Ejemplo:
-        >>> pipeline = TwoStageRetrievalPipeline(
-        ...     hybrid_search=hybrid_search_usecase,
-        ...     config=TwoStageRetrievalConfig()
-        ... )
-        >>> results = pipeline.search("diabetes tratamiento")
-        >>> for result in results:
-        ...     print(result)
-    """
+    """Two-stage retrieval pipeline: hybrid search → cross-encoder reranking."""
     
     hybrid_search: SearchHybridUseCase
     config: TwoStageRetrievalConfig = field(default_factory=TwoStageRetrievalConfig)
@@ -131,9 +104,8 @@ class TwoStageRetrievalPipeline:
     feedback_store: Optional[FeedbackStorePort] = None
     
     def __post_init__(self):
-        """Inicializa el cross-encoder si no fue proporcionado."""
         if self.cross_encoder is None:
-            logger.info("Inicializando cross-encoder...")
+            logger.info("Initializing cross-encoder...")
             ce_config = CrossEncoderConfig(
                 model_name=self.config.cross_encoder_model,
                 device=self.config.device,
@@ -142,7 +114,7 @@ class TwoStageRetrievalPipeline:
                 score_threshold=self.config.score_threshold,
             )
             self.cross_encoder = SentenceTransformersCrossEncoderAdapter(ce_config)
-            logger.info("Cross-encoder inicializado correctamente")
+            logger.info("Cross-encoder initialized")
         if self.synonym_expander is None:
             self.synonym_expander = SynonymExpander()
         if self.prf_expander is None:
@@ -156,29 +128,14 @@ class TwoStageRetrievalPipeline:
         session_id: Optional[str] = None,
         excluded_chunk_ids: Optional[set[str]] = None,
     ) -> List[RetrievalResult]:
-        """
-        Ejecuta búsqueda en dos etapas.
-        
-        Args:
-            query: Query del usuario
-            hybrid_candidates: Override de número de candidatos (None = usar config)
-            final_results: Override de resultados finales (None = usar config)
-        
-        Returns:
-            Lista de resultados finales rerankeados
-        
-        Raises:
-            ValueError: Si query está vacía
-        """
         if not query or not query.strip():
-            raise ValueError("Query no puede estar vacía")
-        
-        # Parámetros
+            raise ValueError("Query cannot be empty")
+
         k_candidates = hybrid_candidates or self.config.hybrid_candidates
         k_final = final_results or self.config.final_results
         
-        logger.info("=== Búsqueda en 2 etapas: '%s...' ===", query[:50])
-        logger.info("Stage 1: %d candidatos | Stage 2: %d finales", k_candidates, k_final)
+        logger.info("=== Two-stage search: '%s...' ===", query[:50])
+        logger.info("Stage 1: %d candidates | Stage 2: %d final", k_candidates, k_final)
 
         retrieval_query = query
         if self.config.enable_synonym_expansion and self.synonym_expander is not None:
@@ -192,12 +149,11 @@ class TwoStageRetrievalPipeline:
                 strategy="synonym",
             )
         
-        # Stage 1: Búsqueda híbrida
-        logger.info("Stage 1: Ejecutando búsqueda híbrida...")
+        logger.info("Stage 1: Running hybrid search...")
         hybrid_results = self.hybrid_search.search(query=retrieval_query, k=k_candidates)
         
         if not hybrid_results:
-            logger.warning("Búsqueda híbrida no retornó resultados")
+            logger.warning("Hybrid search returned no results")
             return []
 
         if self.config.enable_prf and self.prf_expander is not None:
@@ -222,13 +178,12 @@ class TwoStageRetrievalPipeline:
                 if result.chunk_id not in excluded_chunk_ids
             ]
             if not hybrid_results:
-                logger.warning("Todos los candidatos fueron filtrados por feedback negativo")
+                logger.warning("All candidates were filtered by negative feedback")
                 return []
-        
-        logger.info("Stage 1 completado: %d candidatos obtenidos", len(hybrid_results))
-        
-        # Stage 2: Reranking con cross-encoder
-        logger.info("Stage 2: Ejecutando reranking con cross-encoder...")
+
+        logger.info("Stage 1 complete: %d candidates", len(hybrid_results))
+
+        logger.info("Stage 2: Running cross-encoder reranking...")
         rerank_request = RerankRequest(
             query=query,
             results=hybrid_results,
@@ -237,28 +192,17 @@ class TwoStageRetrievalPipeline:
         )
         
         rerank_response = self.cross_encoder.rerank(rerank_request)
-        logger.info("Stage 2 completado: %d resultados finales", len(rerank_response.ranked_results))
-        
-        # Convertir a RetrievalResult enriquecido
+        logger.info("Stage 2 complete: %d final results", len(rerank_response.ranked_results))
+
         final_results = self._enrich_results(rerank_response.ranked_results)
-        
-        logger.info("Pipeline completado: %d resultados", len(final_results))
+
+        logger.info("Pipeline complete: %d results", len(final_results))
         return final_results
     
     def _enrich_results(self, rerank_results: List[RerankResult]) -> List[RetrievalResult]:
-        """
-        Convierte RerankResult a RetrievalResult con información enriquecida.
-        
-        Args:
-            rerank_results: Resultados del reranking
-        
-        Returns:
-            Lista de resultados enriquecidos
-        """
         enriched = []
-        
+
         for rr in rerank_results:
-            # Extraer contenido si está disponible
             content = None
             if rr.original_result.metadata and self.config.content_field in rr.original_result.metadata:
                 content = rr.original_result.metadata.get(self.config.content_field)
@@ -286,19 +230,7 @@ class TwoStageRetrievalPipeline:
         session_id: Optional[str] = None,
         excluded_chunk_ids: Optional[set[str]] = None,
     ) -> List[DiseaseResult]:
-        """
-        Búsqueda en tres etapas: híbrida → reranking → NER on-demand → agregación por enfermedad.
-
-        NER se calcula solo sobre los top-K chunks rerankeados (no durante indexado).
-
-        Args:
-            query: Query del usuario (síntomas, lab tests, etc.)
-            hybrid_candidates: Override de número de candidatos
-            final_results: Número de enfermedades a devolver (no de chunks para NER)
-
-        Returns:
-            Lista de enfermedades rankeadas con evidencia de soporte.
-        """
+        """Three-stage search: hybrid → reranking → on-demand NER → disease aggregation."""
         # NER needs enough chunks to find disease entities — always rerank at
         # least 20 chunks regardless of the requested number of final diseases.
         ner_k = max(final_results or self.config.final_results, 20)
@@ -311,10 +243,9 @@ class TwoStageRetrievalPipeline:
         )
 
         if not chunk_results:
-            logger.warning("No hay chunks para agregar en enfermedades")
+            logger.warning("No chunks available for disease aggregation")
             return []
 
-        # NER on-demand: calcular entidades solo para los chunks rerankeados
         self._apply_ner_to_results(chunk_results)
 
         if self.disease_aggregator is None:
@@ -326,7 +257,7 @@ class TwoStageRetrievalPipeline:
             )
 
         diseases = self.disease_aggregator.aggregate(chunk_results)
-        logger.info("Agregación completada: %d enfermedades identificadas", len(diseases))
+        logger.info("Aggregation complete: %d diseases identified", len(diseases))
         # Truncate to the originally requested k (not ner_k)
         requested_k = final_results or self.config.final_results
         return diseases[:requested_k]
@@ -338,15 +269,11 @@ class TwoStageRetrievalPipeline:
         final_results: Optional[int] = None,
         positioned_results: Optional[int] = None,
     ) -> list:
-        """
-        Búsqueda posicionada: híbrida → reranking → NER on-demand → posicionamiento clínico.
-
-        No modifica el comportamiento de search() ni search_diseases().
-        """
+        """Positioned search: hybrid → reranking → on-demand NER → clinical positioning."""
         chunk_results = self.search(query, hybrid_candidates, final_results)
 
         if not chunk_results:
-            logger.warning("No hay chunks para posicionamiento clínico")
+            logger.warning("No chunks available for clinical positioning")
             return []
 
         self._apply_ner_to_results(chunk_results)
@@ -368,15 +295,15 @@ class TwoStageRetrievalPipeline:
             retrieval_results=chunk_results,
             top_k=top_k,
         )
-        logger.info("Posicionamiento completado: %d condiciones", len(positioned))
+        logger.info("Positioning complete: %d conditions", len(positioned))
         return positioned
 
     def _apply_ner_to_results(self, results: List[RetrievalResult]) -> None:
-        """Aplica NER en batch sobre los chunks rerankeados e inyecta ner_entities en metadata."""
+        """Runs batch NER on reranked chunks and injects ner_entities into each result's metadata."""
         try:
             from sri_dx.adapters.embeddings.biomedical_ner_adapter import BiomedicalNERAdapter
         except ImportError:
-            logger.warning("BiomedicalNERAdapter no disponible. Enfermedades sin NER.")
+            logger.warning("BiomedicalNERAdapter not available. NER disabled.")
             return
 
         texts = []
@@ -388,7 +315,7 @@ class TwoStageRetrievalPipeline:
             return
 
         ner_adapter = BiomedicalNERAdapter.get_instance()
-        logger.info("Ejecutando NER on-demand sobre %d chunks rerankeados...", len(texts))
+        logger.info("Running on-demand NER on %d reranked chunks...", len(texts))
         batch_entities = ner_adapter.predict_batch(texts)
 
         for result, entities in zip(results, batch_entities):
@@ -407,9 +334,8 @@ class TwoStageRetrievalPipeline:
             result.metadata["ner_entities"] = ner_list
 
     def print_disease_results(self, diseases: List[DiseaseResult]) -> None:
-        """Imprime ranking de enfermedades de forma legible."""
         print("\n" + "=" * 80)
-        print(f"ENFERMEDADES IDENTIFICADAS: {len(diseases)}")
+        print(f"IDENTIFIED DISEASES: {len(diseases)}")
         print("=" * 80)
 
         for disease in diseases:
@@ -418,9 +344,8 @@ class TwoStageRetrievalPipeline:
         print("\n" + "=" * 80)
 
     def print_positioned_results(self, positioned: list) -> None:
-        """Imprime ranking de condiciones posicionadas de forma legible."""
         print("\n" + "=" * 80)
-        print(f"CONDICIONES POSICIONADAS: {len(positioned)}")
+        print(f"POSITIONED CONDITIONS: {len(positioned)}")
         print("=" * 80)
 
         for result in positioned:
@@ -429,9 +354,9 @@ class TwoStageRetrievalPipeline:
                 f"({result.relevance_label}, score={result.final_score:.4f})"
             )
             if result.matched_symptoms:
-                print(f"  Coincidencias: {', '.join(result.matched_symptoms)}")
+                print(f"  Matches: {', '.join(result.matched_symptoms)}")
             if result.source_domains:
-                print(f"  Fuentes: {', '.join(result.source_domains[:3])}")
+                print(f"  Sources: {', '.join(result.source_domains[:3])}")
             for explanation in result.explanation:
                 print(f"  - {explanation}")
             for evidence in result.evidences[:3]:
@@ -443,14 +368,8 @@ class TwoStageRetrievalPipeline:
         print("\n" + "=" * 80)
 
     def print_results(self, results: List[RetrievalResult]) -> None:
-        """
-        Imprime resultados de forma legible.
-        
-        Args:
-            results: Resultados a imprimir
-        """
         print("\n" + "=" * 80)
-        print(f"RESULTADOS FINALES: {len(results)} documentos")
+        print(f"FINAL RESULTS: {len(results)} documents")
         print("=" * 80)
         
         for result in results:
@@ -459,75 +378,3 @@ class TwoStageRetrievalPipeline:
         print("\n" + "=" * 80)
 
 
-def main():
-    """
-    Función principal para testing del pipeline.
-    
-    Permite hardcodear la query para pruebas rápidas.
-    """
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Query hardcodeada (modificar según necesidad)
-    HARDCODED_QUERY = ""
-    
-    print("\n" + "=" * 80)
-    print("TWO-STAGE RETRIEVAL PIPELINE - TEST")
-    print("=" * 80)
-    print(f"\nQuery: {HARDCODED_QUERY}\n")
-    
-    # TODO: Inicializar componentes reales
-    # Por ahora, este es un skeleton que muestra la estructura
-    
-    print("⚠️  NOTA: Para ejecutar este pipeline necesitas:")
-    print("  1. Configurar SearchHybridUseCase con:")
-    print("     - lexical_backend (OpenSearchAdapter o ElasticsearchAdapter)")
-    print("     - embedding_store (QdrantAdapter o ChromaAdapter)")
-    print("  2. Asegurarte de que los índices existen y tienen datos")
-    print("  3. Tener los modelos descargados (ClinicalBERT, cross-encoder)")
-    print("\nEjemplo de configuración:")
-    print("""
-    from sri_dx.adapters.stores import OpenSearchAdapter, QdrantAdapter
-    from sri_dx.usecases.search.search_hybrid import SearchHybridUseCase
-    from sri_dx.usecases.search.schemas import HybridSearchConfig
-    
-    # Configurar backends
-    lexical_backend = OpenSearchAdapter(...)
-    embedding_store = QdrantAdapter(...)
-    
-    # Crear usecase de búsqueda híbrida
-    hybrid_config = HybridSearchConfig(
-        fusion_method="rrf",
-        lexical_k=100,
-        semantic_k=100,
-    )
-    hybrid_search = SearchHybridUseCase(
-        lexical_backend=lexical_backend,
-        embedding_store=embedding_store,
-        config=hybrid_config,
-    )
-    
-    # Configurar pipeline
-    pipeline_config = TwoStageRetrievalConfig(
-        hybrid_candidates=100,
-        final_results=10,
-        cross_encoder_model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        device="cpu",
-    )
-    
-    # Crear y ejecutar pipeline
-    pipeline = TwoStageRetrievalPipeline(
-        hybrid_search=hybrid_search,
-        config=pipeline_config,
-    )
-    
-    results = pipeline.search(HARDCODED_QUERY)
-    pipeline.print_results(results)
-    """)
-
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
-# Core Schemas - Modelos de Datos del Sistema
-# Organizados por dominio para fácil navegación
+# Core Schemas - System Data Models
+# Organised by domain for easy navigation
 
 from .acquisition import (
     AcquiredDocument,

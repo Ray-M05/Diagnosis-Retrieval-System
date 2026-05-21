@@ -27,7 +27,7 @@ from sri_dx.modules.indexing.pipeline_version import PIPELINE_VERSION
 
 logger = logging.getLogger(__name__)
 
-_LOG_EVERY = 50  # Imprimir progreso cada N documentos
+_LOG_EVERY = 50  # Print progress every N documents
 
 
 def _print_progress(seen: int, total: int, chunks_seen: int, t0: float) -> None:
@@ -83,7 +83,7 @@ class IndexCombinedUseCase:
         else:
             print(f"  Estrategia overflow: ventana deslizante (overlap={self.chunk_cfg.overlap_chars} chars)")
 
-        # Contar total de documentos (contando líneas del JSONL, sin parsear)
+        # Count total documents (counting JSONL lines without parsing)
         total_docs = 0
         try:
             for p in self.source.paths:  # type: ignore[attr-defined]
@@ -168,7 +168,7 @@ class IndexCombinedUseCase:
         self.doc_sink.set_refresh_interval("1s")
         self.chunk_sink.set_refresh_interval("1s")
 
-        # Refresh siempre al final para que F4 vea los chunks inmediatamente
+        # Always refresh at the end so the embedding phase sees chunks immediately
         self.doc_sink.client.indices.refresh(index=self.doc_sink.cfg.index_name)
         self.chunk_sink.client.indices.refresh(index=self.chunk_sink.cfg.index_name)
 

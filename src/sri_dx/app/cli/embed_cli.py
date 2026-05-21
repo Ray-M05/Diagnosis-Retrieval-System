@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configura logging."""
+    """Configures logging."""
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
@@ -26,7 +26,7 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def progress_bar(current: int, total: int) -> None:
-    """Muestra barra de progreso simple."""
+    """Displays a simple progress bar."""
     pct = (current / total * 100) if total > 0 else 0
     bar_len = 30
     filled = int(bar_len * current / total) if total > 0 else 0
@@ -38,87 +38,87 @@ def progress_bar(current: int, total: int) -> None:
 
 
 def main() -> int:
-    """Punto de entrada del CLI."""
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Genera embeddings para chunks almacenados en OpenSearch."
+        description="Generates embeddings for chunks stored in OpenSearch."
     )
-    
-    # Conexión
+
+    # Connection
     parser.add_argument(
-        "--host", 
+        "--host",
         default="localhost",
-        help="Host de OpenSearch (default: localhost)"
+        help="OpenSearch host (default: localhost)"
     )
     parser.add_argument(
-        "--port", 
-        type=int, 
+        "--port",
+        type=int,
         default=9200,
-        help="Puerto de OpenSearch (default: 9200)"
+        help="OpenSearch port (default: 9200)"
     )
-    
-    # Índices
+
+    # Indices
     parser.add_argument(
         "--chunks-index",
         default="clinical_chunks_v1",
-        help="Nombre del índice de chunks (default: clinical_chunks_v1)"
+        help="Chunks index name (default: clinical_chunks_v1)"
     )
     parser.add_argument(
         "--embeddings-index",
         default="clinical_embeddings_v1",
-        help="Nombre del índice de embeddings (default: clinical_embeddings_v1)"
+        help="Embeddings index name (default: clinical_embeddings_v1)"
     )
-    
-    # Procesamiento
+
+    # Processing
     parser.add_argument(
         "--batch-size",
         type=int,
         default=128,
-        help="Tamaño de batch para embedding (default: 128)"
+        help="Batch size for embedding (default: 128)"
     )
     parser.add_argument(
         "--no-skip-existing",
         action="store_true",
-        help="Re-genera embeddings incluso si ya existen"
+        help="Re-generates embeddings even if they already exist"
     )
-    
-    # Filtros
+
+    # Filters
     parser.add_argument(
         "--seed-group",
-        help="Filtrar por seed_group"
+        help="Filter by seed_group"
     )
     parser.add_argument(
         "--source-domain",
-        help="Filtrar por source_domain"
+        help="Filter by source_domain"
     )
-    
+
     parser.add_argument(
         "--device",
         default="auto",
         choices=["auto", "cpu", "cuda"],
-        help="Dispositivo para inferencia (default: auto)"
+        help="Inference device (default: auto)"
     )
 
-    # Opciones
+    # Options
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Solo simula, no almacena embeddings"
+        help="Simulate only, do not store embeddings"
     )
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="Activa logging detallado"
+        help="Enable verbose logging"
     )
     parser.add_argument(
         "--no-progress",
         action="store_true",
-        help="Desactiva barra de progreso"
+        help="Disable progress bar"
     )
     
     args = parser.parse_args()
     setup_logging(args.verbose)
     
-    # Configurar UseCase
+    # Configure use case
     config = EmbedChunksConfig(
         chunks_host=args.host,
         chunks_port=args.port,
@@ -133,34 +133,34 @@ def main() -> int:
         source_domain=args.source_domain,
     )
     
-    logger.info("Iniciando generación de embeddings...")
+    logger.info("Starting embedding generation...")
     logger.info(f"  Chunks: {args.host}:{args.port}/{args.chunks_index}")
     logger.info(f"  Embeddings: {args.host}:{args.port}/{args.embeddings_index}")
-    
+
     if args.dry_run:
-        logger.info("  MODO DRY-RUN: No se almacenarán embeddings")
-    
-    # Ejecutar
+        logger.info("  DRY-RUN MODE: No embeddings will be stored")
+
+    # Run
     usecase = EmbedChunksUseCase(config)
     
     progress_cb = progress_bar if not args.no_progress else None
     result = usecase.run(dry_run=args.dry_run, progress_callback=progress_cb)
     
-    # Resultados
-    print("\n--- Resultados ---")
+    # Results
+    print("\n--- Results ---")
     print(f"Total chunks:       {result.total_chunks}")
     print(f"Embeddings gen.:    {result.embeddings_generated}")
-    print(f"Embeddings alm.:    {result.embeddings_stored}")
-    print(f"Saltados (exist.):  {result.skipped_already_embedded}")
-    print(f"Errores:            {len(result.errors)}")
-    print(f"Tiempo:             {result.processing_time_seconds:.2f}s")
-    
+    print(f"Embeddings stored:  {result.embeddings_stored}")
+    print(f"Skipped (exist.):   {result.skipped_already_embedded}")
+    print(f"Errors:             {len(result.errors)}")
+    print(f"Time:               {result.processing_time_seconds:.2f}s")
+
     if result.errors:
-        print("\nErrores:")
+        print("\nErrors:")
         for err in result.errors[:5]:
             print(f"  - {err}")
         if len(result.errors) > 5:
-            print(f"  ... y {len(result.errors) - 5} más")
+            print(f"  ... and {len(result.errors) - 5} more")
         return 1
     
     return 0

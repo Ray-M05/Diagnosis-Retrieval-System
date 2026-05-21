@@ -1,8 +1,8 @@
-"""Agregación de chunks rankeados en un ranking de enfermedades.
+"""Aggregation of ranked chunks into a disease ranking.
 
-Dado un conjunto de RetrievalResult (chunks rerankeados por cross-encoder),
-extrae entidades NER con label PROBLEM (enfermedades), las agrupa por nombre
-normalizado y produce un ranking de enfermedades ponderado por
+Given a set of RetrievalResult objects (chunks reranked by the cross-encoder),
+extracts NER entities with the PROBLEM label (diseases), groups them by
+normalised name and produces a disease ranking weighted by
 rerank_score × ner_confidence.
 """
 
@@ -52,7 +52,7 @@ _SINGLE_WORD_NOISE: frozenset[str] = frozenset({
 })
 
 
-# Acrónimos comunes → nombre canónico (expansión local, sin red)
+# Common acronyms -> canonical name (local expansion, no network call)
 _ACRONYM_MAP: Dict[str, str] = {
     "uti": "urinary tract infection",
     "utis": "urinary tract infection",
@@ -82,19 +82,19 @@ _ACRONYM_MAP: Dict[str, str] = {
 
 @dataclass
 class DiseaseAggregatorConfig:
-    """Configuración para la agregación de enfermedades."""
+    """Configuration for disease aggregation."""
 
-    min_ner_score: float = 0.5  # Confianza mínima de NER para considerar la entidad
-    max_diseases: int = 10  # Máximo de enfermedades a retornar
-    min_evidence_count: int = 1  # Mínimo de chunks para que una enfermedad califique
+    min_ner_score: float = 0.5  # Minimum NER confidence to consider an entity
+    max_diseases: int = 10  # Maximum number of diseases to return
+    min_evidence_count: int = 1  # Minimum number of chunks for a disease to qualify
 
 
 class DiseaseAggregator:
-    """Agrega chunks rerankeados en un ranking de enfermedades.
+    """Aggregates reranked chunks into a disease ranking.
 
-    Ranking por mejor posición en el ranking del cross-encoder.
-    Cada enfermedad se rankea por la posición más alta (más temprana)
-    en la que aparece y se cuenta la cantidad de chunks donde se menciona.
+    Ranks diseases by their best (earliest) position in the cross-encoder ranking.
+    Each disease is ranked by its highest (earliest) position and the number of
+    chunks in which it is mentioned.
     """
 
     def __init__(
@@ -106,13 +106,13 @@ class DiseaseAggregator:
         self._normalizer = normalizer
 
     def aggregate(self, retrieval_results: list) -> List[DiseaseResult]:
-        """Agrega resultados de chunks en un ranking de enfermedades.
+        """Aggregates chunk results into a disease ranking.
 
         Args:
-            retrieval_results: Lista de RetrievalResult del pipeline de dos etapas.
+            retrieval_results: List of RetrievalResult from the two-stage pipeline.
 
         Returns:
-            Lista de DiseaseResult ordenada por mejor posición en el ranking.
+            List of DiseaseResult ordered by best position in the ranking.
         """
         # disease_name_normalized → list of (evidence, display_name, position)
         disease_map: Dict[str, List[Tuple[DiseaseEvidence, str, int]]] = defaultdict(list)
@@ -173,17 +173,17 @@ class DiseaseAggregator:
             )
             disease_map[normalized].append((evidence, disease_text, position))
 
-        # Construir DiseaseResult por cada enfermedad
+        # Build one DiseaseResult per disease
         results: List[DiseaseResult] = []
         for normalized_name, entries in disease_map.items():
             if len(entries) < self.config.min_evidence_count:
                 continue
 
-            # Mejor posición (más temprana) en el ranking
+            # Best (earliest) position in the ranking
             best_position = min(pos for _, _, pos in entries)
             evidence_list = [ev for ev, _, _ in entries]
 
-            # Display name: usar el del chunk con mejor posición
+            # Display name: use the one from the chunk with the best position
             best_display = normalized_name
             for ev, display, pos in entries:
                 if pos == best_position:
@@ -200,7 +200,7 @@ class DiseaseAggregator:
                 )
             )
 
-        # Ordenar por mejor posición (menor = mejor)
+        # Sort by best position (lower = better)
         results.sort(key=lambda d: d.aggregated_score)
         for i, r in enumerate(results[: self.config.max_diseases]):
             r.rank = i + 1

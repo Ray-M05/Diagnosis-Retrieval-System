@@ -20,7 +20,7 @@ class SearchLexicalUseCase:
         with_facets: bool = True,
         with_highlights: bool = True,
     ) -> SearchResponse:
-        # Extraer conceptos de la consulta para expansión
+        # Extract query concepts for expansion
         extractor = ConceptExtractor()
         concepts = extractor.extract(query)
         

@@ -24,7 +24,7 @@ class IndexChunksOpenSearchUseCase:
         self.sink.ensure_index()
         self.sink.set_refresh_interval("-1")
         
-        # Opcional: ConceptExtractor (Módulo 4 / Fase D)
+        # Optional: ConceptExtractor (Module 4 / Phase D)
         extractor = None
         if with_concepts:
             try:
@@ -48,7 +48,7 @@ class IndexChunksOpenSearchUseCase:
         for doc in self.source.iter_documents():
             seen_docs += 1
             
-            # Dividir documento en trozos
+            # Split document into chunks
             chunks_gen = chunk_acquired_document(
                 doc,
                 cfg=self.chunk_cfg,
@@ -64,7 +64,7 @@ class IndexChunksOpenSearchUseCase:
                     indexed_ops += self.sink.bulk_upsert(batch, refresh=False)
                     batch.clear()
 
-        # Procesar resto del batch
+        # Flush remaining batch
         if batch:
             indexed_ops += self.sink.bulk_upsert(batch, refresh=False)
 

@@ -11,10 +11,10 @@ class SearchFilters:
     seed_groups: Optional[list[str]] = None
     seed_ids: Optional[list[str]] = None
 
-    # Fase D / opcional: filtrar por conceptos si ya los guardas en OpenSearch
+    # Phase D / optional: filter by concepts if stored in OpenSearch
     concept_ids: Optional[list[str]] = None
 
-    # rangos (ISO-8601 o fecha compatible con OpenSearch)
+    # date ranges (ISO-8601 or OpenSearch-compatible date)
     fetched_from: Optional[str] = None
     fetched_to: Optional[str] = None
 
@@ -31,6 +31,6 @@ class SearchRequest:
     # Highlights (snippets)
     return_highlights: bool = True
 
-    # Facetas (aggs). Si está vacío, no se calculan.
+    # Facets (aggs). If empty, no facets are computed.
     facet_fields: Sequence[str] = ("source_domain", "mime_type", "seed_group")
     facet_size: int = 20

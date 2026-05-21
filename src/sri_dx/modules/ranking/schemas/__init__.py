@@ -1,4 +1,4 @@
-"""Schemas para el módulo de ranking."""
+"""Schemas for the ranking module."""
 
 from .cross_encoder_config import CrossEncoderConfig
 from .rerank_schemas import (

@@ -5,8 +5,8 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class DiseaseNormalizerPort(Protocol):
-    """Resuelve un nombre de enfermedad a su forma canónica según una ontología externa."""
+    """Resolves a disease name to its canonical form according to an external ontology."""
 
     def normalize(self, disease_name: str) -> str:
-        """Retorna el nombre canónico, o el mismo nombre si no hay match."""
+        """Returns the canonical name, or the same name if no match is found."""
         ...

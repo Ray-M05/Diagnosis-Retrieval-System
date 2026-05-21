@@ -1,5 +1,5 @@
 # adapters/stores/opensearch_embedding_sink.py
-"""Adaptador para almacenar embeddings en OpenSearch."""
+"""Adapter for storing embeddings in OpenSearch."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _drop_none(d: dict) -> dict:
-    """Elimina claves con valor None."""
+    """Removes keys with None values."""
     return {k: v for k, v in d.items() if v is not None}
 
 
@@ -31,10 +31,10 @@ def _drop_none(d: dict) -> dict:
 
 class OpenSearchEmbeddingSink(EmbeddingStorePort):
     """
-    Implementación del EmbeddingStorePort para OpenSearch.
-    
-    Almacena embeddings en un índice separado con soporte kNN
-    para búsqueda por similitud coseno.
+    EmbeddingStorePort implementation for OpenSearch.
+
+    Stores embeddings in a dedicated index with kNN support
+    for cosine similarity search.
     """
     
     def __init__(self, cfg: OpenSearchEmbeddingConfig) -> None:
@@ -48,7 +48,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         )
     
     def ensure_index(self) -> None:
-        """Asegura que el índice de embeddings existe."""
+        """Ensures the embeddings index exists."""
         if not self.client.indices.exists(index=self.cfg.index_name):
             body = build_embeddings_index_body(
                 vector_dim=self.cfg.vector_dim,
@@ -58,9 +58,9 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
                 m=self.cfg.m,
             )
             self.client.indices.create(index=self.cfg.index_name, body=body)
-            logger.info(f"Índice {self.cfg.index_name} creado")
-        
-        # Asegurar alias
+            logger.info(f"Index {self.cfg.index_name} created")
+
+        # Ensure alias
         try:
             aliases = self.client.indices.get_alias(index=self.cfg.index_name)
             if self.cfg.alias_name not in aliases.get(self.cfg.index_name, {}).get("aliases", {}):
@@ -69,7 +69,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
             self.client.indices.put_alias(index=self.cfg.index_name, name=self.cfg.alias_name)
     
     def set_refresh_interval(self, interval: str) -> None:
-        """Cambia el refresh_interval del índice. Usar '-1' durante bulk masivo."""
+        """Changes the index refresh_interval. Use '-1' during bulk indexing."""
         self.client.indices.put_settings(
             index=self.cfg.index_name,
             body={"index": {"refresh_interval": interval}},
@@ -80,7 +80,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         embeddings: List[EmbeddingDocument],
         refresh: bool = False
     ) -> int:
-        """Almacena embeddings en bulk."""
+        """Stores embeddings in bulk."""
         if not embeddings:
             return 0
         
@@ -134,16 +134,16 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         filters: Optional[Dict[str, Any]] = None,
         min_score: float = 0.0
     ) -> List[EmbeddingSearchResult]:
-        """Búsqueda kNN por similitud coseno."""
+        """kNN search by cosine similarity."""
         import numpy as np
-        
-        # Normalizar vector para cosine similarity
+
+        # Normalize vector for cosine similarity
         query_vec = np.array(query_vector).flatten()
         norm = np.linalg.norm(query_vec)
         if norm > 0:
             query_vec = query_vec / norm
-        
-        # Construir query kNN
+
+        # Build kNN query
         knn_query = {
             "size": k,
             "query": {
@@ -162,7 +162,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
             ]
         }
         
-        # Agregar filtros si los hay
+        # Apply filters if provided
         if filters:
             filter_clauses = []
             for field, value in filters.items():
@@ -206,11 +206,11 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         self,
         chunk_ids: List[str]
     ) -> Dict[str, EmbeddingDocument]:
-        """Obtiene embeddings por IDs de chunk (paginado para >10K ids)."""
+        """Retrieves embeddings by chunk IDs (paginated for >10K ids)."""
         if not chunk_ids:
             return {}
 
-        PAGE = 5000  # Mantenerse bajo max_result_window (10000)
+        PAGE = 5000  # Stay below max_result_window (10000)
         result = {}
 
         for offset in range(0, len(chunk_ids), PAGE):
@@ -254,23 +254,23 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         return result
     
     def exists_for_chunks(
-        self, 
+        self,
         chunk_ids: List[str],
         chunk_hashes: Optional[Dict[str, str]] = None
     ) -> Dict[str, bool]:
-        """Verifica qué chunks ya tienen embeddings."""
+        """Checks which chunks already have embeddings."""
         if not chunk_ids:
             return {}
-        
-        # Buscar embeddings existentes
+
+        # Fetch existing embeddings
         existing = self.get_by_chunk_ids(chunk_ids)
-        
+
         result = {}
         for chunk_id in chunk_ids:
             if chunk_id not in existing:
                 result[chunk_id] = False
             elif chunk_hashes and chunk_id in chunk_hashes:
-                # Verificar si el hash coincide
+                # Verify hash match
                 existing_hash = existing[chunk_id].chunk_hash
                 result[chunk_id] = (existing_hash == chunk_hashes[chunk_id])
             else:
@@ -279,7 +279,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         return result
     
     def delete_by_chunk_ids(self, chunk_ids: List[str]) -> int:
-        """Elimina embeddings por IDs de chunk."""
+        """Deletes embeddings by chunk IDs."""
         if not chunk_ids:
             return 0
         
@@ -296,7 +296,7 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         return response.get("deleted", 0)
     
     def get_stats(self) -> Dict[str, Any]:
-        """Obtiene estadísticas del índice."""
+        """Returns index statistics."""
         try:
             count = self.client.count(index=self.cfg.index_name)
             stats = self.client.indices.stats(index=self.cfg.index_name)

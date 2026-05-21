@@ -1,5 +1,5 @@
-# UI - Interfaces de Usuario Gráficas
-# Incluye Streamlit y otras UIs
+# UI - Graphical User Interfaces
+# Includes Streamlit and other UIs
 
 from .ui_streamlit import main as run_streamlit_app
 

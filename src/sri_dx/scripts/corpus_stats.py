@@ -131,7 +131,6 @@ class CorpusStats:
         dup_docs = sum(c for c in self.content_hashes.values() if c > 1)
         dup_unique = sum(1 for c in self.content_hashes.values() if c > 1)
 
-        # ✅ versiones completas (para que puedas imprimir TODO)
         domains_full = dict(self.by_domain.most_common())
         headings_full = dict(self.heading_counter.most_common())
 
@@ -199,7 +198,6 @@ def iter_jsonl(path: Path):
                 continue
 
 def print_all_results(result: dict) -> None:
-    # ✅ imprime absolutamente TODO lo calculado
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 def main():
@@ -219,7 +217,7 @@ def main():
     out_path = Path("data/processed/corpus_stats.json")
     out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # ✅ Aquí está el cambio principal:
+    # Main output step:
     print_all_results(result)
 
     print("\nOK - wrote", out_path)

@@ -120,12 +120,12 @@ class EmbedChunksUseCase:
         start_time = time.time()
         result = EmbeddingBatchResult()
         
-        # Asegurar que el índice de embeddings existe
+        # Ensure the embeddings index exists
         if not dry_run:
             self.embedding_sink.ensure_index()
             self.embedding_sink.set_refresh_interval("-1")
         
-        # Construir filtros
+        # Build filters
         filters = self._build_filters()
         
         import sys
@@ -139,7 +139,7 @@ class EmbedChunksUseCase:
             print("  No hay chunks para procesar.")
             return result
 
-        # Si skip_existing, obtener hashes existentes
+        # If skip_existing, retrieve existing hashes
         existing_hashes: Dict[str, str] = {}
         if self.config.skip_existing:
             print("  Verificando embeddings ya existentes...")
@@ -152,7 +152,7 @@ class EmbedChunksUseCase:
             pending_count = total_chunks - result.skipped_already_embedded
             print(f"  Ya embebidos: {result.skipped_already_embedded}  Pendientes: {pending_count}")
 
-        # Procesar en batches con overlap I/O-compute
+        # Process in batches with I/O-compute overlap
         processed = 0
         t0_embed = start_time
 
@@ -178,7 +178,7 @@ class EmbedChunksUseCase:
                 batch_size=self.config.batch_size,
                 filters=filters
             ):
-                # Filtrar chunks que ya tienen embedding (si skip_existing)
+                # Filter out chunks that already have an embedding (if skip_existing)
                 if self.config.skip_existing:
                     batch = [
                         chunk for chunk in batch
@@ -189,16 +189,16 @@ class EmbedChunksUseCase:
                     continue
 
                 try:
-                    # Generar embeddings (compute)
+                    # Generate embeddings (compute)
                     embeddings = self.embedding_generator.generate_embeddings(batch)
                     result.embeddings_generated += len(embeddings)
 
-                    # Esperar store anterior si existe
+                    # Wait for previous store if pending
                     if pending_store is not None:
                         result.embeddings_stored += pending_store.result()
                         pending_store = None
 
-                    # Lanzar store en paralelo (I/O) mientras se genera el siguiente batch
+                    # Launch store in parallel (I/O) while the next batch is generated
                     if not dry_run and embeddings:
                         pending_store = pool.submit(self.embedding_sink.store_embeddings, embeddings)
 
@@ -209,12 +209,12 @@ class EmbedChunksUseCase:
 
                 processed += len(batch)
 
-                # Progress callback y consola
+                # Progress callback and console
                 if progress_callback:
                     progress_callback(processed, total_chunks)
                 _print_embed_progress(processed, total_chunks)
 
-            # Esperar último store pendiente
+            # Wait for the last pending store
             if pending_store is not None:
                 result.embeddings_stored += pending_store.result()
 

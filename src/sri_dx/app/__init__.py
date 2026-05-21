@@ -1,6 +1,6 @@
-# App - Interfaces de Usuario del Sistema
-# CLI: Comandos de línea de comandos
-# UI: Interfaces gráficas (Streamlit, etc.)
+# App - System User Interfaces
+# CLI: Command-line commands
+# UI: Graphical interfaces (Streamlit, etc.)
 
 from .cli import main
 

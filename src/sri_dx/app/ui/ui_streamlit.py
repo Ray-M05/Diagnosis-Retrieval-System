@@ -15,7 +15,7 @@ OPENSEARCH_PORT = 9200
 
 
 # ---------------------------------------------------------------------------
-# Inicialización lazy de componentes (cacheados en session_state)
+# Lazy initialisation of components (cached in session_state)
 # ---------------------------------------------------------------------------
 
 def _build_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: str):
@@ -46,7 +46,7 @@ def _build_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: st
         fusion_method=fusion,
         lexical_k=candidates,
         semantic_k=candidates,
-        use_reranking=False,  # reranking lo hace el pipeline de 2 etapas
+        use_reranking=False,  # reranking is handled by the two-stage pipeline
     )
     hybrid_search = SearchHybridUseCase(
         lexical_backend=lexical_backend,
@@ -65,7 +65,7 @@ def _build_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: st
 
 
 def get_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: str):
-    """Obtiene pipeline cacheado en session_state."""
+    """Returns the pipeline cached in session_state."""
     cache_key = f"pipeline_{fusion}_{candidates}_{final_k}_{rerank_model}"
     if cache_key not in st.session_state:
         with st.spinner("Cargando modelos (primera vez ~15s)..."):
@@ -74,7 +74,7 @@ def get_pipeline(fusion: str, candidates: int, final_k: int, rerank_model: str):
 
 
 # ---------------------------------------------------------------------------
-# Página principal
+# Main page
 # ---------------------------------------------------------------------------
 
 def main():
@@ -160,11 +160,11 @@ def main():
         )
         return
 
-    # ---- Ejecución ------------------------------------------------------
+    # ---- Execution ------------------------------------------------------
     try:
         pipeline = get_pipeline(fusion_method, k_candidates, k_final, rerank_model)
 
-        # Override config de diseases si aplica
+        # Override disease config if applicable
         if "Enfermedades" in search_mode or "Condiciones" in search_mode:
             pipeline.config.min_ner_score = min_ner_score
             pipeline.config.max_diseases = max_diseases
@@ -206,7 +206,7 @@ def main():
 # ---------------------------------------------------------------------------
 
 def _render_chunks(results, query: str, elapsed: float, fusion: str):
-    """Muestra resultados de chunks rerankeados."""
+    """Renders reranked chunk results."""
     st.success(f"✅ {len(results)} resultados en {elapsed:.2f}s — fusión: `{fusion}` + cross-encoder reranking")
 
     if not results:
@@ -239,7 +239,7 @@ def _render_chunks(results, query: str, elapsed: float, fusion: str):
 
 
 def _render_diseases(diseases, query: str, elapsed: float):
-    """Muestra resultados agregados por enfermedad."""
+    """Renders results aggregated by disease."""
     st.success(f"✅ {len(diseases)} enfermedades identificadas en {elapsed:.2f}s")
 
     if not diseases:
@@ -271,7 +271,7 @@ def _render_diseases(diseases, query: str, elapsed: float):
 
 
 def _render_positioned(positioned, query: str, elapsed: float):
-    """Muestra condiciones clinicas posicionadas."""
+    """Renders positioned clinical conditions."""
     st.success(f"✅ {len(positioned)} condiciones posicionadas en {elapsed:.2f}s")
 
     if not positioned:
