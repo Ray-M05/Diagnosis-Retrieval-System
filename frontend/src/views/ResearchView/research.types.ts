@@ -81,7 +81,7 @@ export interface WebSearchResponse {
   elapsed_seconds: number;
 }
 
-export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned' | 'web';
+export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned' | 'web' | 'rag';
 
 // ---------------------------------------------------------------------------
 // Evaluation module — qrels-based IR metric reports
@@ -96,6 +96,9 @@ export interface EvaluationMetrics {
   ndcg_at_k: number;
   fallout_at_k: number;
   r_precision: number;
+  top_1_hit?: number;
+  top_3_hit?: number;
+  rag_hit?: number;
 }
 
 export interface PerQueryResult {

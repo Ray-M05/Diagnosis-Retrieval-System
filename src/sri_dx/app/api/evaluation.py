@@ -30,13 +30,15 @@ def build_evaluation_router(
     PipelineStagesCls: type,
     get_evaluation_store: Callable[[], EvaluationStore | None],
     get_corpus_size: Callable[[], int],
+    rag_answer_fn: Callable[[str], str] | None = None,
+    is_rag_available: Callable[[], bool] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
     @router.post("/run")
     async def run_evaluation(
         qrels: UploadFile = File(...),
-        mode: Literal["hybrid", "diagnostic", "positioned", "web"] = Form(...),
+        mode: Literal["hybrid", "diagnostic", "positioned", "web", "rag"] = Form(...),
         k: int = Form(10),
     ):
         store = get_evaluation_store()
@@ -45,6 +47,13 @@ def build_evaluation_router(
 
         if k < 1 or k > 50:
             raise HTTPException(400, detail="k must be between 1 and 50.")
+
+        if mode == "rag":
+            if rag_answer_fn is None or (is_rag_available is not None and not is_rag_available()):
+                raise HTTPException(
+                    503,
+                    detail="RAG evaluation is not available — the LLM is unreachable.",
+                )
 
         raw_bytes = await qrels.read()
         try:
@@ -67,6 +76,7 @@ def build_evaluation_router(
                 mode=mode,
                 k=k,
                 corpus_size=corpus_size,
+                rag_answer_fn=rag_answer_fn,
             )
             report = evaluator.run()
             store.save_run(report)

@@ -129,6 +129,32 @@ def _build_evaluation_store():
     return EvaluationStore(db_path)
 
 
+def _regenerate_seed_qrels() -> None:
+    """Rebuild data/qrels/test_cases.jsonl from tests/TEST_CASES.md.
+
+    Runs the same logic as `python scripts/build_seed_qrels.py` so the seed
+    qrels served by GET /evaluation/seed-qrels is always in sync with the
+    Markdown source — contributors don't have to remember to run the script
+    after editing TEST_CASES.md.
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[3].parent
+    script_path = repo_root / "scripts" / "build_seed_qrels.py"
+    if not script_path.exists():
+        logger.warning("Seed qrels script not found at %s — skipping regeneration.", script_path)
+        return
+
+    import runpy
+    try:
+        runpy.run_path(str(script_path), run_name="__main__")
+    except SystemExit as exc:
+        if exc.code not in (None, 0):
+            logger.warning("Seed qrels regeneration exited with code %s.", exc.code)
+    except Exception as exc:
+        logger.warning("Seed qrels regeneration failed: %s", exc)
+
+
 def _compute_corpus_size() -> int:
     """Total indexed chunks — used as denominator for Fallout (closed-world)."""
     try:
@@ -249,6 +275,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if _pipeline is not None:
         _rag_uc, _llm_status = _build_rag_usecase(_pipeline)
+
+    _regenerate_seed_qrels()
 
     try:
         _evaluation_store = _build_evaluation_store()
@@ -742,11 +770,28 @@ app.include_router(build_feedback_router(
     diseases_to_response=_diseases_to_pipeline_response,
 ))
 
+def _rag_answer_for_eval(query: str) -> str:
+    """Blocking RAG call used by the evaluation `rag` mode.
+
+    Runs the same `ClinicalRAGUseCase` as the live endpoint but with an
+    empty `PatientChart`, captures the final answer and returns it as plain
+    text so the evaluator can search for the expected diagnosis in it.
+    Returns an empty string when the LLM is unavailable.
+    """
+    if _rag_uc is None:
+        return ""
+    from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
+    response = _rag_uc.run(_PatientChart(), query)
+    return getattr(response, "answer_markdown", "") or ""
+
+
 app.include_router(build_evaluation_router(
     execute_stages=_execute_pipeline_stages,
     PipelineStagesCls=PipelineStages,
     get_evaluation_store=lambda: _evaluation_store,
     get_corpus_size=lambda: _corpus_size,
+    rag_answer_fn=_rag_answer_for_eval,
+    is_rag_available=lambda: _rag_uc is not None,
 ))
 
 

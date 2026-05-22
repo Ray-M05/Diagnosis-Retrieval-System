@@ -121,12 +121,20 @@ def is_match(retrieved: str, expected: str, threshold: float = DEFAULT_MATCH_THR
     return head in _tokenize(retrieved)
 
 
-def has_match(retrieved: str, expected_list: list[str], threshold: float = DEFAULT_MATCH_THRESHOLD) -> bool:
+def has_match(
+    retrieved: str,
+    expected_list: list[str],
+    threshold: float = DEFAULT_MATCH_THRESHOLD,
+) -> bool:
     """True when `retrieved` matches any name in `expected_list`."""
     return any(is_match(retrieved, e, threshold) for e in expected_list)
 
 
-def any_match(retrieved_aliases: list[str], expected_list: list[str], threshold: float = DEFAULT_MATCH_THRESHOLD) -> bool:
+def any_match(
+    retrieved_aliases: list[str],
+    expected_list: list[str],
+    threshold: float = DEFAULT_MATCH_THRESHOLD,
+) -> bool:
     """True when any alias of the retrieved item matches any expected name.
 
     A "retrieved item" can carry several aliases (e.g. the NER-aggregated
@@ -134,4 +142,46 @@ def any_match(retrieved_aliases: list[str], expected_list: list[str], threshold:
     counts as long as at least one alias passes the threshold against at
     least one expected name.
     """
-    return any(is_match(alias, e, threshold) for alias in retrieved_aliases if alias for e in expected_list)
+    return any(
+        is_match(alias, e, threshold)
+        for alias in retrieved_aliases
+        if alias
+        for e in expected_list
+    )
+
+
+def text_contains_expected(
+    text: str,
+    expected: str,
+    threshold: float = DEFAULT_MATCH_THRESHOLD,
+) -> bool:
+    """True when the expected disease name appears in a free-text passage.
+
+    Used to score RAG answers: the LLM returns prose, not a ranked list, so
+    we look for the expected name inside the answer's tokens. Same rules as
+    `is_match`:
+
+    1. Token-set coverage: the answer contains at least `threshold` of the
+       expected name's content tokens.
+    2. Head-token rule: the answer contains the most specific clinical
+       token of the expected name.
+    """
+    if not text or not expected:
+        return False
+    text_norm = normalize_disease_name(text)
+    exp_norm = normalize_disease_name(expected)
+    if similarity(exp_norm, text_norm) >= threshold:
+        return True
+    head = _head_token(exp_norm)
+    if head is None:
+        return False
+    return head in _tokenize(text_norm)
+
+
+def text_contains_any(
+    text: str,
+    expected_list: list[str],
+    threshold: float = DEFAULT_MATCH_THRESHOLD,
+) -> bool:
+    """True when the text mentions any of the expected disease names."""
+    return any(text_contains_expected(text, e, threshold) for e in expected_list)

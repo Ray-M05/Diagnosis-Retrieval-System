@@ -52,7 +52,6 @@ export const ResearchView: React.FC = () => {
 
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
   const [subTab, setSubTab] = useState<SubTab>('results');
-  const [hybridFusion, setHybridFusion] = useState('weighted_sum');
   const [hybridCandidates, setHybridCandidates] = useState(20);
   const [finalResultsCount, setFinalResultsCount] = useState(3);
   const [refinedQuery, setRefinedQuery] = useState<string | null>(null);
@@ -124,6 +123,13 @@ export const ResearchView: React.FC = () => {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
+
+    if ((searchMode as string) === 'rag') {
+      // RAG mode is only meaningful via the evaluation pipeline; there is
+      // no equivalent per-query browsing UI here yet.
+      setSubTab('evaluation');
+      return;
+    }
 
     setIsSearching(true);
     setWebEnriched(false);
@@ -206,7 +212,6 @@ export const ResearchView: React.FC = () => {
   };
 
   // Hybrid configuration sliders are kept for future use (not all are routed yet)
-  void hybridFusion;
   void hybridCandidates;
 
   return (
@@ -214,8 +219,6 @@ export const ResearchView: React.FC = () => {
       <ResearchSidebar
         searchMode={searchMode}
         setSearchMode={setSearchMode}
-        hybridFusion={hybridFusion}
-        setHybridFusion={setHybridFusion}
         hybridCandidates={hybridCandidates}
         setHybridCandidates={setHybridCandidates}
         finalResultsCount={finalResultsCount}
@@ -236,7 +239,7 @@ export const ResearchView: React.FC = () => {
               }`}
             >
               <SearchIcon className="w-3.5 h-3.5" />
-              Resultados
+              Results
             </button>
             <button
               type="button"
@@ -248,7 +251,7 @@ export const ResearchView: React.FC = () => {
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              Evaluación
+              Evaluation
             </button>
           </div>
         </div>

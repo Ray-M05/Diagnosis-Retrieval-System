@@ -29,14 +29,15 @@ interface EvaluationPanelProps {
 }
 
 const METRIC_LABELS: { key: keyof EvaluationMetrics; label: string; tooltip: string }[] = [
-  { key: 'precision_at_k', label: 'P@k', tooltip: 'Precisión en los top-k recuperados' },
-  { key: 'recall_at_k', label: 'R@k', tooltip: 'Fracción de relevantes recuperados en top-k' },
-  { key: 'f1_at_k', label: 'F1@k', tooltip: 'Media armónica de P@k y R@k' },
+  { key: 'precision_at_k', label: 'P@k', tooltip: 'Precision among the top-k retrieved' },
+  { key: 'recall_at_k', label: 'R@k', tooltip: 'Fraction of relevant items retrieved in top-k' },
+  { key: 'f1_at_k', label: 'F1@k', tooltip: 'Harmonic mean of P@k and R@k' },
   { key: 'map', label: 'MAP', tooltip: 'Mean Average Precision' },
   { key: 'mrr', label: 'MRR', tooltip: 'Mean Reciprocal Rank' },
   { key: 'ndcg_at_k', label: 'NDCG@k', tooltip: 'Normalized Discounted Cumulative Gain' },
-  { key: 'fallout_at_k', label: 'Fallout@k', tooltip: 'Proporción de irrelevantes en el top-k (closed-world)' },
-  { key: 'r_precision', label: 'R-Precision', tooltip: 'P@R, con R = |relevantes|' },
+  { key: 'fallout_at_k', label: 'Fallout@k', tooltip: 'Share of irrelevant items in the top-k (closed-world)' },
+  { key: 'r_precision', label: 'R-Precision', tooltip: 'P@R, with R = |relevant|' },
+  { key: 'rag_hit', label: 'RAG hit', tooltip: 'Fraction of queries where the LLM answer mentions the expected diagnosis (RAG mode only)' },
 ];
 
 const fmt = (n: number | undefined) =>
@@ -87,7 +88,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
 
   const onRun = async () => {
     if (!qrelsContent.trim()) {
-      setError('Carga un archivo de qrels o usa el seed por defecto.');
+      setError('Upload a qrels file or load the default seed.');
       return;
     }
     setIsRunning(true);
@@ -132,17 +133,17 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
           <div>
             <h2 className="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-indigo-600" />
-              Evaluación IR
+              IR Evaluation
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Evaluando modo <span className="font-bold text-indigo-600 uppercase">{mode}</span> contra
-              juicios de relevancia (qrels).
+              Evaluating mode <span className="font-bold text-indigo-600 uppercase">{mode}</span> against
+              relevance judgments (qrels).
             </p>
           </div>
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 cursor-pointer hover:border-indigo-300 transition-colors">
               <Upload className="w-3.5 h-3.5" />
-              Subir qrels JSONL
+              Upload qrels JSONL
               <input
                 type="file"
                 accept=".jsonl,application/jsonl,text/plain"
@@ -161,7 +162,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
               ) : (
                 <Download className="w-3.5 h-3.5" />
               )}
-              {isLoadingSeed ? 'Cargando…' : 'Cargar seed'}
+              {isLoadingSeed ? 'Loading…' : 'Load seed'}
             </button>
           </div>
         </div>
@@ -172,9 +173,9 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
             <div className="text-xs">
               <p className="text-gray-400 font-bold uppercase tracking-tighter leading-none">Qrels</p>
               <p className="text-gray-900 font-bold">
-                {qrelsName || 'Ninguno cargado'}{' '}
+                {qrelsName || 'None loaded'}{' '}
                 {qrelsLineCount > 0 && (
-                  <span className="text-gray-500">· {qrelsLineCount} consultas</span>
+                  <span className="text-gray-500">· {qrelsLineCount} queries</span>
                 )}
               </p>
             </div>
@@ -205,7 +206,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
             ) : (
               <Play className="w-4 h-4" />
             )}
-            {isRunning ? 'Evaluando…' : 'Ejecutar evaluación'}
+            {isRunning ? 'Evaluating…' : 'Run evaluation'}
           </button>
         </div>
 
@@ -218,8 +219,8 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
 
         {qrelsContent && !report && (
           <div className="mt-3 text-[11px] text-gray-500">
-            <span className="font-semibold">Nota:</span> el modo <b>web</b> es no determinista (depende
-            de APIs externas) y puede ser más lento. Los demás modos son reproducibles.
+            <span className="font-semibold">Note:</span> the <b>web</b> mode is non-deterministic (depends
+            on external APIs) and may be slower. The other modes are reproducible.
           </div>
         )}
       </div>
@@ -230,36 +231,36 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
           {/* Run metadata */}
           <div className="bg-white border border-gray-100 rounded-2xl p-4 text-xs text-gray-600 flex flex-wrap gap-4">
             <span><b>Run:</b> #{report.run_id ?? '—'}</span>
-            <span><b>Modo:</b> {report.mode}</span>
+            <span><b>Mode:</b> {report.mode}</span>
             <span><b>k:</b> {report.k}</span>
-            <span><b>Nivel:</b> {report.level}</span>
+            <span><b>Level:</b> {report.level}</span>
             <span><b>Corpus:</b> {report.corpus_size.toLocaleString()} docs</span>
             <span><b>qrels SHA256:</b> {report.qrels_hash.slice(0, 12)}…</span>
             <span><b>Timestamp:</b> {new Date(report.timestamp).toLocaleString()}</span>
             {report.errors.length > 0 && (
-              <span className="text-red-700"><b>Errores:</b> {report.errors.length}</span>
+              <span className="text-red-700"><b>Errors:</b> {report.errors.length}</span>
             )}
           </div>
 
           {/* Macro metric cards — disease level */}
-          <MetricGrid title="Macro métricas (a nivel de enfermedad)" metrics={report.macro} />
+          <MetricGrid title="Macro metrics (disease level)" metrics={report.macro} />
 
           {/* Chunk-level metrics */}
           {hasChunkLevel && report.macro_chunk && (
-            <MetricGrid title="Macro métricas (a nivel de chunk/documento)" metrics={report.macro_chunk} accent="emerald" />
+            <MetricGrid title="Macro metrics (chunk / document level)" metrics={report.macro_chunk} accent="emerald" />
           )}
 
           {/* Per-query table */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 text-sm font-extrabold text-gray-900">
-              Detalle por consulta ({report.per_query.length})
+              Per-query detail ({report.per_query.length})
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50/60 text-gray-500 uppercase tracking-tighter font-bold">
                   <tr>
                     <th className="px-3 py-2 text-left">#</th>
-                    <th className="px-3 py-2 text-left">Consulta</th>
+                    <th className="px-3 py-2 text-left">Query</th>
                     <th className="px-3 py-2 text-right">P@k</th>
                     <th className="px-3 py-2 text-right">R@k</th>
                     <th className="px-3 py-2 text-right">F1@k</th>
@@ -290,7 +291,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                               type="button"
                               onClick={() => toggleExpand(idx)}
                               className="p-1 text-gray-400 hover:text-indigo-600"
-                              aria-label="Expandir detalle"
+                              aria-label="Expand details"
                             >
                               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </button>
@@ -303,10 +304,10 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                                 <div>
                                   <p className="font-bold text-gray-500 uppercase tracking-tighter mb-1">
-                                    Recuperados (enfermedades)
+                                    Retrieved (diseases)
                                   </p>
                                   {row.retrieved_disease_names.length === 0 ? (
-                                    <p className="text-gray-400 italic">— vacío —</p>
+                                    <p className="text-gray-400 italic">— empty —</p>
                                   ) : (
                                     <ol className="list-decimal list-inside space-y-0.5 text-gray-700">
                                       {row.retrieved_disease_names.map((d, i) => (
@@ -326,7 +327,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                                 </div>
                                 <div>
                                   <p className="font-bold text-gray-500 uppercase tracking-tighter mb-1">
-                                    Relevantes (qrels)
+                                    Relevant (qrels)
                                   </p>
                                   <ul className="space-y-0.5 text-gray-700">
                                     {row.relevant_disease_names.map((d, i) => (
@@ -337,7 +338,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                                 {row.chunk_metrics && (
                                   <div className="md:col-span-2 mt-1 p-2 bg-emerald-50/50 rounded-lg">
                                     <p className="font-bold text-emerald-700 uppercase tracking-tighter mb-1">
-                                      Métricas a nivel de chunk
+                                      Chunk-level metrics
                                     </p>
                                     <div className="grid grid-cols-4 gap-2 text-emerald-900">
                                       <span>P@k: <b>{fmt(row.chunk_metrics.precision_at_k)}</b></span>
@@ -366,7 +367,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100 text-sm font-extrabold text-gray-900 flex items-center gap-2">
             <History className="w-4 h-4 text-gray-400" />
-            Runs anteriores ({pastRuns.length})
+            Previous runs ({pastRuns.length})
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -374,7 +375,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                 <tr>
                   <th className="px-3 py-2 text-left">#</th>
                   <th className="px-3 py-2 text-left">Timestamp</th>
-                  <th className="px-3 py-2 text-left">Modo</th>
+                  <th className="px-3 py-2 text-left">Mode</th>
                   <th className="px-3 py-2 text-right">k</th>
                   <th className="px-3 py-2 text-right">P@k</th>
                   <th className="px-3 py-2 text-right">MAP</th>
@@ -398,7 +399,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                         onClick={() => onLoadPastRun(run.id)}
                         className="text-indigo-600 hover:underline font-semibold"
                       >
-                        Cargar
+                        Load
                       </button>
                     </td>
                   </tr>

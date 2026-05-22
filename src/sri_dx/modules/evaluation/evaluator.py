@@ -21,11 +21,19 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sri_dx.modules.evaluation import metrics as M
-from sri_dx.modules.evaluation.normalization import normalize_disease_name
+from sri_dx.modules.evaluation.normalization import (
+    normalize_disease_name,
+    text_contains_any,
+)
 from sri_dx.modules.evaluation.qrels import QrelEntry, Qrels
 
 
-SearchMode = str  # "hybrid" | "diagnostic" | "positioned" | "web"
+SearchMode = str  # "hybrid" | "diagnostic" | "positioned" | "web" | "rag"
+
+
+# Type of the optional RAG callable injected from the API layer.
+# Receives the raw query and returns the LLM's final answer as plain text.
+RagAnswerFn = Callable[[str], str]
 
 
 @dataclass
@@ -185,15 +193,19 @@ class BatchEvaluator:
         mode: SearchMode,
         k: int,
         corpus_size: int,
+        rag_answer_fn: RagAnswerFn | None = None,
     ) -> None:
-        if mode not in ("hybrid", "diagnostic", "positioned", "web"):
+        if mode not in ("hybrid", "diagnostic", "positioned", "web", "rag"):
             raise ValueError(f"Unknown mode: {mode!r}")
+        if mode == "rag" and rag_answer_fn is None:
+            raise ValueError("mode='rag' requires `rag_answer_fn` to be provided.")
         self._execute_stages = execute_stages
         self._PipelineStages = PipelineStagesCls
         self.qrels = qrels
         self.mode = mode
         self.k = k
         self.corpus_size = max(corpus_size, 1)
+        self._rag_answer_fn = rag_answer_fn
 
     def _stages_for_mode(self):
         cls = self._PipelineStages
@@ -203,8 +215,10 @@ class BatchEvaluator:
             return cls(web_enrichment=False, positioning=False, generation=False, raw_hybrid=False)
         if self.mode == "positioned":
             return cls(web_enrichment=False, positioning=True, generation=False, raw_hybrid=False)
-        # web
-        return cls(web_enrichment=True, positioning=False, generation=False, raw_hybrid=False)
+        if self.mode == "web":
+            return cls(web_enrichment=True, positioning=False, generation=False, raw_hybrid=False)
+        # rag — retrieval baseline; the LLM call is handled separately.
+        return cls(web_enrichment=False, positioning=False, generation=False, raw_hybrid=False)
 
     def _run_one(self, entry: QrelEntry) -> PerQueryResult:
         stages = self._stages_for_mode()
@@ -219,13 +233,38 @@ class BatchEvaluator:
             disease_aliases = _extract_disease_aliases_from_positioned(response.positioned or [])
             if not disease_aliases:
                 disease_aliases = _extract_disease_aliases_from_dtos(response.hybrid or [])
-        else:  # diagnostic, web
+        else:  # diagnostic, web, rag
             disease_aliases = _extract_disease_aliases_from_dtos(response.hybrid or [])
 
         disease_retrieved = _primary_names(disease_aliases)
-        disease_metrics = _disease_metrics(
-            disease_aliases, entry.relevant_disease_names, self.k, self.corpus_size
-        )
+
+        # RAG mode: the "retrieved" list that feeds IR metrics is REPLACED by
+        # the LLM's answer outcome. If the answer mentions the expected
+        # diagnosis, we treat it as a single-position perfect retrieval; if
+        # not, as an empty retrieval. This makes P@k / R@k / MRR / MAP / NDCG
+        # / top_*_hit reflect the end-to-end RAG quality rather than the
+        # retriever baseline. The retriever's actual top-k is still kept in
+        # `disease_retrieved` for inspection in the per-query detail view.
+        if self.mode == "rag" and self._rag_answer_fn is not None:
+            try:
+                answer_text = self._rag_answer_fn(entry.query) or ""
+            except Exception:
+                answer_text = ""
+            rag_hit_value = (
+                1.0 if text_contains_any(answer_text, entry.relevant_disease_names) else 0.0
+            )
+            if rag_hit_value > 0.0 and entry.relevant_disease_names:
+                metric_aliases: list[list[str]] = [list(entry.relevant_disease_names)]
+            else:
+                metric_aliases = []
+            disease_metrics = _disease_metrics(
+                metric_aliases, entry.relevant_disease_names, self.k, self.corpus_size
+            )
+            disease_metrics["rag_hit"] = rag_hit_value
+        else:
+            disease_metrics = _disease_metrics(
+                disease_aliases, entry.relevant_disease_names, self.k, self.corpus_size
+            )
 
         # Chunk-level metrics — only when the qrels entry provides chunk or doc IDs.
         chunk_retrieved: list[str] | None = None
