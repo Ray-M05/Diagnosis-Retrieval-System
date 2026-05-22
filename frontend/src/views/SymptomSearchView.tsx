@@ -5,6 +5,7 @@ import { DiseaseCard } from '../components/DiseaseCard';
 import { WebDocumentCard } from '../components/WebDocumentCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
+import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
 import { runPipeline } from '../api/client';
 import { useFeedback } from '../hooks/useFeedback';
 import type { Disease } from '../types';
