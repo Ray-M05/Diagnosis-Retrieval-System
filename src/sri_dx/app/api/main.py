@@ -593,6 +593,7 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
             if top_ev
             else f"{d.disease_name_display}:{d.rank}"
         )
+        url = (top_ev.url or "") if top_ev else ""
         dtos.append(DiseaseDTO(
             id=disease_id,
             name=d.disease_name_display,
