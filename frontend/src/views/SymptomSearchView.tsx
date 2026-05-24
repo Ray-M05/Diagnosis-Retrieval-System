@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ResultCard } from '../components/ResultCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
+import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
 import { runPipeline } from '../api/client';
 import { useFeedback } from '../hooks/useFeedback';
 import {
