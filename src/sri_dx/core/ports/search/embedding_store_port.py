@@ -1,5 +1,5 @@
 # core/ports/search/embedding_store_port.py
-"""Puerto para almacenamiento y recuperación de embeddings."""
+"""Port for embedding storage and retrieval."""
 
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ from sri_dx.core.schemas.search.vector_search_schema import (
 
 class EmbeddingStorePort(ABC):
     """
-    Puerto para almacenamiento y recuperación de embeddings vectoriales.
-    
-    Responsabilidades:
-    - Almacenar embeddings con metadata
-    - Búsqueda kNN por similitud
-    - Verificar si un chunk ya tiene embedding
+    Port for storing and retrieving vector embeddings.
+
+    Responsibilities:
+    - Store embeddings with metadata
+    - kNN search by similarity
+    - Check whether a chunk already has an embedding
     """
     
     @abstractmethod
@@ -33,14 +33,14 @@ class EmbeddingStorePort(ABC):
         refresh: bool = False
     ) -> int:
         """
-        Almacena embeddings en el índice.
-        
+        Stores embeddings in the index.
+
         Args:
-            embeddings: Lista de documentos de embedding
-            refresh: Si True, hace refresh del índice después de insertar
-            
+            embeddings: List of embedding documents
+            refresh: If True, refreshes the index after insertion
+
         Returns:
-            Número de embeddings almacenados con éxito
+            Number of embeddings successfully stored
         """
     
     @abstractmethod
@@ -52,16 +52,16 @@ class EmbeddingStorePort(ABC):
         min_score: float = 0.0
     ) -> List[EmbeddingSearchResult]:
         """
-        Busca embeddings similares al vector query.
-        
+        Searches for embeddings similar to the query vector.
+
         Args:
-            query_vector: Vector de búsqueda (debe ser mismo dim que índice)
-            k: Número de resultados
-            filters: Filtros adicionales (seed_group, source_domain, etc.)
-            min_score: Score mínimo para incluir en resultados
-            
+            query_vector: Query vector (must match index dimension)
+            k: Number of results
+            filters: Additional filters (seed_group, source_domain, etc.)
+            min_score: Minimum score to include in results
+
         Returns:
-            Lista de resultados ordenados por similitud descendente
+            List of results ordered by descending similarity
         """
     
     @abstractmethod
@@ -70,11 +70,11 @@ class EmbeddingStorePort(ABC):
         chunk_ids: List[str]
     ) -> Dict[str, EmbeddingDocument]:
         """
-        Obtiene embeddings por IDs de chunk.
-        
+        Retrieves embeddings by chunk IDs.
+
         Args:
-            chunk_ids: IDs de chunks a buscar
-            
+            chunk_ids: IDs of chunks to retrieve
+
         Returns:
             Dict mapping chunk_id -> EmbeddingDocument
         """
@@ -86,12 +86,12 @@ class EmbeddingStorePort(ABC):
         chunk_hashes: Optional[Dict[str, str]] = None
     ) -> Dict[str, bool]:
         """
-        Verifica qué chunks ya tienen embeddings.
-        
+        Checks which chunks already have embeddings.
+
         Args:
-            chunk_ids: IDs de chunks a verificar
-            chunk_hashes: Opcional - si se provee, también verifica que el hash coincida
-            
+            chunk_ids: IDs of chunks to check
+            chunk_hashes: Optional - if provided, also verifies that the hash matches
+
         Returns:
             Dict mapping chunk_id -> exists (True/False)
         """
@@ -99,17 +99,17 @@ class EmbeddingStorePort(ABC):
     @abstractmethod
     def delete_by_chunk_ids(self, chunk_ids: List[str]) -> int:
         """
-        Elimina embeddings por IDs de chunk.
-        
+        Deletes embeddings by chunk IDs.
+
         Returns:
-            Número de embeddings eliminados
+            Number of embeddings deleted
         """
     
     @abstractmethod
     def get_stats(self) -> Dict[str, Any]:
         """
-        Obtiene estadísticas del índice.
-        
+        Returns index statistics.
+
         Returns:
-            Dict con total_embeddings, index_size, etc.
+            Dict with total_embeddings, index_size, etc.
         """

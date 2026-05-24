@@ -1,12 +1,10 @@
 import React from 'react';
-import { Settings, Activity, Database, FlaskConical, MapPin, Globe } from 'lucide-react';
+import { Settings, Activity, Database, FlaskConical, MapPin, Globe, Sparkles } from 'lucide-react';
 import type { SearchMode } from './research.types';
 
 interface ResearchSidebarProps {
   searchMode: SearchMode;
   setSearchMode: (mode: SearchMode) => void;
-  hybridFusion: string;
-  setHybridFusion: (fusion: string) => void;
   hybridCandidates: number;
   setHybridCandidates: (count: number) => void;
   finalResultsCount: number;
@@ -16,8 +14,6 @@ interface ResearchSidebarProps {
 export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
   searchMode,
   setSearchMode,
-  hybridFusion,
-  setHybridFusion,
   hybridCandidates,
   setHybridCandidates,
   finalResultsCount,
@@ -94,6 +90,20 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
               </div>
               {(searchMode as string) === 'web' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
             </button>
+            <button
+              onClick={() => setSearchMode('rag' as SearchMode)}
+              className={`w-full px-4 py-3 rounded-xl text-left transition-all border flex items-center justify-between cursor-pointer ${
+                (searchMode as string) === 'rag'
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100'
+                  : 'bg-white border-gray-100 text-gray-600 hover:border-indigo-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles className={`w-4 h-4 ${(searchMode as string) === 'rag' ? 'text-indigo-200' : 'text-gray-400'}`} />
+                <span className="text-sm font-bold">RAG (Evaluation only)</span>
+              </div>
+              {(searchMode as string) === 'rag' && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+            </button>
           </div>
         </div>
 
@@ -101,23 +111,6 @@ export const ResearchSidebar: React.FC<ResearchSidebarProps> = ({
 
         <div className="space-y-6">
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Parameters</h3>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-600 flex justify-between">
-              <span>Hybrid fusion</span>
-              <span className="text-indigo-600 font-bold">
-                {hybridFusion === 'weighted_sum' ? 'CC' : 'RRF'}
-              </span>
-            </label>
-            <select
-              value={hybridFusion}
-              onChange={(e) => setHybridFusion(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-100 focus:outline-none cursor-pointer"
-            >
-              <option value="weighted_sum">Combined Scores (CC)</option>
-              <option value="rrf">Reciprocal Rank Fusion (RRF)</option>
-            </select>
-          </div>
 
           <div className="space-y-3">
             <label className="text-xs font-semibold text-gray-600 flex justify-between">

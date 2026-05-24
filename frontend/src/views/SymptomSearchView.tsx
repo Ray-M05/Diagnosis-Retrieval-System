@@ -1,86 +1,19 @@
 import React, { useState } from 'react';
 import { RefreshCw, Search, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DiseaseCard } from '../components/DiseaseCard';
-import { WebDocumentCard } from '../components/WebDocumentCard';
+import { ResultCard } from '../components/ResultCard';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
 import { WebEnrichmentBanner } from '../components/WebEnrichmentBanner';
 import { runPipeline } from '../api/client';
 import { useFeedback } from '../hooks/useFeedback';
+import {
+  findHybridForPositioned,
+  syntheticDiseaseFromPositioned,
+} from '../utils/matchPositioned';
 import type { Disease } from '../types';
-import type { PipelineResponse, PositionedResult } from '../api/client';
+import type { PipelineResponse } from '../api/client';
 import type { SearchBarModifier, SearchBarModifiers } from '../components/SearchBar';
-
-const relevanceColor: Record<string, string> = {
-  high: 'bg-green-100 text-green-700',
-  alta: 'bg-green-100 text-green-700',
-  medium: 'bg-amber-100 text-amber-700',
-  media: 'bg-amber-100 text-amber-700',
-  low: 'bg-gray-100 text-gray-500',
-  baja: 'bg-gray-100 text-gray-500',
-};
-
-const PositionedCard: React.FC<{ result: PositionedResult }> = ({ result }) => {
-  const [open, setOpen] = useState(false);
-  const color = relevanceColor[result.relevance_label?.toLowerCase()] ?? 'bg-gray-100 text-gray-500';
-
-  return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 text-xs font-black flex items-center justify-center shrink-0">
-            {result.rank}
-          </span>
-          <h3 className="font-bold text-gray-900 text-base leading-tight">
-            {result.disease_name_display}
-          </h3>
-        </div>
-        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${color}`}>
-          {result.relevance_label}
-        </span>
-      </div>
-
-      {result.matched_symptoms?.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {result.matched_symptoms.map((s) => (
-            <span key={s} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
-              {s}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {result.explanation?.length > 0 && (
-        <div>
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
-          >
-            {open ? 'Hide explanation' : 'View explanation'}
-          </button>
-          <AnimatePresence>
-            {open && (
-              <motion.ul
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="mt-2 space-y-1 overflow-hidden"
-              >
-                {result.explanation.map((line, i) => (
-                  <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
-                    <span className="mt-1 w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
-                    {line}
-                  </li>
-                ))}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const EmptyState: React.FC = () => (
   <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
@@ -95,7 +28,8 @@ const EmptyState: React.FC = () => (
 export const SymptomSearchView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: false });
+  // Positioning is always-on in this view. Only `web` is user-toggleable.
+  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: true });
   const [response, setResponse] = useState<PipelineResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refinedQuery, setRefinedQuery] = useState<string | null>(null);
@@ -114,7 +48,9 @@ export const SymptomSearchView: React.FC = () => {
   };
 
   const handleModifierToggle = (m: SearchBarModifier) => {
-    setModifiers((prev) => ({ ...prev, [m]: !prev[m] }));
+    // Only `web` is exposed to the user here; ignore other modifiers.
+    if (m !== 'web') return;
+    setModifiers((prev) => ({ ...prev, web: !prev.web }));
     clearAll();
   };
 
@@ -132,7 +68,7 @@ export const SymptomSearchView: React.FC = () => {
         k: 10,
         stages: {
           web_enrichment: modifiers.web,
-          positioning: modifiers.positioned,
+          positioning: true,
           generation: false,
         },
       });
@@ -178,7 +114,6 @@ export const SymptomSearchView: React.FC = () => {
       const refined = await feedback.refine(currentQuery, 10);
       setResponse(refined.results);
       setRefinedQuery(refined.refined_query);
-      setModifiers({ web: false, positioned: false });
       feedback.reset();
     } catch (err) {
       setError(String(err));
@@ -189,9 +124,21 @@ export const SymptomSearchView: React.FC = () => {
   const positioned = response?.positioned ?? null;
   const webEnriched = response?.web_enriched;
   const hasResults = response !== null;
-  const totalCount = modifiers.positioned
-    ? positioned?.length ?? 0
-    : hybridDiseases.length;
+
+  // Build the unified result list: prefer positioned (always on) and enrich
+  // each entry with its hybrid counterpart for description / source / feedback.
+  const unifiedItems =
+    positioned && positioned.length > 0
+      ? positioned.map((p) => {
+          const match = findHybridForPositioned(p, hybridDiseases);
+          return {
+            positioned: p,
+            disease: match ?? syntheticDiseaseFromPositioned(p),
+          };
+        })
+      : hybridDiseases.map((d) => ({ positioned: null, disease: d }));
+
+  const totalCount = unifiedItems.length;
 
   return (
     <div className="flex flex-col gap-10">
@@ -204,6 +151,7 @@ export const SymptomSearchView: React.FC = () => {
           isLoading={isSearching}
           placeholder="Enter symptoms (e.g. fever, cough...)"
           showModeToggles
+          showPositioningToggle={false}
           modifiers={modifiers}
           onModifierToggle={handleModifierToggle}
         />
@@ -240,13 +188,9 @@ export const SymptomSearchView: React.FC = () => {
               <div className="w-12 h-12 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin absolute inset-0" />
             </div>
             <p className="text-gray-500 font-medium animate-pulse">
-              {modifiers.web && modifiers.positioned
+              {modifiers.web
                 ? 'Searching web + analyzing positioning...'
-                : modifiers.web
-                ? 'Searching web sources...'
-                : modifiers.positioned
-                ? 'Analyzing clinical positioning...'
-                : 'Processing medical data...'}
+                : 'Analyzing clinical positioning...'}
             </p>
           </motion.div>
         ) : hasResults ? (
@@ -263,7 +207,7 @@ export const SymptomSearchView: React.FC = () => {
                   {totalCount} found
                 </span>
               </h2>
-              {!modifiers.positioned && feedback.hasFeedback && (
+              {feedback.hasFeedback && (
                 <button
                   type="button"
                   onClick={handleRefine}
@@ -282,71 +226,32 @@ export const SymptomSearchView: React.FC = () => {
               </div>
             )}
 
-            {modifiers.web && (
-              hybridDiseases.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {hybridDiseases.map((d, idx) => {
-                    const resultKey = [
-                      response?.query ?? searchTerm,
-                      d.id,
-                      d.feedback_doc_id,
-                      d.feedback_chunk_id,
-                      d.name,
-                      idx,
-                    ].join('|');
-                    return (
-                      <WebDocumentCard
-                        key={resultKey}
-                        disease={d}
-                        query={response?.query ?? searchTerm}
-                        onFeedback={handleFeedbackSubmit}
-                        onRetractFeedback={handleFeedbackRetract}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState />
-              )
-            )}
-
-            {!modifiers.web && !modifiers.positioned && (
-              hybridDiseases.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {hybridDiseases.map((d) => {
-                    const resultKey = [
-                      response?.query ?? searchTerm,
-                      d.id,
-                      d.feedback_doc_id,
-                      d.feedback_chunk_id,
-                      d.name,
-                    ].join('|');
-                    return (
-                      <DiseaseCard
-                        key={resultKey}
-                        disease={d}
-                        query={response?.query ?? searchTerm}
-                        onFeedback={handleFeedbackSubmit}
-                        onRetractFeedback={handleFeedbackRetract}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState />
-              )
-            )}
-
-            {modifiers.positioned && (
-              positioned && positioned.length > 0 ? (
-                <div className="flex flex-col gap-4">
-                  {positioned.map((r) => (
-                    <PositionedCard key={r.rank} result={r} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState />
-              )
+            {unifiedItems.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {unifiedItems.map((item, idx) => {
+                  const resultKey = [
+                    response?.query ?? searchTerm,
+                    item.disease.id,
+                    item.disease.feedback_doc_id,
+                    item.disease.feedback_chunk_id,
+                    item.disease.name,
+                    idx,
+                  ].join('|');
+                  return (
+                    <ResultCard
+                      key={resultKey}
+                      variant={item.positioned ? 'positioned' : 'hybrid'}
+                      disease={item.disease}
+                      positioned={item.positioned}
+                      query={response?.query ?? searchTerm}
+                      onFeedback={handleFeedbackSubmit}
+                      onRetractFeedback={handleFeedbackRetract}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState />
             )}
           </motion.div>
         ) : null}

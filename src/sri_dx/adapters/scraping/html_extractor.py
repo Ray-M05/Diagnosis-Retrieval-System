@@ -14,8 +14,8 @@ def _safe_text(el) -> str:
 
 def _pick_main_container(soup: BeautifulSoup):
     """
-    Heurística simple para reducir ruido:
-    prioriza <article> o <main>, luego <body>.
+    Simple heuristic to reduce noise:
+    prefers <article> or <main>, falls back to <body>.
     """
     for tag in ("article", "main"):
         found = soup.find(tag)
@@ -51,7 +51,7 @@ class SimpleHtmlExtractor(HtmlExtractorPort):
             h1 = container.find("h1") if container else soup.find("h1")
             title = _safe_text(h1) if h1 else None
 
-        # ---- out links (sin filtrar aquí; el módulo los filtrará)
+        # ---- out links (not filtered here; the module will filter them)
         out_links: list[str] = []
         for a in container.find_all("a", href=True):
             href = str(a.get("href", "")).strip()
@@ -70,7 +70,7 @@ class SimpleHtmlExtractor(HtmlExtractorPort):
                 sections.append(Section(heading=current_heading, text=txt))
             current_parts = []
 
-        # Recorremos headings + texto típico
+        # Iterate headings + typical text elements
         for el in container.find_all(["h1", "h2", "h3", "p", "li"]):
             if el.name in {"h1", "h2", "h3"}:
                 flush()
@@ -93,7 +93,7 @@ class SimpleHtmlExtractor(HtmlExtractorPort):
         else:
             body = _safe_text(container)
 
-        # ---- page_meta_partial (solo explícito)
+        # ---- page_meta_partial (explicit values only)
         page_meta: dict = {}
 
         # language
@@ -107,7 +107,7 @@ class SimpleHtmlExtractor(HtmlExtractorPort):
         if author and author.get("content"):
             page_meta["author"] = str(author["content"]).strip()
 
-        # published/updated (metas comunes)
+        # published/updated (common meta tags)
         pub = soup.find("meta", attrs={"property": "article:published_time"})
         if pub and pub.get("content"):
             page_meta["published_at"] = str(pub["content"]).strip()

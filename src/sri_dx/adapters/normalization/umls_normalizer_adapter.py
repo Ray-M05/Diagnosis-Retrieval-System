@@ -1,13 +1,11 @@
-"""Adapter UMLS REST API para normalización de nombres de enfermedades.
+"""UMLS REST API adapter for disease name normalization.
 
-Flujo:
-  1. POST /auth/token  → obtiene TGT (Ticket Granting Ticket) con la API key
-  2. POST {tgt_url}    → obtiene ST (Service Ticket) para el endpoint de búsqueda
-  3. GET  /search/current?string=...&sabs=SNOMEDCT_US,MSH → busca conceptos
-  4. Retorna el nombre preferido (preferredName) del primer resultado
+Authentication flow:
+  1. POST /auth/token  → obtain TGT (Ticket Granting Ticket) using the API key
+  2. POST {tgt_url}    → obtain a single-use ST (Service Ticket)
+  3. GET  /search/current?string=...&sabs=SNOMEDCT_US,MSH → search concepts
 
-Los tickets ST son de un solo uso; el TGT dura ~8 horas.
-Se cachea el TGT en memoria para evitar re-autenticación por cada lookup.
+The TGT is cached in memory (~8 h lifetime) to avoid re-authentication per lookup.
 """
 
 from __future__ import annotations
@@ -25,12 +23,12 @@ _UMLS_AUTH_URL = "https://utslogin.nlm.nih.gov/cas/v1/api-key"
 _UMLS_SEARCH_URL = "https://uts-ws.nlm.nih.gov/rest/search/current"
 _UMLS_SERVICE = "http://umlsks.nlm.nih.gov"
 
-# Vocabularios en orden de prioridad: SNOMED CT US, MeSH, OMIM, ICD-10-CM
+# Priority order: SNOMED CT US, MeSH, OMIM, ICD-10-CM
 _DEFAULT_SABS = "SNOMEDCT_US,MSH,OMIM,ICD10CM"
 
 
 class UMLSNormalizerAdapter:
-    """Normaliza nombres de enfermedades via UMLS Metathesaurus REST API."""
+    """Normalizes disease names via UMLS Metathesaurus REST API."""
 
     def __init__(
         self,
@@ -39,7 +37,7 @@ class UMLSNormalizerAdapter:
         timeout_s: float = 5.0,
     ) -> None:
         if not api_key:
-            raise ValueError("UMLS_API_KEY es requerida")
+            raise ValueError("UMLS_API_KEY is required")
         self._api_key = api_key
         self._sabs = sabs
         self._timeout = timeout_s
@@ -53,7 +51,7 @@ class UMLSNormalizerAdapter:
     # ------------------------------------------------------------------
 
     def normalize(self, disease_name: str) -> str:
-        """Retorna nombre canónico UMLS o el mismo nombre si no hay match."""
+        """Returns the canonical UMLS name, or the original name if no match found."""
         key = disease_name.strip().lower()
         if not key:
             return disease_name
@@ -64,7 +62,7 @@ class UMLSNormalizerAdapter:
         try:
             canonical = self._lookup(key)
         except Exception as exc:
-            logger.warning("UMLS lookup falló para '%s': %s", disease_name, exc)
+            logger.warning("UMLS lookup failed for '%s': %s", disease_name, exc)
             canonical = disease_name
 
         self._cache[key] = canonical
@@ -75,7 +73,7 @@ class UMLSNormalizerAdapter:
     # ------------------------------------------------------------------
 
     def _get_tgt(self) -> str:
-        """Obtiene o reutiliza el Ticket Granting Ticket (válido ~8 horas)."""
+        """Returns a cached TGT (valid ~8 h) or acquires a new one."""
         with self._lock:
             if self._tgt_url and time.time() < self._tgt_expires_at:
                 return self._tgt_url
@@ -86,13 +84,12 @@ class UMLSNormalizerAdapter:
                 timeout=self._timeout,
             )
             resp.raise_for_status()
-            # La URL del TGT viene en el header Location
             tgt_url = resp.headers.get("location") or resp.url
             if not tgt_url or "TGT" not in tgt_url:
-                raise RuntimeError(f"No se pudo obtener TGT: {resp.text[:200]}")
+                raise RuntimeError(f"Could not obtain TGT: {resp.text[:200]}")
 
             self._tgt_url = tgt_url
-            self._tgt_expires_at = time.time() + 8 * 3600 - 60  # margen 1 min
+            self._tgt_expires_at = time.time() + 8 * 3600 - 60  # 1-minute safety margin
             return self._tgt_url
 
     def _get_service_ticket(self) -> str:

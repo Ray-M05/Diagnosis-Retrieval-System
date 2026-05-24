@@ -1,5 +1,5 @@
 # usecases/search/search_hybrid.py
-"""UseCase para búsqueda híbrida (léxica + semántica)."""
+"""Use case for hybrid search (lexical + semantic)."""
 
 from __future__ import annotations
 
@@ -26,32 +26,32 @@ from sri_dx.modules.ranking.schemas import (
 logger = logging.getLogger(__name__)
 
 
-# HybridSearchConfig ahora está en usecases.search.schemas.hybrid_search_config
+# HybridSearchConfig is now in usecases.search.schemas.hybrid_search_config
 
 
 @dataclass
 class SearchHybridUseCase:
     """
-    UseCase para búsqueda híbrida combinando:
-    - Búsqueda léxica (BM25) sobre documentos completos
-    - Búsqueda semántica (kNN) sobre embeddings de chunks
-    
-    Fusiona resultados usando RRF o suma ponderada.
-    
-    Flujo:
-    1. Ejecuta búsqueda léxica en paralelo con semántica
-    2. Mapea chunk_ids → doc_ids para búsqueda semántica
-    3. Fusiona rankings usando método configurado (RRF/weighted_sum)
-    4. Enriquece resultados con metadatos de ambas fuentes
-    
-    Uso:
+    Use case for hybrid search combining:
+    - Lexical search (BM25) over full documents
+    - Semantic search (kNN) over chunk embeddings
+
+    Fuses results using RRF or weighted sum.
+
+    Flow:
+    1. Runs lexical and semantic search
+    2. Maps chunk_ids -> doc_ids for semantic results
+    3. Fuses rankings using the configured method (RRF/weighted_sum)
+    4. Enriches results with metadata from both sources
+
+    Usage:
         config = HybridSearchConfig(fusion_method="rrf")
         use_case = SearchHybridUseCase(
             lexical_backend=lexical_backend,
             embedding_store=embedding_store,
             config=config
         )
-        results = use_case.search(query="diabetes tratamiento", k=10)
+        results = use_case.search(query="diabetes treatment", k=10)
     """
     
     lexical_backend: SearchBackendPort
@@ -66,7 +66,7 @@ class SearchHybridUseCase:
             self.bert_adapter = ClinicalBERTAdapter.get_instance()
         
         if self.cross_encoder is None and self.config.use_reranking:
-            logger.info(f"Inicializando cross-encoder: {self.config.rerank_model_name}")
+            logger.info(f"Initializing cross-encoder: {self.config.rerank_model_name}")
             ce_config = CrossEncoderConfig(
                 model_name=self.config.rerank_model_name,
                 batch_size=self.config.rerank_batch_size,
@@ -83,45 +83,45 @@ class SearchHybridUseCase:
         metadata_filters: Optional[Dict[str, Any]] = None
     ) -> List[HybridSearchResult]:
         """
-        Búsqueda híbrida fusionando léxica + semántica.
-        
+        Hybrid search fusing lexical + semantic results.
+
         Args:
-            query: Texto de consulta
-            k: Número de resultados finales
-            filters: Filtros para búsqueda léxica
-            metadata_filters: Filtros para búsqueda semántica
-            
+            query: Query text
+            k: Number of final results
+            filters: Filters for lexical search
+            metadata_filters: Filters for semantic search
+
         Returns:
-            Resultados híbridos ordenados por score fusionado
+            Hybrid results ordered by fused score
         """
         if not query.strip():
-            logger.warning("Query vacío en búsqueda híbrida")
+            logger.warning("Empty query in hybrid search")
             return []
-        
-        logger.info(f"Búsqueda híbrida: '{query[:100]}...' (k={k})")
-        
-        # 1. Búsqueda léxica
+
+        logger.info(f"Hybrid search: '{query[:100]}...' (k={k})")
+
+        # 1. Lexical search
         lexical_results = self._lexical_search(query, filters)
-        logger.debug(f"Búsqueda léxica: {len(lexical_results)} resultados")
-        
-        # 2. Búsqueda semántica  
+        logger.debug(f"Lexical search: {len(lexical_results)} results")
+
+        # 2. Semantic search
         semantic_results = self._semantic_search(query, metadata_filters)
-        logger.debug(f"Búsqueda semántica: {len(semantic_results)} resultados")
-        
-        # 3. Fusionar resultados
+        logger.debug(f"Semantic search: {len(semantic_results)} results")
+
+        # 3. Fuse results
         fused_results = self._fuse_results(
             lexical_results,
             semantic_results,
             k if not self.config.use_reranking else self.config.lexical_k
         )
-        
-        # 4. Reranking (opcional)
+
+        # 4. Reranking (optional)
         final_results = fused_results
         if self.config.use_reranking and self.cross_encoder:
-            logger.info(f"Ejecutando reranking sobre {len(fused_results)} candidatos")
+            logger.info(f"Running reranking over {len(fused_results)} candidates")
             final_results = self._rerank(query, fused_results, k)
-        
-        logger.info(f"Búsqueda híbrida completada: {len(final_results)} resultados")
+
+        logger.info(f"Hybrid search completed: {len(final_results)} results")
         return final_results
     
     def _lexical_search(
@@ -130,10 +130,10 @@ class SearchHybridUseCase:
         filters: Optional[SearchFilters]
     ) -> List[Tuple[str, float, Dict[str, Any]]]:
         """
-        Ejecuta búsqueda léxica.
-        
+        Runs lexical search.
+
         Returns:
-            Lista de (doc_id, score, metadata)
+            List of (doc_id, score, metadata)
         """
         # Expansion by concepts
         extractor = ConceptExtractor()
@@ -185,16 +185,16 @@ class SearchHybridUseCase:
         filters: Optional[Dict[str, Any]]
     ) -> List[Tuple[str, float, Dict[str, Any]]]:
         """
-        Ejecuta búsqueda semántica.
-        
+        Runs semantic search.
+
         Returns:
-            Lista de (doc_id, score, metadata) con doc_ids mapeados desde chunks
+            List of (doc_id, score, metadata) with doc_ids mapped from chunks
         """
-        # Generar embedding de query
+        # Encode the query
         query_embedding = self.bert_adapter.encode([query])
         query_vector = query_embedding[0].numpy()
-        
-        # Buscar chunks similares
+
+        # Search for similar chunks
         chunk_results = self.embedding_store.search_similar(
             query_vector=query_vector,
             k=self.config.semantic_k,
@@ -202,14 +202,14 @@ class SearchHybridUseCase:
             min_score=self.config.min_semantic_score
         )
         
-        # Mapear chunk_id → doc_id y agregar metadatos
+        # Map chunk_id -> doc_id and attach metadata
         results = []
         for chunk_result in chunk_results:
             metadata = {
                 "chunk_id": chunk_result.chunk_id,
                 "doc_id": chunk_result.doc_id,
                 "chunk_text_preview": chunk_result.chunk_text_preview,
-                "content": chunk_result.chunk_text_preview,  # Alias para reranker
+                "content": chunk_result.chunk_text_preview,  # Alias for reranker
                 "section_heading": chunk_result.section_heading,
                 "source_domain": chunk_result.metadata.get("source_domain") if chunk_result.metadata else None,
                 "seed_group": chunk_result.metadata.get("seed_group") if chunk_result.metadata else None,
@@ -227,15 +227,15 @@ class SearchHybridUseCase:
         k: int
     ) -> List[HybridSearchResult]:
         """
-        Fusiona resultados léxicos y semánticos.
-        
+        Fuses lexical and semantic results.
+
         Args:
-            lexical_results: Resultados de búsqueda léxica
-            semantic_results: Resultados de búsqueda semántica
-            k: Número de resultados finales
-            
+            lexical_results: Results from lexical search
+            semantic_results: Results from semantic search
+            k: Number of final results
+
         Returns:
-            Resultados híbridos ordenados por score fusionado
+            Hybrid results ordered by fused score
         """
         if self.config.fusion_method == "rrf":
             return self._fuse_with_rrf(lexical_results, semantic_results, k)
@@ -243,8 +243,8 @@ class SearchHybridUseCase:
             return self._fuse_with_weighted_sum(lexical_results, semantic_results, k)
         else:
             logger.warning(
-                f"Método de fusión desconocido: {self.config.fusion_method}, "
-                f"usando RRF"
+                f"Unknown fusion method: {self.config.fusion_method}, "
+                f"falling back to RRF"
             )
             return self._fuse_with_rrf(lexical_results, semantic_results, k)
     
@@ -254,32 +254,32 @@ class SearchHybridUseCase:
         semantic_results: List[Tuple[str, float, Dict[str, Any]]],
         k: int
     ) -> List[HybridSearchResult]:
-        """Fusión con Reciprocal Rank Fusion."""
-        # Extraer rankings (ahora chunk_ids)
+        """Fusion using Reciprocal Rank Fusion."""
+        # Extract rankings (chunk_ids)
         lexical_ranking = [chunk_id for chunk_id, _, _ in lexical_results]
         semantic_ranking = [chunk_id for chunk_id, _, _ in semantic_results]
         
         lexical_meta = {chunk_id: (score, meta) for chunk_id, score, meta in lexical_results}
         
-        # Para semántica
+        # Semantic metadata
         semantic_meta: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         for chunk_id, score, meta in semantic_results:
             if chunk_id not in semantic_meta or score > semantic_meta[chunk_id][0]:
                 semantic_meta[chunk_id] = (score, meta)
-        
-        # Aplicar RRF
+
+        # Apply RRF
         fused_scores = reciprocal_rank_fusion(
             rankings=[lexical_ranking, semantic_ranking],
             k=self.config.rrf_k
         )
         
-        # Construir resultados híbridos
+        # Build hybrid results
         results = []
         for chunk_id, rrf_score in fused_scores[:k]:
             lexical_score = lexical_meta.get(chunk_id, (0.0, {}))[0]
             semantic_score = semantic_meta.get(chunk_id, (0.0, {}))[0]
-            
-            # Combinar metadatos
+
+            # Merge metadata
             metadata = {}
             if chunk_id in lexical_meta:
                 metadata.update(lexical_meta[chunk_id][1])
@@ -304,8 +304,7 @@ class SearchHybridUseCase:
         semantic_results: List[Tuple[str, float, Dict[str, Any]]],
         k: int
     ) -> List[HybridSearchResult]:
-        """Fusión con suma ponderada de scores."""
-        # Preparar datos
+        """Fusion using weighted score sum."""
         lexical_ranking = [chunk_id for chunk_id, _, _ in lexical_results]
         lexical_scores = [score for _, score, _ in lexical_results]
         
@@ -319,7 +318,7 @@ class SearchHybridUseCase:
             if chunk_id not in semantic_meta or score > semantic_meta[chunk_id][0]:
                 semantic_meta[chunk_id] = (score, meta)
         
-        # Aplicar weighted sum
+        # Apply weighted sum
         fused_scores = weighted_sum_fusion(
             rankings_with_scores=[
                 (lexical_ranking, lexical_scores),
@@ -329,13 +328,13 @@ class SearchHybridUseCase:
             normalize=self.config.normalize_scores
         )
         
-        # Construir resultados híbridos
+        # Build hybrid results
         results = []
         for chunk_id, combined_score in fused_scores[:k]:
             lexical_score = lexical_meta.get(chunk_id, (0.0, {}))[0]
             semantic_score = semantic_meta.get(chunk_id, (0.0, {}))[0]
-            
-            # Combinar metadatos
+
+            # Merge metadata
             metadata = {}
             if chunk_id in lexical_meta:
                 metadata.update(lexical_meta[chunk_id][1])
@@ -361,15 +360,15 @@ class SearchHybridUseCase:
         k: int
     ) -> List[HybridSearchResult]:
         """
-        Ejecuta reranking con cross-encoder.
-        
+        Runs reranking with the cross-encoder.
+
         Args:
-            query: Query original
-            results: Resultados fusionados (candidatos)
-            k: Número de resultados finales
-            
+            query: Original query
+            results: Fused results (candidates)
+            k: Number of final results
+
         Returns:
-            Lista de resultados reordenados por el cross-encoder
+            List of results reordered by the cross-encoder
         """
         if not results:
             return []
@@ -385,10 +384,10 @@ class SearchHybridUseCase:
         
         reranked_results = []
         for rr in response.ranked_results:
-            # Actualizar el HybridSearchResult con el score del rerank
+            # Update the HybridSearchResult with the rerank score
             res = rr.original_result
             res.rerank_score = rr.rerank_score
-            res.score = rr.rerank_score  # El score "principal" ahora es el del rerank
+            res.score = rr.rerank_score  # The "main" score is now the rerank score
             res.fusion_method = "cross-encoder"
             reranked_results.append(res)
             

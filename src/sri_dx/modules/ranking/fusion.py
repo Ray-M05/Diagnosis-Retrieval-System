@@ -1,5 +1,5 @@
 # modules/ranking/fusion.py
-"""Utilidades para fusión de rankings (RRF, weighted sum, etc.)."""
+"""Utilities for ranking fusion (RRF, weighted sum, etc.)."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def reciprocal_rank_fusion(
     
     rrf_scores: Dict[str, float] = {}
     
-    # Calcular RRF para cada documento
+    # Compute RRF contribution for each document
     for ranking_idx, ranking in enumerate(rankings):
         for position, doc_id in enumerate(ranking):
             rank = position + 1  # 1-indexed
@@ -59,16 +59,16 @@ def reciprocal_rank_fusion(
             
             rrf_scores[doc_id] += rrf_contribution
     
-    # Ordenar por score descendente
+    # Sort by descending score
     sorted_items = sorted(
         rrf_scores.items(),
         key=lambda x: x[1],
         reverse=True
     )
-    
+
     logger.debug(
         f"RRF fusion: {len(rankings)} rankings → "
-        f"{len(rrf_scores)} docs únicos"
+        f"{len(rrf_scores)} unique docs"
     )
     
     return sorted_items
@@ -94,21 +94,21 @@ def weighted_sum_fusion(
         return []
     
     n_rankings = len(rankings_with_scores)
-    
-    # Pesos por defecto (iguales)
+
+    # Default weights (equal)
     if weights is None:
         weights = [1.0 / n_rankings] * n_rankings
-    
+
     if len(weights) != n_rankings:
         raise ValueError(
-            f"Número de pesos ({len(weights)}) != "
-            f"número de rankings ({n_rankings})"
+            f"Number of weights ({len(weights)}) != "
+            f"number of rankings ({n_rankings})"
         )
     
     combined_scores: Dict[str, float] = {}
     
     for (ranking, scores), weight in zip(rankings_with_scores, weights):
-        # Normalizar scores si es necesario
+        # Normalize scores if requested
         if normalize and scores:
             max_score = max(scores) if scores else 1.0
             if max_score > 0:
@@ -118,23 +118,23 @@ def weighted_sum_fusion(
         else:
             normalized_scores = scores
         
-        # Sumar scores ponderados
+        # Add weighted scores
         for doc_id, score in zip(ranking, normalized_scores):
             if doc_id not in combined_scores:
                 combined_scores[doc_id] = 0.0
             
             combined_scores[doc_id] += weight * score
     
-    # Ordenar por score descendente
+    # Sort by descending score
     sorted_items = sorted(
         combined_scores.items(),
         key=lambda x: x[1],
         reverse=True
     )
-    
+
     logger.debug(
         f"Weighted sum fusion: {n_rankings} rankings → "
-        f"{len(combined_scores)} docs únicos"
+        f"{len(combined_scores)} unique docs"
     )
     
     return sorted_items
@@ -145,16 +145,16 @@ def borda_count_fusion(
     max_points: Optional[int] = None
 ) -> List[Tuple[str, float]]:
     """
-    Fusión por Borda Count.
-    
-    Cada ranking otorga puntos: mejor ranking obtiene más puntos.
-    
+    Fusion using Borda Count.
+
+    Each ranking awards points: higher rank receives more points.
+
     Args:
-        rankings: Lista de rankings ordenados
-        max_points: Puntos para el primer lugar (default: len del ranking más largo)
-        
+        rankings: List of ordered rankings
+        max_points: Points for first place (default: length of the longest ranking)
+
     Returns:
-        Lista de (doc_id, borda_score) ordenada descendente
+        List of (doc_id, borda_score) sorted descending
     """
     if not rankings:
         return []
@@ -173,16 +173,16 @@ def borda_count_fusion(
             
             borda_scores[doc_id] += points
     
-    # Ordenar por score descendente
+    # Sort by descending score
     sorted_items = sorted(
         borda_scores.items(),
         key=lambda x: x[1],
         reverse=True
     )
-    
+
     logger.debug(
         f"Borda count fusion: {len(rankings)} rankings → "
-        f"{len(borda_scores)} docs únicos"
+        f"{len(borda_scores)} unique docs"
     )
     
     return sorted_items
@@ -191,7 +191,7 @@ def borda_count_fusion(
 def get_unique_results(
     rankings: List[List[str]]
 ) -> Set[str]:
-    """Obtiene el conjunto de IDs únicos a través de todos los rankings."""
+    """Returns the set of unique IDs across all rankings."""
     unique_ids: Set[str] = set()
     for ranking in rankings:
         unique_ids.update(ranking)
@@ -203,16 +203,16 @@ def interleave_rankings(
     max_results: Optional[int] = None
 ) -> List[str]:
     """
-    Interleave (entrelaza) múltiples rankings round-robin.
-    
-    Útil para diversidad de resultados.
-    
+    Interleaves multiple rankings round-robin.
+
+    Useful for result diversity.
+
     Args:
-        rankings: Lista de rankings
-        max_results: Número máximo de resultados (optional)
-        
+        rankings: List of rankings
+        max_results: Maximum number of results (optional)
+
     Returns:
-        Ranking combinado con docs intercalados
+        Combined ranking with interleaved documents
     """
     result = []
     seen: Set[str] = set()

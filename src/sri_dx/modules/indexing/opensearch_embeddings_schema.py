@@ -1,5 +1,5 @@
 # modules/indexing/opensearch_embeddings_schema.py
-"""Schema del índice de embeddings para OpenSearch."""
+"""Index schema for the embeddings index in OpenSearch."""
 
 
 def build_embeddings_index_body(
@@ -10,17 +10,17 @@ def build_embeddings_index_body(
     m: int = 16,
 ) -> dict:
     """
-    Construye el body para crear el índice de embeddings en OpenSearch.
-    
+    Builds the request body for creating the embeddings index in OpenSearch.
+
     Args:
-        vector_dim: Dimensión de los vectores (768 para Bio_ClinicalBERT)
-        shards: Número de shards primarios
-        replicas: Número de réplicas
-        ef_construction: Parámetro HNSW (mayor = mejor calidad, más lento)
-        m: Parámetro HNSW (número de conexiones por nodo)
-        
+        vector_dim: Vector dimension (768 for Bio_ClinicalBERT)
+        shards: Number of primary shards
+        replicas: Number of replicas
+        ef_construction: HNSW parameter (higher = better quality, slower)
+        m: HNSW parameter (number of connections per node)
+
     Returns:
-        Dict con configuración del índice
+        Dict with index configuration
     """
     return {
         "settings": {
@@ -33,7 +33,7 @@ def build_embeddings_index_body(
         },
         "mappings": {
             "properties": {
-                # Identificadores
+                # Identifiers
                 "embedding_id": {
                     "type": "keyword"
                 },
@@ -43,8 +43,8 @@ def build_embeddings_index_body(
                 "doc_id": {
                     "type": "keyword"
                 },
-                
-                # Vector embedding con kNN
+
+                # kNN embedding vector
                 "vector": {
                     "type": "knn_vector",
                     "dimension": vector_dim,
@@ -58,8 +58,8 @@ def build_embeddings_index_body(
                         }
                     }
                 },
-                
-                # Información del modelo
+
+                # Model information
                 "model_name": {
                     "type": "keyword"
                 },
@@ -72,12 +72,12 @@ def build_embeddings_index_body(
                 "similarity_metric": {
                     "type": "keyword"
                 },
-                
-                # Metadata del chunk (desnormalizada para filtros)
+
+                # Chunk metadata (denormalized for filtering)
                 "chunk_text_preview": {
                     "type": "text",
                     "analyzer": "standard",
-                    "index": False  # Solo para display, no búsqueda
+                    "index": False  # Display only, not searchable
                 },
                 "chunk_index": {
                     "type": "integer"
@@ -92,10 +92,10 @@ def build_embeddings_index_body(
                     "type": "keyword"
                 },
                 "concept_ids": {
-                    "type": "keyword"  # Array de keywords
+                    "type": "keyword"  # Array of keywords
                 },
-                
-                # Control
+
+                # Control fields
                 "chunk_hash": {
                     "type": "keyword"
                 },

@@ -17,19 +17,19 @@ class InvalidDocumentError(ValueError):
 
 def _require(obj: dict, key: str, where: str) -> Any:
     if key not in obj:
-        raise InvalidDocumentError(f"Falta campo requerido '{key}' en {where}")
+        raise InvalidDocumentError(f"Missing required field '{key}' in {where}")
     return obj[key]
 
 
 def _as_str(v: Any, where: str) -> str:
     if not isinstance(v, str) or not v.strip():
-        raise InvalidDocumentError(f"Se esperaba string no vacío en {where}")
+        raise InvalidDocumentError(f"Expected non-empty string in {where}")
     return v
 
 
 def _as_int(v: Any, where: str) -> int:
     if not isinstance(v, int):
-        raise InvalidDocumentError(f"Se esperaba int en {where}")
+        raise InvalidDocumentError(f"Expected int in {where}")
     return v
 
 
@@ -37,18 +37,18 @@ def _as_opt_str(v: Any, where: str) -> Optional[str]:
     if v is None:
         return None
     if not isinstance(v, str):
-        raise InvalidDocumentError(f"Se esperaba string|null en {where}")
+        raise InvalidDocumentError(f"Expected string|null in {where}")
     vv = v.strip()
     return vv if vv else None
 
 
 def _parse_sections(raw_sections: Any) -> list[Section]:
     if not isinstance(raw_sections, list):
-        raise InvalidDocumentError("content.sections debe ser una lista")
+        raise InvalidDocumentError("content.sections must be a list")
     sections: list[Section] = []
     for i, s in enumerate(raw_sections):
         if not isinstance(s, dict):
-            raise InvalidDocumentError(f"content.sections[{i}] debe ser objeto")
+            raise InvalidDocumentError(f"content.sections[{i}] must be an object")
         heading = _as_str(_require(s, "heading", f"content.sections[{i}]"), f"content.sections[{i}].heading")
         text = _as_str(_require(s, "text", f"content.sections[{i}]"), f"content.sections[{i}].text")
         sections.append(Section(heading=heading, text=text))
@@ -57,9 +57,7 @@ def _parse_sections(raw_sections: Any) -> list[Section]:
 
 @dataclass
 class JsonlDocumentSource(DocumentSourcePort):
-    """
-    Lee 1..N archivos JSONL (HTML + PDF) y produce AcquiredDocument en streaming.
-    """
+    """Reads one or more JSONL files (HTML + PDF) and streams AcquiredDocument objects."""
     paths: list[Path]
 
     def iter_documents(self) -> Iterable[AcquiredDocument]:
@@ -75,7 +73,7 @@ class JsonlDocumentSource(DocumentSourcePort):
                 try:
                     raw = json.loads(line)
                     if not isinstance(raw, dict):
-                        raise InvalidDocumentError("JSONL line no es objeto")
+                        raise InvalidDocumentError("JSONL line is not a JSON object")
 
                     doc_id = _as_str(_require(raw, "doc_id", "root"), "doc_id")
                     url = _as_str(_require(raw, "url", "root"), "url")
@@ -84,7 +82,7 @@ class JsonlDocumentSource(DocumentSourcePort):
 
                     crawl_raw = _require(raw, "crawl", "root")
                     if not isinstance(crawl_raw, dict):
-                        raise InvalidDocumentError("crawl debe ser objeto")
+                        raise InvalidDocumentError("crawl must be an object")
                     crawl = CrawlMeta(
                         depth=_as_int(_require(crawl_raw, "depth", "crawl"), "crawl.depth"),
                         parent_url=_as_opt_str(crawl_raw.get("parent_url"), "crawl.parent_url"),
@@ -94,7 +92,7 @@ class JsonlDocumentSource(DocumentSourcePort):
 
                     content_raw = _require(raw, "content", "root")
                     if not isinstance(content_raw, dict):
-                        raise InvalidDocumentError("content debe ser objeto")
+                        raise InvalidDocumentError("content must be an object")
 
                     content = Content(
                         mime_type=_as_str(_require(content_raw, "mime_type", "content"), "content.mime_type"),
@@ -107,7 +105,7 @@ class JsonlDocumentSource(DocumentSourcePort):
                     pm_raw = raw.get("page_meta")
                     if pm_raw is not None:
                         if not isinstance(pm_raw, dict):
-                            raise InvalidDocumentError("page_meta debe ser objeto|null")
+                            raise InvalidDocumentError("page_meta must be an object|null")
                         page_meta = PageMeta(
                             published_at=_as_opt_str(pm_raw.get("published_at"), "page_meta.published_at"),
                             updated_at=_as_opt_str(pm_raw.get("updated_at"), "page_meta.updated_at"),
@@ -129,7 +127,6 @@ class JsonlDocumentSource(DocumentSourcePort):
                     )
 
                 except Exception as e:
-                    # En Fase A: estrategia simple (no romper todo el proceso por 1 doc)
                     raise InvalidDocumentError(
                         f"[{path.name}:{line_no}] Documento inválido: {e}"
                     ) from e

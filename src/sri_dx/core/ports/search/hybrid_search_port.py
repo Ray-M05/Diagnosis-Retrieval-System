@@ -6,32 +6,31 @@ from sri_dx.core.schemas.search.search_result_schema import HybridSearchResult
 
 class HybridSearchPort(ABC):
     """
-    Puerto para búsqueda híbrida (fusión de vectorial + léxica).
+    Port for hybrid search (fusion of vector + lexical).
     """
-    
+
     @abstractmethod
     def search(
-        self, 
-        query: HybridQuery, 
+        self,
+        query: HybridQuery,
         k: int = 10,
-        alpha: float = 0.5,  # Balance vectorial vs léxico
+        alpha: float = 0.5,  # Balance between vector and lexical
         filter_criteria: Optional[Dict] = None
     ) -> List[HybridSearchResult]:
         """
-        Búsqueda híbrida con fusión de resultados.
-        
+        Hybrid search with result fusion.
+
         Args:
-            query: Query con componentes semánticos y léxicos
-            k: Número de resultados finales
-            alpha: Peso (0=solo léxico, 1=solo vectorial, 0.5=balanceado)
-            filter_criteria: Filtros por metadatos
-            
+            query: Query with semantic and lexical components
+            k: Number of final results
+            alpha: Weight (0=lexical only, 1=vector only, 0.5=balanced)
+            filter_criteria: Metadata filters
+
         Returns:
-            Resultados fusionados con scores combinados
+            Fused results with combined scores
         """
-        
-    
+
     @abstractmethod
     def get_fusion_strategy(self) -> str:
-        """Retorna la estrategia de fusión usada (RRF, CombSUM, etc.)."""
+        """Returns the fusion strategy in use (RRF, CombSUM, etc.)."""
         

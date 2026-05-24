@@ -1,5 +1,5 @@
-# Schemas para el módulo de Búsqueda
-# Modelos de datos para requests y responses de búsqueda
+# Schemas for the Search module
+# Data models for search requests and responses
 
 from .search_request import SearchRequest, SearchFilters
 from .search_response import SearchResponse, SearchHit

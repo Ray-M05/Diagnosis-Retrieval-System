@@ -6,7 +6,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class FetchResult:
-    """Resultado crudo de una petición HTTP (respuesta del servidor)."""
+    """Raw result of an HTTP request (server response)."""
     url: str
     status_code: int
     mime_type: str

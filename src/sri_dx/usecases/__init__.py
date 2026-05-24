@@ -1,8 +1,8 @@
-# Use Cases - Casos de Uso del Sistema
-# Organizados por dominio para fácil navegación
-# 
-# indexing/ - Casos de uso de indexación
-# search/   - Casos de uso de búsqueda
+# Use Cases - System Use Cases
+# Organised by domain for easy navigation
+#
+# indexing/ - Indexing use cases
+# search/   - Search use cases
 
 from .acquisition import RunAcquisitionUseCase
 from .indexing import (

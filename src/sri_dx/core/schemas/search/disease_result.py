@@ -1,4 +1,4 @@
-"""Schemas para resultados de diagnóstico agrupados por enfermedad."""
+"""Schemas for diagnosis results grouped by disease."""
 
 from __future__ import annotations
 
@@ -8,32 +8,32 @@ from typing import List, Optional
 
 @dataclass
 class DiseaseEvidence:
-    """Un chunk que menciona una enfermedad específica."""
+    """A chunk that mentions a specific disease."""
 
     chunk_id: str
     doc_id: str
     rerank_score: float
     ner_score: float
-    combined_score: float  # rerank_score * ner_score
+    combined_score: float  # rerank_score * ner_score (not currently multiplied; kept for future use)
     content_preview: str
     url: str
 
 
 @dataclass
 class DiseaseResult:
-    """Enfermedad rankeada con evidencia de soporte."""
+    """Ranked disease with supporting evidence."""
 
-    disease_name: str  # Normalizado (lowercase, stripped)
-    disease_name_display: str  # Texto original del mejor NER match
-    aggregated_score: float  # sum(combined_score) de toda la evidencia
+    disease_name: str  # Normalized form (lowercase, stripped)
+    disease_name_display: str  # Original text from the best NER match
+    aggregated_score: float  # Aggregated score across all evidence
     evidence_count: int
     evidence: List[DiseaseEvidence] = field(default_factory=list)
-    rank: int = 0  # Posición 1-based en el ranking final
+    rank: int = 0  # 1-based position in the final ranking
 
     def __str__(self) -> str:
         lines = [
             f"#{self.rank} - {self.disease_name_display} (score: {self.aggregated_score:.4f})",
-            f"  Evidencia: {self.evidence_count} chunk(s)",
+            f"  Evidence: {self.evidence_count} chunk(s)",
         ]
         for ev in self.evidence[:3]:
             lines.append(
@@ -41,5 +41,5 @@ class DiseaseResult:
                 f"ner={ev.ner_score:.4f}, combined={ev.combined_score:.4f}"
             )
         if self.evidence_count > 3:
-            lines.append(f"    ... y {self.evidence_count - 3} más")
+            lines.append(f"    ... and {self.evidence_count - 3} more")
         return "\n".join(lines)
