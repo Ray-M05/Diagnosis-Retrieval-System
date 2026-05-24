@@ -14,9 +14,13 @@ import {
 } from 'lucide-react';
 import { SearchBar } from '../components/SearchBar';
 import { InsufficiencyBanner } from '../components/InsufficiencyBanner';
-import { WebDocumentCard } from '../components/WebDocumentCard';
+import { ResultCard } from '../components/ResultCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { parseChart, streamPipeline } from '../api/client';
+import {
+  findHybridForPositioned,
+  syntheticDiseaseFromPositioned,
+} from '../utils/matchPositioned';
 import type { Citation, DifferentialDiagnosis, PatientChart, RAGResponse, Disease } from '../types';
 import type { PositionedResult, SufficiencyInfo, WebEnrichmentSummary } from '../api/client';
 import type { SearchBarModifier, SearchBarModifiers } from '../components/SearchBar';
@@ -151,7 +155,8 @@ export const ClinicalRAGView: React.FC = () => {
   const [chartOpen, setChartOpen] = useState(false);
   const [chart, setChart] = useState<PatientChart>(emptyChart());
   const [query, setQuery] = useState('');
-  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: false });
+  // Positioning is always-on in this view. Only `web` is user-toggleable.
+  const [modifiers, setModifiers] = useState<SearchBarModifiers>({ web: false, positioned: true });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -213,7 +218,9 @@ export const ClinicalRAGView: React.FC = () => {
   };
 
   const handleModifierToggle = (m: SearchBarModifier) => {
-    setModifiers((prev) => ({ ...prev, [m]: !prev[m] }));
+    // Only `web` is exposed to the user here; ignore other modifiers.
+    if (m !== 'web') return;
+    setModifiers((prev) => ({ ...prev, web: !prev.web }));
     clearResults();
   };
 
@@ -232,7 +239,7 @@ export const ClinicalRAGView: React.FC = () => {
         k: 10,
         stages: {
           web_enrichment: modifiers.web,
-          positioning: modifiers.positioned,
+          positioning: true,
           generation: true,
         },
       },
@@ -499,8 +506,9 @@ export const ClinicalRAGView: React.FC = () => {
         onClear={() => { setQuery(''); clearResults(); }}
         isLoading={isGenerating}
         placeholder="What is your clinical question? e.g. Most likely diagnoses and urgent workup?"
-        submitLabel={!modifiers.web && !modifiers.positioned ? 'Generate' : 'Search'}
+        submitLabel="Generate"
         showModeToggles
+        showPositioningToggle={false}
         modifiers={modifiers}
         onModifierToggle={handleModifierToggle}
       />
@@ -548,7 +556,7 @@ export const ClinicalRAGView: React.FC = () => {
               />
             )}
 
-            {/* Evidence tag — only when web or positioning stages produced results */}
+            {/* Evidence tag — unified card grid (positioning is always on) */}
             {!isGenerating && (positionedResults || webEnrichment?.triggered) && (
               <div className="border-t border-gray-100 pt-3 mt-1">
                 <button
@@ -581,47 +589,41 @@ export const ClinicalRAGView: React.FC = () => {
                       className="overflow-hidden"
                     >
                       <div className="pt-4 flex flex-col gap-5">
-                        {positionedResults && positionedResults.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
-                              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Clinical positioning
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {positionedResults.map((r) => {
-                                const colorMap: Record<string, string> = { high: 'bg-green-100 text-green-700', alta: 'bg-green-100 text-green-700', medium: 'bg-amber-100 text-amber-700', media: 'bg-amber-100 text-amber-700', low: 'bg-gray-100 text-gray-500', baja: 'bg-gray-100 text-gray-500' };
-                                const color = colorMap[r.relevance_label?.toLowerCase()] ?? 'bg-gray-100 text-gray-500';
-                                return (
-                                  <div key={r.rank} className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">{r.rank}</span>
-                                      <span className="font-semibold text-gray-800 truncate">{r.disease_name_display}</span>
-                                    </div>
-                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 ${color}`}>{r.relevance_label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
+                        {webEnrichment?.triggered && (
+                          <p className="text-[11px] text-gray-500">
+                            {webEnrichment.api_retrieved} documents retrieved ·{' '}
+                            {webEnrichment.docs_added} new · {webEnrichment.chunks_added} chunks
+                            indexed from PubMed / EuropePMC / MedlinePlus
+                          </p>
                         )}
 
-                        {webEnrichment?.triggered && hybridResults && hybridResults.length > 0 && (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-gray-600 font-semibold text-xs uppercase tracking-wide">
-                              <Globe className="w-3.5 h-3.5 text-blue-500" /> Indexed web documents
-                            </div>
-                            <p className="text-[11px] text-gray-500">
-                              {webEnrichment.api_retrieved} documents retrieved · {webEnrichment.docs_added} new · {webEnrichment.chunks_added} chunks indexed from PubMed / EuropePMC / MedlinePlus
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {hybridResults.map((d, idx) => (
-                                <WebDocumentCard
-                                  key={`${d.id}|${idx}`}
-                                  disease={d}
+                        {(() => {
+                          const hybrid = hybridResults ?? [];
+                          const positioned = positionedResults ?? [];
+                          const items =
+                            positioned.length > 0
+                              ? positioned.map((p) => {
+                                  const match = findHybridForPositioned(p, hybrid);
+                                  return {
+                                    positioned: p,
+                                    disease: match ?? syntheticDiseaseFromPositioned(p),
+                                  };
+                                })
+                              : hybrid.map((d) => ({ positioned: null, disease: d }));
+                          if (items.length === 0) return null;
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {items.map((item, idx) => (
+                                <ResultCard
+                                  key={`${item.disease.id}|${idx}`}
+                                  variant={item.positioned ? 'positioned' : 'hybrid'}
+                                  disease={item.disease}
+                                  positioned={item.positioned}
                                 />
                               ))}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </motion.div>
                   )}

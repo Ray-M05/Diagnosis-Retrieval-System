@@ -701,6 +701,46 @@ def _evaluate_sufficiency(query: str, k: int) -> SufficiencyInfo | None:
         return None
 
 
+def _positioned_to_retrieval_results(positioned: list) -> list:
+    """Flatten PositionedClinicalResult[] into RetrievalResult[] preserving the
+    order chosen by the positioning module.
+
+    Order: outer = positioned[].rank ascending (1, 2, 3...), inner = order of
+    evidences as the positioning module emitted them. Duplicates across groups
+    are dropped (first occurrence wins) so the RAG context isn't pollued.
+    """
+    from sri_dx.usecases.search.two_stage_retrieval_pipeline import RetrievalResult
+
+    flat: list = []
+    seen_chunks: set[str] = set()
+    fp = 0
+    for cond in positioned or []:
+        for ev in getattr(cond, "evidences", []) or []:
+            if ev.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(ev.chunk_id)
+            metadata = {
+                "chunk_id": ev.chunk_id,
+                "url": ev.url or "",
+                "source_domain": ev.source_domain or "",
+                "section_heading": ev.section_heading or "",
+                "content": ev.text or ev.content_preview or "",
+            }
+            flat.append(RetrievalResult(
+                doc_id=ev.doc_id,
+                rerank_score=float(ev.cross_encoder_score or 0.0),
+                original_hybrid_score=float(ev.hybrid_score or 0.0),
+                lexical_score=ev.lexical_score,
+                vector_score=ev.vector_score,
+                original_position=fp,
+                final_position=fp,
+                metadata=metadata,
+                content=ev.text or ev.content_preview or None,
+            ))
+            fp += 1
+    return flat
+
+
 def _execute_pipeline_stages(
     query: str, stages: PipelineStages, k: int
 ) -> PipelineResponse:
@@ -813,23 +853,41 @@ async def pipeline(req: PipelineRequest):
             raise HTTPException(503, detail="LLM not available. Verify GROQ_API_KEY.")
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 
+    # Force positioning ON for generation: the RAG must receive the ranking
+    # produced by the positioning module, not the raw cross-encoder rerank.
+    stages_for_run = req.stages.model_copy(update={"positioning": True})
+
     # Execute retrieval stages first (synchronous), then stream the LLM.
     stages_response = await run_in_threadpool(
         _execute_pipeline_stages,
         req.query,
-        req.stages,
+        stages_for_run,
         req.k,
     )
 
     from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
     chart = req.chart if req.chart is not None else _PatientChart()
 
+    # Feed the RAG with the positioned ranking. Fall back to internal retrieval
+    # only if positioning produced nothing (which would be an upstream failure).
+    preretrieved = _positioned_to_retrieval_results(stages_response.positioned or [])
+    if not preretrieved:
+        logger.warning(
+            "Positioning returned no evidences for query '%s' — RAG will fall back to pipeline.search().",
+            req.query[:80],
+        )
+
     def generate():
         try:
             # Emit non-generation stages first so the UI can render them
             yield f"event: stages\ndata: {stages_response.model_dump_json()}\n\n"
 
-            for item in _rag_uc.run_streaming(chart, req.query):
+            stream = _rag_uc.run_streaming(
+                chart,
+                req.query,
+                preretrieved_chunks=preretrieved or None,
+            )
+            for item in stream:
                 if isinstance(item, RAGResponse):
                     payload = item.model_dump_json()
                     yield f"event: response\ndata: {payload}\n\n"
