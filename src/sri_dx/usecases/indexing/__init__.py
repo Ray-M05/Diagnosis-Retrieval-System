@@ -1,5 +1,5 @@
-# Use Cases de Indexación
-# Casos de uso para indexar documentos en OpenSearch
+# Indexing Use Cases
+# Use cases for indexing documents in OpenSearch
 
 from .index_opensearch import IndexOpenSearchUseCase
 from .index_chunks_opensearch import IndexChunksOpenSearchUseCase

@@ -81,4 +81,60 @@ export interface WebSearchResponse {
   elapsed_seconds: number;
 }
 
-export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned' | 'web';
+export type SearchMode = 'hybrid' | 'diagnostic' | 'positioned' | 'web' | 'rag';
+
+// ---------------------------------------------------------------------------
+// Evaluation module — qrels-based IR metric reports
+// ---------------------------------------------------------------------------
+
+export interface EvaluationMetrics {
+  precision_at_k: number;
+  recall_at_k: number;
+  f1_at_k: number;
+  map: number;
+  mrr: number;
+  ndcg_at_k: number;
+  fallout_at_k: number;
+  r_precision: number;
+  top_1_hit?: number;
+  top_3_hit?: number;
+  rag_hit?: number;
+}
+
+export interface PerQueryResult {
+  query: string;
+  retrieved_disease_names: string[];
+  relevant_disease_names: string[];
+  disease_metrics: EvaluationMetrics;
+  retrieved_chunk_ids?: string[] | null;
+  relevant_chunk_ids?: string[] | null;
+  chunk_metrics?: EvaluationMetrics | null;
+}
+
+export type EvaluationLevel = 'disease' | 'chunk' | 'both';
+
+export interface EvaluationReport {
+  run_id: number | null;
+  mode: SearchMode;
+  k: number;
+  level: EvaluationLevel;
+  qrels_hash: string;
+  corpus_size: number;
+  timestamp: string;
+  macro: EvaluationMetrics;
+  macro_chunk: EvaluationMetrics | null;
+  per_query: PerQueryResult[];
+  errors: { query: string; error: string }[];
+}
+
+export interface EvaluationRunSummary {
+  id: number;
+  timestamp: string;
+  mode: SearchMode;
+  k: number;
+  level: EvaluationLevel;
+  qrels_hash: string;
+  corpus_size: number;
+  macro: EvaluationMetrics;
+  macro_chunk: EvaluationMetrics | null;
+}

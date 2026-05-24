@@ -1,4 +1,4 @@
-"""Schemas para configuración de búsqueda híbrida."""
+"""Schemas for hybrid search configuration."""
 
 from __future__ import annotations
 
@@ -8,10 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class HybridSearchConfig(BaseModel):
-    """Configuración para SearchHybridUseCase.
-
-    Campos equivalentes a la antigua dataclass, ahora como Pydantic model.
-    """
+    """Configuration for SearchHybridUseCase."""
 
     model_config = ConfigDict(title="HybridSearchConfig")
 

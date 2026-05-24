@@ -47,6 +47,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from sri_dx.app.api.feedback import build_feedback_router
+from sri_dx.app.api.evaluation import build_evaluation_router
 from sri_dx.app.api.dto import (
     ClinicalRAGRequest,
     DiseaseDTO,
@@ -73,6 +74,8 @@ logger = logging.getLogger(__name__)
 
 _pipeline = None        # TwoStageRetrievalPipeline
 _feedback_store = None  # SqliteFeedbackStore
+_evaluation_store = None  # EvaluationStore
+_corpus_size: int = 1   # Cached at startup; used as denominator for Fallout.
 _rag_uc: ClinicalRAGUseCase | None = None
 _llm_status: str = "unreachable"
 _os_status: str = "unreachable"
@@ -114,6 +117,52 @@ def _build_feedback_store():
 
     db_path = Path(os.environ.get("SRI_FEEDBACK_DB", "data/feedback/feedback.sqlite"))
     return SqliteFeedbackStore(db_path)
+
+
+def _build_evaluation_store():
+    import os
+    from pathlib import Path
+
+    from sri_dx.modules.evaluation.evaluation_store import EvaluationStore
+
+    db_path = Path(os.environ.get("SRI_EVALUATION_DB", "data/evaluation/evaluation.sqlite"))
+    return EvaluationStore(db_path)
+
+
+def _regenerate_seed_qrels() -> None:
+    """Rebuild data/qrels/test_cases.jsonl from tests/TEST_CASES.md.
+
+    Runs the same logic as `python scripts/build_seed_qrels.py` so the seed
+    qrels served by GET /evaluation/seed-qrels is always in sync with the
+    Markdown source — contributors don't have to remember to run the script
+    after editing TEST_CASES.md.
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[3].parent
+    script_path = repo_root / "scripts" / "build_seed_qrels.py"
+    if not script_path.exists():
+        logger.warning("Seed qrels script not found at %s — skipping regeneration.", script_path)
+        return
+
+    import runpy
+    try:
+        runpy.run_path(str(script_path), run_name="__main__")
+    except SystemExit as exc:
+        if exc.code not in (None, 0):
+            logger.warning("Seed qrels regeneration exited with code %s.", exc.code)
+    except Exception as exc:
+        logger.warning("Seed qrels regeneration failed: %s", exc)
+
+
+def _compute_corpus_size() -> int:
+    """Total indexed chunks — used as denominator for Fallout (closed-world)."""
+    try:
+        reader = _build_chunk_reader()
+        return max(int(reader.get_total_chunks()), 1)
+    except Exception as exc:
+        logger.warning("Could not compute corpus size: %s. Defaulting to 1.", exc)
+        return 1
 
 
 def _build_pipeline(feedback_store=None):
@@ -211,7 +260,8 @@ def _build_rag_usecase(pipeline) -> tuple[ClinicalRAGUseCase | None, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _pipeline, _feedback_store, _rag_uc, _llm_status, _os_status
+    global _pipeline, _feedback_store, _evaluation_store, _corpus_size
+    global _rag_uc, _llm_status, _os_status
 
     logger.info("SRI-DX API starting — building pipeline...")
     try:
@@ -226,10 +276,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if _pipeline is not None:
         _rag_uc, _llm_status = _build_rag_usecase(_pipeline)
 
+    _regenerate_seed_qrels()
+
+    try:
+        _evaluation_store = _build_evaluation_store()
+        logger.info("Evaluation store ready.")
+    except Exception as exc:
+        logger.warning("Evaluation store unavailable: %s", exc)
+
+    if _os_status == "ready":
+        _corpus_size = _compute_corpus_size()
+        logger.info("Corpus size cached: %d chunks.", _corpus_size)
+
     yield  # app runs here
 
     if _feedback_store is not None:
         _feedback_store.close()
+    if _evaluation_store is not None:
+        _evaluation_store.close()
     logger.info("SRI-DX API shutting down.")
 
 
@@ -692,6 +756,46 @@ def _evaluate_sufficiency(query: str, k: int) -> SufficiencyInfo | None:
         return None
 
 
+def _positioned_to_retrieval_results(positioned: list) -> list:
+    """Flatten PositionedClinicalResult[] into RetrievalResult[] preserving the
+    order chosen by the positioning module.
+
+    Order: outer = positioned[].rank ascending (1, 2, 3...), inner = order of
+    evidences as the positioning module emitted them. Duplicates across groups
+    are dropped (first occurrence wins) so the RAG context isn't pollued.
+    """
+    from sri_dx.usecases.search.two_stage_retrieval_pipeline import RetrievalResult
+
+    flat: list = []
+    seen_chunks: set[str] = set()
+    fp = 0
+    for cond in positioned or []:
+        for ev in getattr(cond, "evidences", []) or []:
+            if ev.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(ev.chunk_id)
+            metadata = {
+                "chunk_id": ev.chunk_id,
+                "url": ev.url or "",
+                "source_domain": ev.source_domain or "",
+                "section_heading": ev.section_heading or "",
+                "content": ev.text or ev.content_preview or "",
+            }
+            flat.append(RetrievalResult(
+                doc_id=ev.doc_id,
+                rerank_score=float(ev.cross_encoder_score or 0.0),
+                original_hybrid_score=float(ev.hybrid_score or 0.0),
+                lexical_score=ev.lexical_score,
+                vector_score=ev.vector_score,
+                original_position=fp,
+                final_position=fp,
+                metadata=metadata,
+                content=ev.text or ev.content_preview or None,
+            ))
+            fp += 1
+    return flat
+
+
 def _execute_pipeline_stages(
     query: str, stages: PipelineStages, k: int
 ) -> PipelineResponse:
@@ -761,6 +865,30 @@ app.include_router(build_feedback_router(
     diseases_to_response=_diseases_to_pipeline_response,
 ))
 
+def _rag_answer_for_eval(query: str) -> str:
+    """Blocking RAG call used by the evaluation `rag` mode.
+
+    Runs the same `ClinicalRAGUseCase` as the live endpoint but with an
+    empty `PatientChart`, captures the final answer and returns it as plain
+    text so the evaluator can search for the expected diagnosis in it.
+    Returns an empty string when the LLM is unavailable.
+    """
+    if _rag_uc is None:
+        return ""
+    from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
+    response = _rag_uc.run(_PatientChart(), query)
+    return getattr(response, "answer_markdown", "") or ""
+
+
+app.include_router(build_evaluation_router(
+    execute_stages=_execute_pipeline_stages,
+    PipelineStagesCls=PipelineStages,
+    get_evaluation_store=lambda: _evaluation_store,
+    get_corpus_size=lambda: _corpus_size,
+    rag_answer_fn=_rag_answer_for_eval,
+    is_rag_available=lambda: _rag_uc is not None,
+))
+
 
 @app.post("/pipeline")
 async def pipeline(req: PipelineRequest):
@@ -780,23 +908,41 @@ async def pipeline(req: PipelineRequest):
             raise HTTPException(503, detail="LLM not available. Verify GROQ_API_KEY.")
         raise HTTPException(503, detail="RAG pipeline not initialised.")
 
+    # Force positioning ON for generation: the RAG must receive the ranking
+    # produced by the positioning module, not the raw cross-encoder rerank.
+    stages_for_run = req.stages.model_copy(update={"positioning": True})
+
     # Execute retrieval stages first (synchronous), then stream the LLM.
     stages_response = await run_in_threadpool(
         _execute_pipeline_stages,
         req.query,
-        req.stages,
+        stages_for_run,
         req.k,
     )
 
     from sri_dx.core.schemas.rag.patient_chart import PatientChart as _PatientChart
     chart = req.chart if req.chart is not None else _PatientChart()
 
+    # Feed the RAG with the positioned ranking. Fall back to internal retrieval
+    # only if positioning produced nothing (which would be an upstream failure).
+    preretrieved = _positioned_to_retrieval_results(stages_response.positioned or [])
+    if not preretrieved:
+        logger.warning(
+            "Positioning returned no evidences for query '%s' — RAG will fall back to pipeline.search().",
+            req.query[:80],
+        )
+
     def generate():
         try:
             # Emit non-generation stages first so the UI can render them
             yield f"event: stages\ndata: {stages_response.model_dump_json()}\n\n"
 
-            for item in _rag_uc.run_streaming(chart, req.query):
+            stream = _rag_uc.run_streaming(
+                chart,
+                req.query,
+                preretrieved_chunks=preretrieved or None,
+            )
+            for item in stream:
                 if isinstance(item, RAGResponse):
                     payload = item.model_dump_json()
                     yield f"event: response\ndata: {payload}\n\n"

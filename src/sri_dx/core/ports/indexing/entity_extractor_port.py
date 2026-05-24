@@ -1,5 +1,5 @@
 # core/ports/indexing/entity_extractor_port.py
-"""Puerto para estrategias de extracción de entidades clínicas."""
+"""Port for clinical entity extraction strategies."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from sri_dx.core.schemas.indexing.entity_schema import (
 
 class EntityExtractorPort(ABC):
     """
-    Puerto para estrategias de extracción de entidades clínicas.
-    
-    Permite cambiar el modelo/estrategia sin afectar al pipeline.
-    Implementaciones posibles:
+    Port for clinical entity extraction strategies.
+
+    Allows switching the model/strategy without affecting the pipeline.
+    Possible implementations:
     - Bio_ClinicalBERT (NER)
     - ScispaCy
-    - Diccionario + reglas
+    - Dictionary + rules
     - LLM-based extraction
     """
     
@@ -31,14 +31,14 @@ class EntityExtractorPort(ABC):
         config: Optional[EntityExtractionConfig] = None
     ) -> List[ClinicalEntity]:
         """
-        Extrae entidades clínicas de un texto.
-        
+        Extracts clinical entities from a text.
+
         Args:
-            text: Texto clínico a procesar
-            config: Configuración de extracción
-            
+            text: Clinical text to process
+            config: Extraction configuration
+
         Returns:
-            Lista de entidades encontradas con sus metadatos
+            List of entities found with their metadata
         """
     
     @abstractmethod
@@ -48,26 +48,26 @@ class EntityExtractorPort(ABC):
         config: Optional[EntityExtractionConfig] = None
     ) -> List[List[ClinicalEntity]]:
         """
-        Extrae entidades de múltiples textos (optimizado para GPU/batching).
-        
+        Extracts entities from multiple texts (optimised for GPU/batching).
+
         Args:
-            texts: Lista de textos a procesar
-            config: Configuración de extracción
-            
+            texts: List of texts to process
+            config: Extraction configuration
+
         Returns:
-            Lista de listas de entidades (preserva orden)
+            List of entity lists (preserves input order)
         """
     
     @abstractmethod
     def get_supported_labels(self) -> List[str]:
         """
-        Retorna los tipos de entidades que este extractor puede identificar.
-        
+        Returns the entity types this extractor can identify.
+
         Returns:
-            Lista de labels soportados. Ej: ['PROBLEM', 'TREATMENT', 'TEST']
+            List of supported labels. E.g.: ['PROBLEM', 'TREATMENT', 'TEST']
         """
     
     @property
     @abstractmethod
     def model_name(self) -> str:
-        """Nombre/identificador del modelo usado."""
+        """Name/identifier of the model in use."""

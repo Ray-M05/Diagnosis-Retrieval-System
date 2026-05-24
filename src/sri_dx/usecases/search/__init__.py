@@ -1,5 +1,5 @@
-# Use Cases de Búsqueda
-# Casos de uso para búsqueda léxica, vectorial e híbrida
+# Search Use Cases
+# Use cases for lexical, vector, and hybrid search
 
 from .search_lexical import SearchLexicalUseCase
 from .search_semantic import SearchSemanticUseCase

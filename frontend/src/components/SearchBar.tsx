@@ -21,6 +21,8 @@ interface SearchBarProps {
   submitLabel?: string;
   /** Show Web / Positioning toggle buttons */
   showModeToggles?: boolean;
+  /** Show the Positioning toggle (defaults to true when showModeToggles is on). */
+  showPositioningToggle?: boolean;
   modifiers?: SearchBarModifiers;
   onModifierToggle?: (modifier: SearchBarModifier) => void;
 }
@@ -34,6 +36,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = 'Enter symptoms...',
   submitLabel = 'Search',
   showModeToggles = false,
+  showPositioningToggle = true,
   modifiers = { web: false, positioned: false },
   onModifierToggle,
 }) => {
@@ -101,18 +104,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 <Globe className="w-3.5 h-3.5" />
                 Web
               </button>
-              <button
-                type="button"
-                onClick={() => onModifierToggle('positioned')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
-                  modifiers.positioned
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                    : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
-                }`}
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                Positioning
-              </button>
+              {showPositioningToggle && (
+                <button
+                  type="button"
+                  onClick={() => onModifierToggle('positioned')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                    modifiers.positioned
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Positioning
+                </button>
+              )}
             </>
           )}
         </div>

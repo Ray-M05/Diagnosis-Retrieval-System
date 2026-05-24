@@ -21,27 +21,27 @@ MODELS = {
 }
 
 def main():
-    logger.info("Iniciando descarga de modelos...")
+    logger.info("Starting model downloads...")
 
-    # 1. Modelo de Embeddings (Bi-Encoder)
-    logger.info(f"Descargando Bi-Encoder: {MODELS['embeddings']}...")
+    # 1. Embeddings model (Bi-Encoder)
+    logger.info(f"Downloading Bi-Encoder: {MODELS['embeddings']}...")
     AutoTokenizer.from_pretrained(MODELS["embeddings"])
     AutoModel.from_pretrained(MODELS["embeddings"])
 
-    # 2. Modelos de Re-ranking (Cross-Encoders)
-    logger.info(f"Descargando Cross-Encoders...")
+    # 2. Re-ranking models (Cross-Encoders)
+    logger.info(f"Downloading Cross-Encoders...")
     CrossEncoder(MODELS["reranking_fast"])
     CrossEncoder(MODELS["reranking_precise"])
 
-    # 3. Modelo de Semantic Chunking
-    logger.info(f"Descargando Semantic Chunking: {MODELS['semantic_chunking']}...")
+    # 3. Semantic Chunking model
+    logger.info(f"Downloading Semantic Chunking model: {MODELS['semantic_chunking']}...")
     SentenceTransformer(MODELS["semantic_chunking"])
 
-    # 4. Modelo de NER (Entidades Clínicas)
-    logger.info(f"Descargando Pipeline NER: {MODELS['ner']}...")
+    # 4. NER model (Clinical Entities)
+    logger.info(f"Downloading NER pipeline: {MODELS['ner']}...")
     pipeline("ner", model=MODELS["ner"])
 
-    logger.info("🎉 Todos los modelos han sido descargados y almacenados en la caché local.")
+    logger.info("All models have been downloaded and stored in the local cache.")
 
 if __name__ == "__main__":
     main()

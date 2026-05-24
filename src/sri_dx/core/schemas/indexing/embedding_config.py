@@ -1,33 +1,33 @@
 # core/schemas/indexing/embedding_config.py
-"""Configuración para generación de embeddings."""
+"""Configuration for embedding generation."""
 
 from pydantic import BaseModel, Field
 
 
 class EmbeddingConfig(BaseModel):
-    """Configuración para generación de embeddings."""
-    
+    """Configuration for embedding generation."""
+
     model_name: str = Field(
         default="Bio_ClinicalBERT",
-        description="Nombre del modelo de embeddings"
+        description="Embedding model name"
     )
-    
+
     embedding_dim: int = Field(
         default=768,
-        description="Dimensionalidad del vector resultante"
+        description="Output vector dimensionality"
     )
-    
+
     normalize: bool = Field(
         default=True,
-        description="Si true, normaliza los vectores a norma 1"
+        description="If true, normalises vectors to unit norm"
     )
-    
+
     batch_size: int = Field(
         default=32,
-        description="Tamaño de batch para procesamiento"
+        description="Batch size for processing"
     )
-    
+
     max_length: int = Field(
         default=512,
-        description="Longitud máxima de secuencia en tokens"
+        description="Maximum sequence length in tokens"
     )

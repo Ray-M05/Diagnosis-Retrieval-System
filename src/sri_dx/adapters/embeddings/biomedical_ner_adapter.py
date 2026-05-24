@@ -132,11 +132,11 @@ class BiomedicalNERAdapter:
                 "end": end,
             })
 
-        # Paso 2: fusionar entidades adyacentes del mismo tipo dentro del mismo
-        # "phrase span" — abarca tokens partidos por el tokenizer subword
-        # (ej: "Diabetic" + "ketoacidosis", "Pulmonary" + "embolism" partido en
-        # "em" + "bolism"). Toleramos hasta 4 chars de gap para puentear
-        # subtokens internos que el modelo etiquetó como O.
+        # Step 2: merge adjacent entities of the same type within the same
+        # "phrase span" — covers tokens split by the subword tokenizer
+        # (e.g. "Diabetic" + "ketoacidosis", "Pulmonary" + "embolism" split as
+        # "em" + "bolism"). We tolerate up to 4-char gaps to bridge internal
+        # subtokens that the model labelled as O.
         merged: List[Dict[str, Any]] = []
         for ent in mapped:
             if (

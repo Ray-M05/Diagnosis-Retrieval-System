@@ -1,5 +1,5 @@
 # core/schemas/indexing/entity_schema.py
-"""Schemas para extracción de entidades clínicas."""
+"""Schemas for clinical entity extraction."""
 
 from __future__ import annotations
 
@@ -9,48 +9,48 @@ from typing import List, Optional, Dict, Any
 
 @dataclass(frozen=True)
 class ClinicalEntity:
-    """Entidad clínica extraída del texto."""
-    
+    """Clinical entity extracted from text."""
+
     text: str
-    """Texto original de la entidad."""
-    
+    """Original entity text."""
+
     label: str
-    """Tipo de entidad: PROBLEM, TREATMENT, TEST, ANATOMY, etc."""
-    
+    """Entity type: PROBLEM, TREATMENT, TEST, ANATOMY, etc."""
+
     start_char: int
-    """Posición inicial en el texto original."""
-    
+    """Start position in the original text."""
+
     end_char: int
-    """Posición final en el texto original."""
-    
+    """End position in the original text."""
+
     confidence: float
-    """Score de confianza [0.0, 1.0]."""
-    
+    """Confidence score [0.0, 1.0]."""
+
     normalized_text: Optional[str] = None
-    """Texto normalizado (lowercase, sin acentos, etc.)."""
-    
+    """Normalised text (lowercase, no accents, etc.)."""
+
     umls_cui: Optional[str] = None
-    """Código UMLS si se pudo mapear."""
-    
+    """UMLS code if a mapping was found."""
+
     metadata: Dict[str, Any] = field(default_factory=dict)
-    """Metadatos adicionales específicos del extractor."""
+    """Additional extractor-specific metadata."""
 
 
 @dataclass
 class EntityExtractionConfig:
-    """Configuración para extracción de entidades."""
-    
+    """Configuration for entity extraction."""
+
     labels_to_extract: Optional[List[str]] = None
-    """Si None, extrae todas. Ej: ['PROBLEM', 'TREATMENT']"""
-    
+    """If None, extracts all labels. E.g.: ['PROBLEM', 'TREATMENT']"""
+
     min_confidence: float = 0.5
-    """Umbral mínimo de confianza."""
-    
+    """Minimum confidence threshold."""
+
     batch_size: int = 8
-    """Tamaño de batch para procesamiento."""
-    
+    """Batch size for processing."""
+
     max_length: int = 512
-    """Longitud máxima de secuencia en tokens."""
-    
+    """Maximum sequence length in tokens."""
+
     overlap_tokens: int = 64
-    """Overlap para documentos largos (sliding window)."""
+    """Token overlap for long documents (sliding window)."""

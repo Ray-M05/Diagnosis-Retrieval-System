@@ -1,4 +1,4 @@
-"""Schemas para configuración de EmbedChunksUseCase."""
+"""Schemas for EmbedChunksUseCase configuration."""
 
 from __future__ import annotations
 
@@ -8,10 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class EmbedChunksConfig(BaseModel):
-    """Configuración para EmbedChunksUseCase.
-
-    Campos equivalentes a la antigua dataclass, ahora como Pydantic model.
-    """
+    """Configuration for EmbedChunksUseCase."""
 
     model_config = ConfigDict(title="EmbedChunksConfig")
 

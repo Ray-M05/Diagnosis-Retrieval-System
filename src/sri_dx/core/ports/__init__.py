@@ -1,5 +1,5 @@
-# Core Ports - Interfaces del Sistema
-# Organizados por dominio para fácil navegación
+# Core Ports - System Interfaces
+# Organised by domain for easy navigation
 
 from .acquisition import (
     IndexDocumentSinkPort,

@@ -24,10 +24,7 @@ class OpenSearchSearchConfig:
 
 
 class OpenSearchSearchBackend(SearchBackendPort):
-    """
-    Backend de búsqueda léxica BM25 sobre OpenSearch.
-    Usa el alias (p.ej. clinical_docs) para desacoplar versiones de índice.
-    """
+    """BM25 lexical search backend backed by OpenSearch, using an alias to decouple index versions."""
     def __init__(self, cfg: OpenSearchSearchConfig) -> None:
         self.cfg = cfg
         self.client = OpenSearch(
@@ -119,9 +116,8 @@ class OpenSearchSearchBackend(SearchBackendPort):
         q = (req.query or "").strip()
         f = req.filters
         
-        # Construir la cláusula principal (must_clause o should_expansion)
         if q and f.concept_ids:
-            # Expansión: match por texto O por concepto
+            # Expand: match by free text OR by concept identifier
             main_clause = {
                 "bool": {
                     "should": [
@@ -137,7 +133,7 @@ class OpenSearchSearchBackend(SearchBackendPort):
                         {
                             "terms": {
                                 "concept_ids": f.concept_ids,
-                                "boost": 3.0  # Boost alto para matches exactos de concepto
+                                "boost": 3.0  # high boost for exact concept matches
                             }
                         }
                     ],
@@ -156,7 +152,6 @@ class OpenSearchSearchBackend(SearchBackendPort):
         else:
             main_clause = {"match_all": {}}
 
-        # Filtros estrictos (concept_ids se mueve a main_clause si hay q, sino se queda aquí)
         filtering_clauses = []
         
         def terms_filter(field: str, values: Optional[list[str]]) -> None:
@@ -168,7 +163,6 @@ class OpenSearchSearchBackend(SearchBackendPort):
         terms_filter("seed_group", f.seed_groups)
         terms_filter("seed_id", f.seed_ids)
         
-        # Si NO hay query, concept_ids actúan como filtro estricto
         if not q:
             terms_filter("concept_ids", f.concept_ids)
 

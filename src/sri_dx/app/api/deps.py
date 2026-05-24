@@ -27,9 +27,9 @@ def get_hybrid_search_use_case() -> SearchHybridUseCase:
         host=host, port=port, index_name=semantic_index
     ))
 
-    # Configuración por defecto, puede ser sobreescrita por el request
+    # Default configuration; can be overridden per request
     config = HybridSearchConfig()
-    
+
     return SearchHybridUseCase(
         lexical_backend=lexical_backend,
         embedding_store=embedding_store,
@@ -39,7 +39,7 @@ def get_hybrid_search_use_case() -> SearchHybridUseCase:
 def get_retrieval_pipeline() -> TwoStageRetrievalPipeline:
     hybrid_search = get_hybrid_search_use_case()
     
-    # Configuración por defecto
+    # Default configuration
     config = TwoStageRetrievalConfig()
     
     return TwoStageRetrievalPipeline(

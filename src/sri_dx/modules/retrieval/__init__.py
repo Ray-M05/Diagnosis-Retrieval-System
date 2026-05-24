@@ -1,11 +1,11 @@
-"""Retrieval Module - Estrategias de Recuperación
+"""Retrieval Module - Retrieval Strategies
 
-Módulo para estrategias avanzadas de recuperación de documentos.
+Module for advanced document retrieval strategies.
 
-Componentes por implementar:
-- HybridRetriever: Combinación de búsqueda léxica y vectorial
-- MultiQueryRetriever: Múltiples consultas expandidas
-- ParentDocumentRetriever: Recuperación jerárquica
+Components to implement:
+- HybridRetriever: Combination of lexical and vector search
+- MultiQueryRetriever: Multiple expanded queries
+- ParentDocumentRetriever: Hierarchical retrieval
 
-Estado: ❌ POR IMPLEMENTAR
+Status: ❌ NOT YET IMPLEMENTED
 """
