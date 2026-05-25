@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 
 
 DEFAULT_WEIGHTS = {
-    "cross_encoder": 0.45,
-    "hybrid": 0.20,
-    "symptom_coverage": 0.15,
-    "authority": 0.15,
-    "freshness": 0.05,
+    "cross_encoder": 0.65,
+    "hybrid": 0.25,
+    "symptom_coverage": 0.05,
+    "authority": 0.05,
+    "freshness": 0.00,
 }
 
 
