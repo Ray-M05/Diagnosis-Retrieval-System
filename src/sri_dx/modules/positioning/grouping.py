@@ -120,7 +120,10 @@ def group_candidates(
         entities = _valid_problem_entities(candidate, cfg)
         if not entities:
             display = _fallback_display(candidate)
-            entities = [(normalize_disease_name(display), display, 1.0)]
+            # Use doc_id as the grouping key so multiple chunks from the same
+            # document without NER hits don't produce separate groups.
+            key = f"__doc__{candidate.doc_id}" if candidate.doc_id else normalize_disease_name(display)
+            entities = [(key, display, 1.0)]
 
         for normalized, display, _ in entities:
             if not normalized:

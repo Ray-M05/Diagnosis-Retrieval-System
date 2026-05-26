@@ -202,22 +202,40 @@ class SearchHybridUseCase:
             min_score=self.config.min_semantic_score
         )
         
+        # The embedding index does not store url/title — enrich from chunks
+        # index via mget so semantic-only hits still carry a navigable URL.
+        chunk_ids = [cr.chunk_id for cr in chunk_results if cr.chunk_id]
+        enrichment: Dict[str, Dict[str, Any]] = {}
+        lookup = getattr(self.lexical_backend, "get_documents_by_ids", None)
+        if callable(lookup) and chunk_ids:
+            try:
+                enrichment = lookup(chunk_ids) or {}
+            except Exception as exc:
+                logger.debug("Chunk metadata enrichment failed: %s", exc)
+                enrichment = {}
+
         # Map chunk_id -> doc_id and attach metadata
         results = []
         for chunk_result in chunk_results:
+            extra = enrichment.get(chunk_result.chunk_id, {})
+            cr_meta = chunk_result.metadata or {}
             metadata = {
                 "chunk_id": chunk_result.chunk_id,
                 "doc_id": chunk_result.doc_id,
                 "chunk_text_preview": chunk_result.chunk_text_preview,
                 "content": chunk_result.chunk_text_preview,  # Alias for reranker
-                "section_heading": chunk_result.section_heading,
-                "source_domain": chunk_result.metadata.get("source_domain") if chunk_result.metadata else None,
-                "seed_group": chunk_result.metadata.get("seed_group") if chunk_result.metadata else None,
-                "chunk_index": chunk_result.metadata.get("chunk_index") if chunk_result.metadata else None,
-                "concept_ids": chunk_result.metadata.get("concept_ids", []) if chunk_result.metadata else [],
+                "section_heading": chunk_result.section_heading or extra.get("section_heading"),
+                "source_domain": cr_meta.get("source_domain") or extra.get("source_domain"),
+                "seed_group": cr_meta.get("seed_group") or extra.get("seed_group"),
+                "chunk_index": cr_meta.get("chunk_index") if cr_meta.get("chunk_index") is not None else extra.get("chunk_index"),
+                "concept_ids": cr_meta.get("concept_ids") or extra.get("concept_ids") or [],
+                "url": extra.get("url"),
+                "title": extra.get("title"),
+                "mime_type": extra.get("mime_type"),
+                "fetched_at": extra.get("fetched_at"),
             }
             results.append((chunk_result.chunk_id, chunk_result.score, metadata))
-        
+
         return results
     
     def _fuse_results(

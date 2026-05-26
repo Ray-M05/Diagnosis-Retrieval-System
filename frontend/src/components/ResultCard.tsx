@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Link2, Target, FileText, Globe, ChevronDown } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React from 'react';
+import { Link2, Target, FileText, Globe } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { Disease } from '../types';
 import type { PositionedResult } from '../api/client';
 import { RelevanceFeedbackButtons } from './feedback/RelevanceFeedbackButtons';
@@ -42,8 +42,6 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   onFeedback,
   onRetractFeedback,
 }) => {
-  const [explanationOpen, setExplanationOpen] = useState(false);
-
   const rank = positioned?.rank ?? disease.rank;
   const title =
     variant === 'web'
@@ -66,10 +64,12 @@ export const ResultCard: React.FC<ResultCardProps> = ({
       ? relevanceColor[relevanceLabel.toLowerCase()]
       : 'bg-gray-100 text-gray-500 border-gray-200';
 
-  const explanation = positioned?.explanation ?? [];
   const sourceDomains = positioned?.source_domains ?? [];
   const source =
     disease.source || (disease.sourceUrl ? disease.sourceUrl.split('/')[2] ?? '' : '');
+  const navigableUrl =
+    disease.sourceUrl ||
+    (source ? (source.startsWith('http') ? source : `https://${source}`) : '');
 
   const canSubmitFeedback = Boolean(
     query && onFeedback && disease.feedback_chunk_id && disease.feedback_doc_id,
@@ -187,57 +187,21 @@ export const ResultCard: React.FC<ResultCardProps> = ({
         </div>
       )}
 
-      {/* Explanation accordion (positioned only) */}
-      {variant === 'positioned' && explanation.length > 0 && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setExplanationOpen((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
-          >
-            {explanationOpen ? 'Hide explanation' : 'View explanation'}
-            <ChevronDown
-              className={`w-3 h-3 transition-transform ${explanationOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-          <AnimatePresence>
-            {explanationOpen && (
-              <motion.ul
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="mt-2 space-y-1 overflow-hidden"
-              >
-                {explanation.map((line, i) => (
-                  <li
-                    key={i}
-                    className="text-xs text-gray-600 flex items-start gap-1.5"
-                  >
-                    <span className="mt-1 w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
-                    {line}
-                  </li>
-                ))}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
       {/* Footer: source + feedback */}
       <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
-          {disease.sourceUrl ? (
+          {navigableUrl ? (
             <a
-              href={disease.sourceUrl}
+              href={navigableUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-medium text-gray-400 hover:text-indigo-600 transition-colors truncate"
             >
-              {source || disease.sourceUrl}
+              {source || navigableUrl}
             </a>
           ) : (
-            <span className="text-xs text-gray-300">{source || '-'}</span>
+            <span className="text-xs text-gray-300">-</span>
           )}
         </div>
 

@@ -110,6 +110,25 @@ class OpenSearchSearchBackend(SearchBackendPort):
             return None
         return DocumentRecord(doc_id=doc_id, source=src)
 
+    def get_documents_by_ids(self, ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch lookup of indexed records by _id (mget). Used to enrich
+        results that came from a sibling index (e.g. embeddings) and need
+        chunk-level metadata such as url/title/source_domain."""
+        ids = [i for i in dict.fromkeys(ids) if i]
+        if not ids:
+            return {}
+        try:
+            response = self.client.mget(index=self.cfg.index_alias, body={"ids": ids})
+        except Exception:
+            return {}
+        out: dict[str, dict[str, Any]] = {}
+        for doc in response.get("docs", []):
+            if doc.get("found"):
+                src = doc.get("_source")
+                if isinstance(src, dict):
+                    out[str(doc.get("_id"))] = src
+        return out
+
     # -------------------- internals --------------------
 
     def _build_query(self, req: SearchRequest) -> dict[str, Any]:

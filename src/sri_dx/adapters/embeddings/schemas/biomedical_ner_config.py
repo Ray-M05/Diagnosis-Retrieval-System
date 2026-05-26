@@ -25,7 +25,7 @@ class BiomedicalNERConfig(BaseModel):
 
     model_name: str = "d4data/biomedical-ner-all"
     device: int = -1
-    aggregation_strategy: str = "simple"
+    aggregation_strategy: str = "average"
     batch_size: int = 32
     stride: int = 128
     label_map: Dict[str, str] = LABEL_MAP.copy()

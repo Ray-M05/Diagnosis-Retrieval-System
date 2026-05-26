@@ -281,22 +281,32 @@ class BatchEvaluator:
                     chunk_retrieved = _extract_doc_ids(response.hybrid_chunks)
                     chunk_relevant = list(entry.relevant_doc_ids or [])
             else:
-                # For non-hybrid modes, fall back to DiseaseDTO.feedback_*
-                source = response.hybrid or []
-                if entry.relevant_chunk_ids:
+                # For positioned mode, use evidences from positioned results.
+                # For other non-hybrid modes, fall back to DiseaseDTO.feedback_*.
+                if self.mode == "positioned" and response.positioned:
                     chunk_retrieved = [
-                        str(getattr(d, "feedback_chunk_id", "") or "")
-                        for d in source
-                        if getattr(d, "feedback_chunk_id", None)
+                        str(_get(ev, "chunk_id") or "")
+                        for p in (response.positioned or [])
+                        for ev in (_get(p, "evidences") or [])
+                        if _get(ev, "chunk_id")
                     ]
-                    chunk_relevant = list(entry.relevant_chunk_ids)
+                    chunk_relevant = list(entry.relevant_chunk_ids or entry.relevant_doc_ids or [])
                 else:
-                    chunk_retrieved = [
-                        str(getattr(d, "feedback_doc_id", "") or "")
-                        for d in source
-                        if getattr(d, "feedback_doc_id", None)
-                    ]
-                    chunk_relevant = list(entry.relevant_doc_ids or [])
+                    source = response.hybrid or []
+                    if entry.relevant_chunk_ids:
+                        chunk_retrieved = [
+                            str(getattr(d, "feedback_chunk_id", "") or "")
+                            for d in source
+                            if getattr(d, "feedback_chunk_id", None)
+                        ]
+                        chunk_relevant = list(entry.relevant_chunk_ids)
+                    else:
+                        chunk_retrieved = [
+                            str(getattr(d, "feedback_doc_id", "") or "")
+                            for d in source
+                            if getattr(d, "feedback_doc_id", None)
+                        ]
+                        chunk_relevant = list(entry.relevant_doc_ids or [])
 
             if chunk_retrieved is not None and chunk_relevant is not None:
                 chunk_metrics = _disease_metrics(
