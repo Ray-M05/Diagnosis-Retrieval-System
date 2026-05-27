@@ -172,6 +172,7 @@ def _disease_metrics(
         "ndcg_at_k": M.ndcg_at_k(retrieved, relevant, k),
         "fallout_at_k": M.fallout_at_k(retrieved, relevant, k, corpus_size),
         "r_precision": M.r_precision(retrieved, relevant),
+        "hit_at_k": M.hit_at_k(retrieved, relevant, k),
         "top_1_hit": M.hit_at_k(retrieved, relevant, 1),
         "top_3_hit": M.hit_at_k(retrieved, relevant, 3),
     }

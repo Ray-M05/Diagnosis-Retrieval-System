@@ -10,12 +10,15 @@ import {
   ChevronUp,
   Loader2,
   Database,
+  Trash2,
 } from 'lucide-react';
 import {
   runEvaluation,
   fetchSeedQrels,
   listEvaluationRuns,
   getEvaluationRun,
+  deleteEvaluationRun,
+  deleteAllEvaluationRuns,
 } from './evaluation.api';
 import type {
   EvaluationMetrics,
@@ -37,6 +40,7 @@ const METRIC_LABELS: { key: keyof EvaluationMetrics; label: string; tooltip: str
   { key: 'ndcg_at_k', label: 'NDCG@k', tooltip: 'Normalized Discounted Cumulative Gain' },
   { key: 'fallout_at_k', label: 'Fallout@k', tooltip: 'Share of irrelevant items in the top-k (closed-world)' },
   { key: 'r_precision', label: 'R-Precision', tooltip: 'P@R, with R = |relevant|' },
+  { key: 'hit_at_k', label: 'Hit@k', tooltip: 'Fraction of queries with at least one relevant item in the top-k' },
   { key: 'rag_hit', label: 'RAG hit', tooltip: 'Fraction of queries where the LLM answer mentions the expected diagnosis (RAG mode only)' },
 ];
 
@@ -113,6 +117,28 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
       setExpandedQueries(new Set());
     } catch (e: any) {
       setError(e?.message ?? `Could not load run ${runId}`);
+    }
+  };
+
+  const onDeleteRun = async (runId: number) => {
+    if (!window.confirm(`Delete run #${runId}? This cannot be undone.`)) return;
+    try {
+      await deleteEvaluationRun(runId);
+      setPastRuns((prev) => prev.filter((r) => r.id !== runId));
+      if (report?.run_id === runId) setReport(null);
+    } catch (e: any) {
+      setError(e?.message ?? `Could not delete run ${runId}`);
+    }
+  };
+
+  const onDeleteAllRuns = async () => {
+    if (!window.confirm('Delete ALL previous runs? This cannot be undone.')) return;
+    try {
+      await deleteAllEvaluationRuns();
+      setPastRuns([]);
+      setReport(null);
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not delete runs');
     }
   };
 
@@ -352,9 +378,19 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
       {/* Past runs */}
       {pastRuns.length > 0 && (
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 text-sm font-extrabold text-gray-900 flex items-center gap-2">
-            <History className="w-4 h-4 text-gray-400" />
-            Previous runs ({pastRuns.length})
+          <div className="px-5 py-3 border-b border-gray-100 text-sm font-extrabold text-gray-900 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <History className="w-4 h-4 text-gray-400" />
+              Previous runs ({pastRuns.length})
+            </span>
+            <button
+              type="button"
+              onClick={onDeleteAllRuns}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear all
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -367,6 +403,7 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                   <th className="px-3 py-2 text-right">P@k</th>
                   <th className="px-3 py-2 text-right">MAP</th>
                   <th className="px-3 py-2 text-right">NDCG@k</th>
+                  <th className="px-3 py-2 text-right">Hit@k</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -380,13 +417,23 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                     <td className="px-3 py-2 text-right font-mono">{fmt(run.macro?.precision_at_k)}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(run.macro?.map)}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(run.macro?.ndcg_at_k)}</td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right font-mono">{fmt(run.macro?.hit_at_k)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => onLoadPastRun(run.id)}
                         className="text-indigo-600 hover:underline font-semibold"
                       >
                         Load
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteRun(run.id)}
+                        className="ml-3 text-red-500 hover:text-red-700"
+                        aria-label={`Delete run ${run.id}`}
+                        title="Delete run"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 inline" />
                       </button>
                     </td>
                   </tr>

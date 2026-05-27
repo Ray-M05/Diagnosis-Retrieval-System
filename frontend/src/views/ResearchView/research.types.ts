@@ -96,6 +96,7 @@ export interface EvaluationMetrics {
   ndcg_at_k: number;
   fallout_at_k: number;
   r_precision: number;
+  hit_at_k?: number;
   top_1_hit?: number;
   top_3_hit?: number;
   rag_hit?: number;

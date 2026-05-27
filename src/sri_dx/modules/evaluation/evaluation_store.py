@@ -184,5 +184,22 @@ class EvaluationStore:
             "per_query": per_query,
         }
 
+    def delete_run(self, run_id: int) -> bool:
+        """Delete a single run and its per-query rows. Returns True if a row was removed."""
+        self.conn.execute("DELETE FROM evaluation_per_query WHERE run_id = ?", (run_id,))
+        cur = self.conn.execute("DELETE FROM evaluation_runs WHERE id = ?", (run_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_all_runs(self) -> int:
+        """Delete every run and its per-query rows. Returns the number of runs removed."""
+        cur = self.conn.execute("SELECT COUNT(*) AS n FROM evaluation_runs")
+        count = int(cur.fetchone()["n"])
+        self.conn.executescript(
+            "DELETE FROM evaluation_per_query; DELETE FROM evaluation_runs;"
+        )
+        self.conn.commit()
+        return count
+
     def close(self) -> None:
         self.conn.close()

@@ -5,6 +5,8 @@ Endpoints:
   GET    /evaluation/seed-qrels  — raw contents of the committed seed JSONL
   GET    /evaluation/runs        — list past runs (summary)
   GET    /evaluation/runs/{id}   — full report for a single run
+  DELETE /evaluation/runs        — delete all runs
+  DELETE /evaluation/runs/{id}   — delete a single run
 """
 
 from __future__ import annotations
@@ -113,5 +115,22 @@ def build_evaluation_router(
         if run is None:
             raise HTTPException(404, detail=f"Run {run_id} not found.")
         return run
+
+    @router.delete("/runs")
+    async def delete_all_runs():
+        store = get_evaluation_store()
+        if store is None:
+            raise HTTPException(503, detail="Evaluation store not available.")
+        deleted = store.delete_all_runs()
+        return {"deleted": deleted}
+
+    @router.delete("/runs/{run_id}")
+    async def delete_run(run_id: int):
+        store = get_evaluation_store()
+        if store is None:
+            raise HTTPException(503, detail="Evaluation store not available.")
+        if not store.delete_run(run_id):
+            raise HTTPException(404, detail=f"Run {run_id} not found.")
+        return {"deleted": run_id}
 
     return router

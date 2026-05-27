@@ -56,3 +56,15 @@ export async function getEvaluationRun(runId: number): Promise<EvaluationReport>
   if (!res.ok) throw new Error(`Could not fetch run ${runId}: ${res.status}`);
   return res.json();
 }
+
+export async function deleteEvaluationRun(runId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/evaluation/runs/${runId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Could not delete run ${runId}: ${res.status}`);
+}
+
+export async function deleteAllEvaluationRuns(): Promise<number> {
+  const res = await fetch(`${API_BASE}/evaluation/runs`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Could not delete runs: ${res.status}`);
+  const data = await res.json();
+  return data.deleted ?? 0;
+}
