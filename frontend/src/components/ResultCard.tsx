@@ -9,11 +9,8 @@ export type ResultVariant = 'hybrid' | 'positioned' | 'web';
 
 const relevanceColor: Record<string, string> = {
   high: 'bg-green-100 text-green-700 border-green-200',
-  alta: 'bg-green-100 text-green-700 border-green-200',
   medium: 'bg-amber-100 text-amber-700 border-amber-200',
-  media: 'bg-amber-100 text-amber-700 border-amber-200',
   low: 'bg-gray-100 text-gray-500 border-gray-200',
-  baja: 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
 interface ResultCardProps {
@@ -89,13 +86,13 @@ export const ResultCard: React.FC<ResultCardProps> = ({
     >
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <div className="flex items-center gap-2 mb-1">
           {rank > 0 && (
             <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
               #{rank}
             </span>
           )}
-          <h3 className="text-xl font-bold text-gray-900 leading-tight flex items-center gap-1.5 min-w-0">
+          <h3 className="text-xl font-bold text-gray-900 leading-tight flex items-center gap-1.5 flex-1 min-w-0">
             {variant === 'web' && (
               <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
             )}
@@ -104,7 +101,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
 
           {/* Score (always when present) */}
           {typeof score === 'number' && score > 0 && (
-            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
+            <span className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
               <Target className="w-3 h-3" />
               {score.toFixed(score < 1 ? 3 : 2)}
             </span>

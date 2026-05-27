@@ -33,7 +33,7 @@ class TwoStageRetrievalConfig:
     hybrid_candidates: int = 100
 
     # Stage 2: Reranking
-    final_results: int = 10
+    final_results: int = 5
 
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     device: str = "cpu"
@@ -44,8 +44,13 @@ class TwoStageRetrievalConfig:
 
     # Disease aggregation
     min_ner_score: float = 0.5
-    max_diseases: int = 10
-    positioned_results: int = 10
+    max_diseases: int = 5
+    positioned_results: int = 5
+
+    # Number of reranked chunks fed into NER + disease grouping. Shared by
+    # diagnostic and positioned modes so both aggregate diseases from the same
+    # pool, keeping their rankings comparable (only the ordering differs).
+    aggregation_pool: int = 100
     enable_synonym_expansion: bool = True
     enable_prf: bool = False
 
@@ -231,9 +236,9 @@ class TwoStageRetrievalPipeline:
         excluded_chunk_ids: Optional[set[str]] = None,
     ) -> List[DiseaseResult]:
         """Three-stage search: hybrid → reranking → on-demand NER → disease aggregation."""
-        # NER needs enough chunks to find disease entities — always rerank at
-        # least 20 chunks regardless of the requested number of final diseases.
-        ner_k = max(final_results or self.config.final_results, 20)
+        # Rerank a fixed-size pool before aggregation so diagnostic and
+        # positioned modes group diseases from the same number of chunks.
+        ner_k = max(final_results or self.config.final_results, self.config.aggregation_pool)
         chunk_results = self.search(
             query,
             hybrid_candidates,
@@ -270,7 +275,10 @@ class TwoStageRetrievalPipeline:
         positioned_results: Optional[int] = None,
     ) -> list:
         """Positioned search: hybrid → reranking → on-demand NER → clinical positioning."""
-        chunk_results = self.search(query, hybrid_candidates, final_results)
+        # Rerank the same fixed-size pool as diagnostic mode before positioning,
+        # so both group diseases from the same chunks (only ordering differs).
+        pool = max(final_results or self.config.final_results, self.config.aggregation_pool)
+        chunk_results = self.search(query, hybrid_candidates, pool)
 
         if not chunk_results:
             logger.warning("No chunks available for clinical positioning")

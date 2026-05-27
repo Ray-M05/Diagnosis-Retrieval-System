@@ -712,7 +712,6 @@ def _run_positioning(query: str, k: int) -> list:
         return _pipeline.search_positioned(
             query=query,
             hybrid_candidates=100,
-            final_results=k,
             positioned_results=k,
         )
     except AttributeError:

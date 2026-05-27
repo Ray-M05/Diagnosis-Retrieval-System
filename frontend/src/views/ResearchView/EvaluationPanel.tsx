@@ -46,7 +46,9 @@ const fmt = (n: number | undefined) =>
 export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
   const [qrelsContent, setQrelsContent] = useState<string>('');
   const [qrelsName, setQrelsName] = useState<string>('');
-  const [k, setK] = useState<number>(10);
+  // Fixed disease-level cut-off (K_d). Both diagnostic and positioned modes
+  // return exactly this many unique diseases, so their rankings are comparable.
+  const k = 5;
   const [isRunning, setIsRunning] = useState(false);
   const [isLoadingSeed, setIsLoadingSeed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,21 +181,6 @@ export const EvaluationPanel: React.FC<EvaluationPanelProps> = ({ mode }) => {
                 )}
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-            <label className="text-xs font-semibold text-gray-600 flex-1 flex justify-between">
-              <span>k (cut-off)</span>
-              <span className="text-indigo-600 font-bold">{k}</span>
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={30}
-              step={1}
-              value={k}
-              onChange={(e) => setK(parseInt(e.target.value, 10))}
-              className="w-32 accent-indigo-600 cursor-pointer"
-            />
           </div>
           <button
             type="button"

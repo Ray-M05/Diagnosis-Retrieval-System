@@ -84,7 +84,7 @@ def test_positioning_service_falls_back_without_ner():
     positioned = service.position("wheezing", [result])
 
     assert positioned[0].disease_name == "asthma"
-    assert positioned[0].relevance_label in {"Alta", "Media", "Baja"}
+    assert positioned[0].relevance_label in {"High", "Medium", "Low"}
 
 
 def test_positioning_service_empty_results():

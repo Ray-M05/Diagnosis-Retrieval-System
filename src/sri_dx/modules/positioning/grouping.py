@@ -70,6 +70,7 @@ def _fallback_display(candidate: PositioningCandidate) -> str:
         candidate.title,
         candidate.section_heading,
         _slug_from_url(candidate.url),
+        re.sub(r"[-_]+", " ", candidate.doc_id).strip() if candidate.doc_id else None,
     )
     for value in candidates_in_order:
         if value and str(value).strip():
@@ -118,21 +119,35 @@ def group_candidates(
 
     for candidate in candidates:
         entities = _valid_problem_entities(candidate, cfg)
-        if not entities:
+        if entities:
+            # (group_key, disease_name, display) — for real diseases the
+            # normalized name doubles as the grouping key.
+            buckets = [(norm, norm, disp) for norm, disp, _ in entities]
+        else:
+            # No disease/problem detected: collapse orphan chunks by their
+            # document title so the whole document yields a single card instead
+            # of one card per chunk. The title-derived name becomes the disease
+            # name; doc_id is only a last resort when there is no usable title.
             display = _fallback_display(candidate)
-            # Use doc_id as the grouping key so multiple chunks from the same
-            # document without NER hits don't produce separate groups.
-            key = f"__doc__{candidate.doc_id}" if candidate.doc_id else normalize_disease_name(display)
-            entities = [(key, display, 1.0)]
+            disease_name = normalize_disease_name(candidate.title or display)
+            title_key = normalize_disease_name(candidate.title or "")
+            group_key = (
+                f"__doc_title__{title_key}"
+                if title_key
+                else f"__doc_id__{candidate.doc_id}"
+                if candidate.doc_id
+                else disease_name
+            )
+            buckets = [(group_key, disease_name, display)]
 
-        for normalized, display, _ in entities:
-            if not normalized:
+        for group_key, disease_name, display in buckets:
+            if not group_key:
                 continue
 
-            group = groups.get(normalized)
+            group = groups.get(group_key)
             if group is None:
-                group = ClinicalGroup(disease_name=normalized, display_name=display)
-                groups[normalized] = group
+                group = ClinicalGroup(disease_name=disease_name, display_name=display)
+                groups[group_key] = group
 
             if all(ev.chunk_id != candidate.chunk_id for ev in group.evidences):
                 group.evidences.append(candidate)
