@@ -25,8 +25,8 @@ class OpenSearchConfig:
     port: int = 9200
     use_ssl: bool = False
     verify_certs: bool = False
-    index_name: str = "clinical_docs_v1"
-    alias_name: str = "clinical_docs"
+    index_name: str = "clinical_docs_local_v1"
+    alias_name: str = "clinical_docs_local"
     shards: int = 1
     replicas: int = 0
     request_timeout: int = 60

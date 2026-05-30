@@ -326,8 +326,8 @@ class TwoStageRetrievalPipeline:
         logger.info("Running on-demand NER on %d reranked chunks...", len(texts))
         batch_entities = ner_adapter.predict_batch(texts)
 
-        for result, entities in zip(results, batch_entities):
-            ner_list = [
+        def _to_ner_list(entities) -> list[dict]:
+            return [
                 {
                     "text": e["word"],
                     "label": e["domain_label"],
@@ -337,9 +337,34 @@ class TwoStageRetrievalPipeline:
                 }
                 for e in entities
             ]
+
+        for result, entities in zip(results, batch_entities):
             if result.metadata is None:
                 result.metadata = {}
-            result.metadata["ner_entities"] = ner_list
+            result.metadata["ner_entities"] = _to_ner_list(entities)
+
+        # Fallback NER pass: for chunks whose text yielded no PROBLEM entity, run
+        # NER over the chunk's heading/title in a SINGLE batch so a disease can
+        # still be identified instead of dropping the chunk. Stored separately so
+        # the aggregator only consults it when text NER found nothing.
+        fallback_idx: list[int] = []
+        fallback_texts: list[str] = []
+        for i, result in enumerate(results):
+            entities = result.metadata.get("ner_entities", [])
+            has_problem = any(e.get("label") == "PROBLEM" for e in entities)
+            if has_problem:
+                continue
+            meta = result.metadata
+            header = (meta.get("section_heading") or meta.get("title") or "").strip()
+            if header:
+                fallback_idx.append(i)
+                fallback_texts.append(header)
+
+        if fallback_texts:
+            logger.info("Running fallback NER on %d chunk headings/titles...", len(fallback_texts))
+            fallback_entities = ner_adapter.predict_batch(fallback_texts)
+            for idx, entities in zip(fallback_idx, fallback_entities):
+                results[idx].metadata["ner_entities_title"] = _to_ner_list(entities)
 
     def print_disease_results(self, diseases: List[DiseaseResult]) -> None:
         print("\n" + "=" * 80)

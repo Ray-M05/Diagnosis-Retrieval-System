@@ -8,6 +8,7 @@ from dateutil import parser
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument
 from sri_dx.core.schemas.indexing.index_document import IndexDocument
 from sri_dx.modules.indexing.text.text_pipeline import TextAnalyzer
+from sri_dx.modules.indexing.title import derive_title
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +45,20 @@ def _flatten_sections(doc: AcquiredDocument) -> str:
 
 
 def _safe_title(doc: AcquiredDocument) -> str:
-    # Para indexación: evita None
-    if doc.content.title and doc.content.title.strip():
-        return doc.content.title.strip()
-    return ""
+    """Garantiza un título no vacío para indexación.
+
+    Cadena de fallback determinista (ver modules/indexing/title.derive_title):
+    título explícito → primer heading de sección → título derivado de la URL →
+    dominio → doc_id humanizado. Nunca devuelve "".
+    """
+    headings = [s.heading for s in doc.content.sections] if doc.content.sections else []
+    return derive_title(
+        explicit_title=doc.content.title,
+        section_headings=headings,
+        url=doc.url,
+        source_domain=doc.source_domain,
+        doc_id=doc.doc_id,
+    )
 
 
 def _compute_hash(body: str) -> str:

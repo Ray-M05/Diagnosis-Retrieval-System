@@ -45,9 +45,18 @@ def run_index_docs_and_chunks(host: str, port: int, use_semantic_chunker: bool =
         logger.error("No JSONL files found in data/processed/")
         return False
 
+    from sri_dx.core.index_names import resolve_index_names
+
+    names = resolve_index_names()
     source = JsonlDocumentSource(paths=paths)
-    doc_sink = OpenSearchIndexSink(OpenSearchConfig(host=host, port=port))
-    chunk_sink = OpenSearchChunksSink(OpenSearchChunksConfig(host=host, port=port))
+    doc_sink = OpenSearchIndexSink(OpenSearchConfig(
+        host=host, port=port,
+        index_name=names.docs_local_index, alias_name=names.docs_local_alias,
+    ))
+    chunk_sink = OpenSearchChunksSink(OpenSearchChunksConfig(
+        host=host, port=port,
+        index_name=names.chunks_local_index, alias_name=names.chunks_local_alias,
+    ))
     manifest = SqliteManifestStore(Path("data/index/manifest.sqlite"))
     chunk_cfg = ChunkingConfig(use_semantic_chunker=use_semantic_chunker)
     uc = IndexCombinedUseCase(
@@ -61,10 +70,15 @@ def run_index_docs_and_chunks(host: str, port: int, use_semantic_chunker: bool =
 def run_embeddings(host: str, port: int, batch_size: int, device: str) -> bool:
     """Phase 4: Generates embeddings in-process, reusing any already-loaded BERT model."""
     from sri_dx.usecases.indexing.embed_chunks import EmbedChunksUseCase, EmbedChunksConfig
+    from sri_dx.core.index_names import resolve_index_names
 
+    names = resolve_index_names()
     config = EmbedChunksConfig(
         chunks_host=host, chunks_port=port,
+        chunks_index=names.chunks_local_index,
         embeddings_host=host, embeddings_port=port,
+        embeddings_index=names.embeddings_index,
+        embeddings_alias=names.embeddings_alias,
         batch_size=batch_size,
         device=device,
     )
@@ -89,6 +103,11 @@ def main() -> None:
     parser.add_argument("--host", default="localhost", help="OpenSearch host")
     parser.add_argument("--port", type=int, default=9200, help="OpenSearch port")
     parser.add_argument(
+        "--reset", action="store_true",
+        help="Wipe the LOCAL docs/chunks indices + manifest before indexing "
+             "(clean re-index). Web and embeddings indices are left untouched.",
+    )
+    parser.add_argument(
         "--no-semantic-chunker", action="store_true",
         help="Disable SemanticChunker in Phase 3: use sliding-window chunking (faster, less precise)"
     )
@@ -112,6 +131,15 @@ def main() -> None:
 
     use_semantic = not args.no_semantic_chunker
     pipeline_start = time.time()
+
+    if args.reset:
+        from pathlib import Path as _Path
+        from sri_dx.app.cli.reset_indices import reset as reset_indices
+        print(f"\n{'='*60}\n  RESET: wiping LOCAL indices + manifest\n{'='*60}")
+        reset_indices(
+            host=args.host, port=args.port, scope="local",
+            keep_manifest=False, manifest_path=_Path("data/index/manifest.sqlite"),
+        )
 
     steps = [
         ("Phase 1: Acquisition", lambda: run_acquisition(), args.skip_acquisition),

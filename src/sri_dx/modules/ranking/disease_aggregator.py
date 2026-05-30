@@ -52,6 +52,17 @@ _SINGLE_WORD_NOISE: frozenset[str] = frozenset({
 })
 
 
+# Boilerplate section headings that are never a disease name. Used to avoid
+# orphan cards titled "Overview", "Summary", etc. when NER finds nothing.
+_GENERIC_HEADINGS: frozenset[str] = frozenset({
+    "overview", "summary", "introduction", "description", "main",
+    "symptoms", "causes", "diagnosis", "treatment", "prevention",
+    "symptoms and causes", "signs and symptoms", "about", "general",
+    "complications", "risk factors", "when to see a doctor", "outlook",
+    "definition", "background", "epidemiology",
+})
+
+
 # Common acronyms -> canonical name (local expansion, no network call)
 _ACRONYM_MAP: Dict[str, str] = {
     "uti": "urinary tract infection",
@@ -87,6 +98,12 @@ class DiseaseAggregatorConfig:
     min_ner_score: float = 0.5  # Minimum NER confidence to consider an entity
     max_diseases: int = 10  # Maximum number of diseases to return
     min_evidence_count: int = 1  # Minimum number of chunks for a disease to qualify
+    # When a chunk's text yields no PROBLEM entity, fall back to NER run on its
+    # heading/title (see TwoStageRetrievalPipeline._apply_ner_to_results, which
+    # stores those under metadata["ner_entities_title"]). If that also fails,
+    # the chunk is grouped in a title-keyed orphan bucket so it still produces a
+    # card. Set to False to restore the legacy "drop chunks without NER" path.
+    title_fallback: bool = True
 
 
 class DiseaseAggregator:
@@ -118,58 +135,51 @@ class DiseaseAggregator:
         disease_map: Dict[str, List[Tuple[DiseaseEvidence, str, int]]] = defaultdict(list)
 
         for position, result in enumerate(retrieval_results):
-            ner_entities = (result.metadata or {}).get("ner_entities", [])
-            if not ner_entities:
-                continue
+            meta = result.metadata or {}
+            section_heading = str(meta.get("section_heading") or "")
+            title = str(meta.get("title") or "")
 
             # One chunk contributes to EXACTLY ONE disease: the highest-scoring
             # PROBLEM entity that passes all filters. This guarantees chunk-to-
             # disease is 1:1 in the final ranking.
-            best: Optional[Tuple[float, str, str]] = None  # (ner_score, disease_text, normalized)
+            best = self._best_problem(meta.get("ner_entities", []))
 
-            for entity in ner_entities:
-                label = entity.get("label", "")
-                if label != "PROBLEM":
-                    continue
+            # Fallback 1: NER over the chunk's heading/title (pre-computed in a
+            # single batch by the pipeline) when the text yielded no PROBLEM.
+            if best is None and self.config.title_fallback:
+                best = self._best_problem(meta.get("ner_entities_title", []))
 
-                ner_score = float(entity.get("score", 0.0))
-                if ner_score < self.config.min_ner_score:
-                    continue
-
-                disease_text = entity.get("text", "").strip()
-                if not disease_text:
-                    continue
-
-                # Strip dangling open/close punctuation (e.g. "Pulmonary embolism (PE")
-                disease_text = re.sub(r"^[\s\(\[\{<]+|[\s\)\]\}>]+$", "", disease_text).strip()
-                if not disease_text:
-                    continue
-
-                # Filter single-word noise (anatomy/symptoms/generic terms).
-                # Multi-word entities always pass through.
-                words = disease_text.split()
-                if len(words) == 1 and disease_text.lower() in _SINGLE_WORD_NOISE:
-                    continue
-
-                normalized = self._normalize(disease_text, self._normalizer)
+            if best is not None:
+                ner_score, disease_text, normalized = best
+            elif self.config.title_fallback:
+                # Fallback 2: orphan bucket so the chunk still produces a card.
+                # Prefer the document title, then a URL-derived name, and only
+                # use the section heading if it is not a generic boilerplate
+                # heading ("Overview", "Summary", …) which is never a disease.
+                display = self._orphan_display(
+                    title=title,
+                    url=str(meta.get("url") or ""),
+                    section_heading=section_heading,
+                )
+                normalized = self._normalize(display, self._normalizer) if display else ""
                 if not normalized:
                     continue
-
-                if best is None or ner_score > best[0]:
-                    best = (ner_score, disease_text, normalized)
-
-            if best is None:
+                ner_score = 0.0
+                disease_text = display
+            else:
+                # Legacy behavior: drop chunks without a PROBLEM entity.
                 continue
 
-            ner_score, disease_text, normalized = best
             evidence = DiseaseEvidence(
-                chunk_id=result.metadata.get("chunk_id", ""),
+                chunk_id=meta.get("chunk_id", ""),
                 doc_id=result.doc_id,
                 rerank_score=result.rerank_score,
                 ner_score=ner_score,
                 combined_score=ner_score,
                 content_preview=(result.content or "")[:200],
-                url=result.metadata.get("url", ""),
+                url=meta.get("url", ""),
+                title=title,
+                section_heading=section_heading,
             )
             disease_map[normalized].append((evidence, disease_text, position))
 
@@ -206,6 +216,62 @@ class DiseaseAggregator:
             r.rank = i + 1
 
         return results[: self.config.max_diseases]
+
+    def _orphan_display(self, *, title: str, url: str, section_heading: str) -> str:
+        """Pick a human display name for an orphan chunk (no PROBLEM entity).
+
+        Generic boilerplate headings are never a disease, so they are skipped in
+        favor of the document title or a URL-derived name.
+        """
+        from sri_dx.modules.indexing.title import title_from_url
+
+        t = (title or "").strip()
+        if t:
+            return t
+        from_url = title_from_url(url)
+        if from_url:
+            return from_url
+        sh = (section_heading or "").strip()
+        if sh and sh.lower() not in _GENERIC_HEADINGS:
+            return sh
+        return ""
+
+    def _best_problem(
+        self, ner_entities: list
+    ) -> Optional[Tuple[float, str, str]]:
+        """Return (ner_score, disease_text, normalized) for the highest-scoring
+        PROBLEM entity passing all filters, or None if none qualifies."""
+        best: Optional[Tuple[float, str, str]] = None
+        for entity in ner_entities or []:
+            if entity.get("label", "") != "PROBLEM":
+                continue
+
+            ner_score = float(entity.get("score", 0.0))
+            if ner_score < self.config.min_ner_score:
+                continue
+
+            disease_text = entity.get("text", "").strip()
+            if not disease_text:
+                continue
+
+            # Strip dangling open/close punctuation (e.g. "Pulmonary embolism (PE")
+            disease_text = re.sub(r"^[\s\(\[\{<]+|[\s\)\]\}>]+$", "", disease_text).strip()
+            if not disease_text:
+                continue
+
+            # Filter single-word noise (anatomy/symptoms/generic terms).
+            # Multi-word entities always pass through.
+            words = disease_text.split()
+            if len(words) == 1 and disease_text.lower() in _SINGLE_WORD_NOISE:
+                continue
+
+            normalized = self._normalize(disease_text, self._normalizer)
+            if not normalized:
+                continue
+
+            if best is None or ner_score > best[0]:
+                best = (ner_score, disease_text, normalized)
+        return best
 
     @staticmethod
     def _normalize(text: str, normalizer: Optional[DiseaseNormalizerPort] = None) -> str:

@@ -8,10 +8,14 @@ Orchestrates the complete web-search-and-enrich pipeline:
    a. Extract symptom concepts from the query.
    b. Query all three medical APIs in parallel.
    c. Convert external documents to ``AcquiredDocument`` dicts.
-   d. Deduplicate against existing corpus.
+   d. Deduplicate against the WEB corpus (``doc_sink``/``chunk_sink`` point at
+      the dedicated web indices, so web ingestion never touches the local
+      corpus and dedup is web-vs-web by construction).
    e. Write delta JSONL.
-   f. Index delta with ``IndexCombinedUseCase`` (docs + chunks in one pass).
-   g. Re-run the hybrid retriever on the now-enriched index.
+   f. Index delta with ``IndexCombinedUseCase`` (docs + chunks in one pass)
+      into the WEB indices.
+   g. Re-run the hybrid retriever on the LOCAL index and interleave fresh web
+      chunks found in the web index.
 5. Return a :class:`WebSearchRunReport`.
 
 All text is in English.
@@ -200,9 +204,9 @@ class SearchWebAndEnrichUseCase:
     delta_writer:
         :class:`JsonlDeltaWriter` that writes delta files.
     doc_sink:
-        OpenSearch sink for ``clinical_docs``.
+        OpenSearch sink for the WEB docs index (``clinical_docs_web``).
     chunk_sink:
-        OpenSearch sink for ``clinical_chunks``.
+        OpenSearch sink for the WEB chunks index (``clinical_chunks_web``).
     manifest:
         SQLite manifest store for incremental indexing.
     report_dir:

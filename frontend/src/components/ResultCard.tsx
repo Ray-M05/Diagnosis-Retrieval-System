@@ -86,22 +86,22 @@ export const ResultCard: React.FC<ResultCardProps> = ({
     >
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-start gap-2 mb-1">
           {rank > 0 && (
-            <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+            <span className="mt-1 shrink-0 text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
               #{rank}
             </span>
           )}
-          <h3 className="text-xl font-bold text-gray-900 leading-tight flex items-center gap-1.5 flex-1 min-w-0">
+          <h3 className="text-xl font-bold text-gray-900 leading-tight flex items-start gap-1.5 flex-1 min-w-0">
             {variant === 'web' && (
-              <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+              <FileText className="w-4 h-4 mt-1 text-indigo-400 shrink-0" />
             )}
-            <span className="truncate">{title}</span>
+            <span className="break-words">{title}</span>
           </h3>
 
           {/* Score (always when present) */}
           {typeof score === 'number' && score > 0 && (
-            <span className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
+            <span className="mt-1 ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[11px] font-bold border border-amber-100/50">
               <Target className="w-3 h-3" />
               {score.toFixed(score < 1 ? 3 : 2)}
             </span>
@@ -110,7 +110,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           {/* Relevance badge only in positioned mode */}
           {variant === 'positioned' && relevanceLabel && (
             <span
-              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 border ${relevanceClass}`}
+              className={`mt-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 border ${relevanceClass}`}
             >
               {relevanceLabel}
             </span>

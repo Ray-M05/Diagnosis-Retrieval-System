@@ -10,8 +10,8 @@ class OpenSearchChunksConfig(BaseModel):
     port: int = 9200
     use_ssl: bool = False
     verify_certs: bool = False
-    index_name: str = "clinical_chunks_v1"
-    alias_name: str = "clinical_chunks"
+    index_name: str = "clinical_chunks_local_v1"
+    alias_name: str = "clinical_chunks_local"
     vector_dim: int = 768
     shards: int = 1
     replicas: int = 0

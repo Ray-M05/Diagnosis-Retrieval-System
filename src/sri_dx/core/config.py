@@ -10,9 +10,23 @@ class OpenSearchConfig:
     port: int = 9200
     use_ssl: bool = False
     verify_certs: bool = False
-    index_name: str = "clinical_docs_v1"
-    alias_name: str = "clinical_docs"
+    # Legacy single-corpus names. Kept pointing at the LOCAL docs index so any
+    # code still reading ``index_name``/``alias_name`` directly targets local.
+    index_name: str = "clinical_docs_local_v1"
+    alias_name: str = "clinical_docs_local"
     request_timeout: int = 30
+    # Separated corpora (see sri_dx.core.index_names). Local is the default
+    # retrieval target; web holds enrichment results; embeddings is shared.
+    docs_local_index: str = "clinical_docs_local_v1"
+    docs_local_alias: str = "clinical_docs_local"
+    docs_web_index: str = "clinical_docs_web_v1"
+    docs_web_alias: str = "clinical_docs_web"
+    chunks_local_index: str = "clinical_chunks_local_v1"
+    chunks_local_alias: str = "clinical_chunks_local"
+    chunks_web_index: str = "clinical_chunks_web_v1"
+    chunks_web_alias: str = "clinical_chunks_web"
+    embeddings_index: str = "clinical_embeddings_v1"
+    embeddings_alias: str = "clinical_embeddings"
 
 @dataclass(frozen=True)
 class IndexingConfig:
@@ -78,13 +92,30 @@ def load_config(config_path: Optional[Path] = None) -> SRIConfig:
             data = tomllib.load(f)
 
     os_data = data.get("opensearch", {})
+
+    def _os(env_key: str, toml_key: str, default: str) -> str:
+        return os.environ.get(env_key) or str(os_data.get(toml_key, default))
+
+    docs_local_index = _os("SRI_DOCS_LOCAL_INDEX", "docs_local_index", "clinical_docs_local_v1")
+    docs_local_alias = _os("SRI_DOCS_LOCAL_ALIAS", "docs_local_alias", "clinical_docs_local")
     opensearch = OpenSearchConfig(
         host=os.environ.get("SRI_OS_HOST", os_data.get("host", "localhost")),
         port=int(os.environ.get("SRI_OS_PORT", os_data.get("port", 9200))),
         use_ssl=os.environ.get("SRI_OS_SSL", str(os_data.get("use_ssl", "false"))).lower() == "true",
         verify_certs=os.environ.get("SRI_OS_VERIFY", str(os_data.get("verify_certs", "false"))).lower() == "true",
-        index_name=os.environ.get("SRI_OS_INDEX", os_data.get("index_name", "clinical_docs_v1")),
-        alias_name=os.environ.get("SRI_OS_ALIAS", os_data.get("alias_name", "clinical_docs")),
+        # Legacy fields default to the LOCAL docs index for backward compat.
+        index_name=os.environ.get("SRI_OS_INDEX", os_data.get("index_name", docs_local_index)),
+        alias_name=os.environ.get("SRI_OS_ALIAS", os_data.get("alias_name", docs_local_alias)),
+        docs_local_index=docs_local_index,
+        docs_local_alias=docs_local_alias,
+        docs_web_index=_os("SRI_DOCS_WEB_INDEX", "docs_web_index", "clinical_docs_web_v1"),
+        docs_web_alias=_os("SRI_DOCS_WEB_ALIAS", "docs_web_alias", "clinical_docs_web"),
+        chunks_local_index=_os("SRI_CHUNKS_LOCAL_INDEX", "chunks_local_index", "clinical_chunks_local_v1"),
+        chunks_local_alias=_os("SRI_CHUNKS_LOCAL_ALIAS", "chunks_local_alias", "clinical_chunks_local"),
+        chunks_web_index=_os("SRI_CHUNKS_WEB_INDEX", "chunks_web_index", "clinical_chunks_web_v1"),
+        chunks_web_alias=_os("SRI_CHUNKS_WEB_ALIAS", "chunks_web_alias", "clinical_chunks_web"),
+        embeddings_index=_os("SRI_EMBEDDINGS_INDEX", "embeddings_index", "clinical_embeddings_v1"),
+        embeddings_alias=_os("SRI_EMBEDDINGS_ALIAS", "embeddings_alias", "clinical_embeddings"),
     )
 
     idx_data = data.get("indexing", {})

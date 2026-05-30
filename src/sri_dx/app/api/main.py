@@ -109,6 +109,12 @@ def _normalize_opensearch_host(host: str) -> str:
     return host
 
 
+def _index_names():
+    """Resolve the separated local/web index names (env > config > default)."""
+    from sri_dx.core.index_names import resolve_index_names
+    return resolve_index_names()
+
+
 def _build_feedback_store():
     import os
     from pathlib import Path
@@ -178,16 +184,11 @@ def _build_pipeline(feedback_store=None):
         TwoStageRetrievalConfig,
     )
     os_host, os_port, use_ssl = _opensearch_settings()
-    chunks_index = (
-        os.environ.get("SRI_CHUNKS_INDEX")
-        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
-        or "clinical_chunks"
-    )
-    embeddings_index = (
-        os.environ.get("SRI_EMBEDDINGS_INDEX")
-        or os.environ.get("OPENSEARCH_EMBEDDINGS_INDEX")
-        or "clinical_embeddings_v1"
-    )
+    names = _index_names()
+    # Default retrieval targets the LOCAL corpus; web is consulted separately
+    # only when the sufficiency indicator triggers (see the web-enrich path).
+    chunks_index = names.chunks_local_alias
+    embeddings_index = names.embeddings_index
 
     lexical = OpenSearchSearchBackend(OpenSearchSearchConfig(
         host=os_host,
@@ -226,11 +227,7 @@ def _build_chunk_reader():
     )
 
     os_host, os_port, use_ssl = _opensearch_settings()
-    chunks_index = (
-        os.environ.get("SRI_CHUNKS_INDEX")
-        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
-        or "clinical_chunks"
-    )
+    chunks_index = _index_names().chunks_local_alias
     return OpenSearchChunkReader(
         OpenSearchChunkReaderConfig(
             host=os_host,
@@ -424,26 +421,13 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
 
     ws_cfg = cfg.web_search
     os_host, os_port, use_ssl = _opensearch_settings()
-    docs_index = (
-        os.environ.get("SRI_OS_INDEX")
-        or os.environ.get("OPENSEARCH_DOCS_INDEX")
-        or cfg.opensearch.index_name
-    )
-    docs_alias = (
-        os.environ.get("SRI_OS_ALIAS")
-        or os.environ.get("OPENSEARCH_DOCS_ALIAS")
-        or cfg.opensearch.alias_name
-    )
-    chunks_index = (
-        os.environ.get("SRI_CHUNKS_INDEX")
-        or os.environ.get("OPENSEARCH_CHUNKS_INDEX")
-        or "clinical_chunks_v1"
-    )
-    chunks_alias = (
-        os.environ.get("SRI_CHUNKS_ALIAS")
-        or os.environ.get("OPENSEARCH_CHUNKS_ALIAS")
-        or "clinical_chunks"
-    )
+    # Web enrichment writes to the dedicated WEB corpus so it never pollutes
+    # the local indices. Deduplication happens against the web corpus itself.
+    names = _index_names()
+    docs_index = names.docs_web_index
+    docs_alias = names.docs_web_alias
+    chunks_index = names.chunks_web_index
+    chunks_alias = names.chunks_web_alias
 
     api_service = MedicalApiSearchService(
         medlineplus=MedlinePlusClient(
@@ -545,43 +529,10 @@ def _clean_display_title(title: str) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
-_SLUG_NOISE_PATTERNS = (
-    re.compile(r"^syc[\s\-_]?\d+$", re.IGNORECASE),
-    re.compile(r"^pmc\d+$", re.IGNORECASE),
-    re.compile(r"^\d+$"),
-    re.compile(r"^(symptoms?[\s\-_]causes?|causes?|symptoms?|diagnosis|treatment|prevention)$", re.IGNORECASE),
-    re.compile(r"^(health[\s\-_]topics?|article|ency|medlineplus)$", re.IGNORECASE),
-)
-
-
-def _is_noise_slug(slug: str) -> bool:
-    s = slug.replace("-", " ").replace("_", " ").strip()
-    return any(p.match(s) for p in _SLUG_NOISE_PATTERNS)
-
-
 def _title_from_url(url: str) -> str | None:
-    """Best-effort title from a URL path. Picks the most meaningful slug,
-    skipping noise like 'syc-20352557', 'PMC1234', 'symptoms-causes', etc."""
-    if not url:
-        return None
-    try:
-        path = urlparse(url).path.strip("/")
-        if not path:
-            return None
-        segments = [s for s in path.split("/") if s]
-        # Walk from end to start, pick first segment that isn't noise.
-        for seg in reversed(segments):
-            seg_clean = re.sub(r"\.(html?|aspx?|php)$", "", seg, flags=re.IGNORECASE)
-            if _is_noise_slug(seg_clean):
-                continue
-            slug = seg_clean.replace("-", " ").replace("_", " ").strip()
-            if slug:
-                return slug.title()
-        # Fallback: last segment even if noisy
-        slug = segments[-1].replace("-", " ").replace("_", " ").strip()
-        return slug.title() if slug else None
-    except Exception:
-        return None
+    """Best-effort title from a URL path (see modules.indexing.title)."""
+    from sri_dx.modules.indexing.title import title_from_url
+    return title_from_url(url)
 
 
 def _load_doc_metadata_by_id(doc_ids: list[str]) -> dict[str, dict[str, str]]:
@@ -602,11 +553,9 @@ def _load_doc_metadata_by_id(doc_ids: list[str]) -> dict[str, dict[str, str]]:
     try:
         cfg = load_config()
         os_host, os_port, use_ssl = _opensearch_settings()
-        docs_index = (
-            os.environ.get("SRI_OS_INDEX")
-            or os.environ.get("OPENSEARCH_DOCS_INDEX")
-            or cfg.opensearch.index_name
-        )
+        # Diagnostic-mode cards come from local retrieval; look up titles in the
+        # local docs index.
+        docs_index = _index_names().docs_local_index
         client = OpenSearch(
             hosts=[{"host": os_host, "port": os_port}],
             use_ssl=use_ssl,
@@ -647,7 +596,16 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
         )
         meta = doc_meta.get(top_ev.doc_id, {}) if top_ev else {}
         url = meta.get("url") or (top_ev.url if top_ev else "")
-        title = meta.get("title") or (_title_from_url(url) if url else None)
+        # Header fallback chain so the card always shows a heading below the
+        # aggregation: doc title (mget) → chunk title → chunk section heading →
+        # URL-derived title → source domain.
+        title = (
+            meta.get("title")
+            or (_clean_display_title(top_ev.title) if top_ev and top_ev.title else None)
+            or (_clean_display_title(top_ev.section_heading) if top_ev and top_ev.section_heading else None)
+            or (_title_from_url(url) if url else None)
+            or (url.split("/")[2] if "://" in url else None)
+        )
         dtos.append(DiseaseDTO(
             id=disease_id,
             name=d.disease_name_display,

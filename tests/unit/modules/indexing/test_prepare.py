@@ -36,3 +36,34 @@ def test_prepare_index_document():
     assert idx_doc.word_count > 0
     assert idx_doc.content_hash is not None
     assert len(idx_doc.content_hash) >= 32, "El hash debe de ser al menos de 32 caracteres (sha256)"
+
+
+def _doc(*, title, sections, url="https://example.org/path", domain="example.org"):
+    return AcquiredDocument(
+        doc_id="doc_x",
+        url=url,
+        source_domain=domain,
+        fetched_at="2026-02-26T05:12:10Z",
+        crawl=CrawlMeta(depth=0, parent_url=None, seed_id="s", seed_group="g"),
+        content=Content(mime_type="text/html", title=title, sections=sections, body="body text"),
+    )
+
+
+def test_title_falls_back_to_section_heading_when_missing():
+    doc = _doc(title=None, sections=[Section(heading="Asthma", text="...")])
+    assert prepare_index_document(doc).title == "Asthma"
+
+
+def test_title_falls_back_to_url_slug_when_no_usable_heading():
+    doc = _doc(
+        title="   ",
+        sections=[Section(heading="main", text="...")],
+        url="https://www.mayoclinic.org/diseases-conditions/asthma/symptoms-causes/syc-20369653",
+    )
+    # "main" heading and noise slug are skipped → meaningful slug used.
+    assert prepare_index_document(doc).title == "Asthma"
+
+
+def test_title_never_empty():
+    doc = _doc(title=None, sections=[Section(heading="main", text="...")], url="", domain="")
+    assert prepare_index_document(doc).title  # non-empty fallback (humanized doc id)

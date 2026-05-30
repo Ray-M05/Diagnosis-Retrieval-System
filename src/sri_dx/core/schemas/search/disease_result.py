@@ -17,6 +17,10 @@ class DiseaseEvidence:
     combined_score: float  # rerank_score * ner_score (not currently multiplied; kept for future use)
     content_preview: str
     url: str
+    # Header context carried from the chunk so cards always have a heading to
+    # show below the aggregation, even when the doc title is empty.
+    title: str = ""
+    section_heading: str = ""
 
 
 @dataclass
