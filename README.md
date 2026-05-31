@@ -24,10 +24,12 @@ La primera ejecucion puede descargar modelos de HuggingFace para embeddings, NER
 El `docker-compose.yml` levanta:
 
 ```text
-opensearch     -> http://localhost:9200
-sri-dx         -> Streamlit en http://localhost:8501
-sri-dx-api     -> FastAPI en http://localhost:8000
+opensearch        -> http://localhost:9200
+sri-dx-api        -> FastAPI en http://localhost:8000
+sri-dx-frontend   -> Interfaz web en http://localhost:3000
 ```
+
+El frontend es una SPA React/Vite servida por nginx. nginx también actúa como proxy inverso hacia `sri-dx-api`, por lo que todas las llamadas a la API se hacen desde el mismo origen (`localhost:3000`) sin necesidad de configurar CORS.
 
 ## Montaje rapido con Docker
 
