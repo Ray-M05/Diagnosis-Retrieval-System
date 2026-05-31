@@ -36,6 +36,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./src:/app/src
+      - hf-cache:/root/.cache/huggingface
     environment:
       - OPENSEARCH_HOST=http://opensearch:9200
     command:
@@ -56,10 +57,32 @@ services:
       opensearch:
         condition: service_healthy
 
+  sri-dx-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sri-dx-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - sri-network
+    depends_on:
+      sri-dx-api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+
 networks:
   sri-network:
     driver: bridge
 
 volumes:
   opensearch-data:
+    driver: local
+  hf-cache:
     driver: local
