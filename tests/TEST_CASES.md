@@ -14,6 +14,10 @@
 
 ## Index
 
+0. [Web-Enrichment Validation Cases](#0-web-enrichment-validation-cases) — rare diseases poorly covered locally; web chunks must reach the final top
+    - 0.1 [POEMS Syndrome](#01-poems-syndrome)
+    - 0.2 [Susac Syndrome](#02-susac-syndrome)
+    - 0.3 [Whipple Disease](#03-whipple-disease)
 1. [Acromegaly](#1-acromegaly)
 2. [Lactic Acidosis](#2-lactic-acidosis)
 3. [Hyperthyroidism](#3-hyperthyroidism)
@@ -36,6 +40,56 @@
     - 11.9 [Acute Pancreatitis](#119-acute-pancreatitis)
     - 11.10 [Pheochromocytoma](#1110-pheochromocytoma)
 12. [Extended Disease Coverage](#12-extended-disease-coverage) — §12.1 to §12.65 (minimal-structure cases: query + expected output only)
+
+---
+
+## 0. Web-Enrichment Validation Cases
+
+> These cases exist to validate the **web-search-and-enrich** path end to end.
+> They are rare diseases the local corpus (Mayo Clinic / NHS / MSD Manuals / CDC)
+> barely covers, but which PubMed / Europe PMC cover well. With web enrichment ON
+> (`stages.web_enrichment = true`), the medical APIs are queried, their documents
+> are indexed, **embedded into the shared vector index**, and then retrieved through
+> the normal hybrid (BM25 + kNN) + cross-encoder pipeline alongside local content.
+> The validation criterion is that **web chunks reach the final top**, not just that
+> web search is triggered.
+>
+> **How to use:** paste the query into the search bar with web enrichment enabled.
+> Observe that several top cards link to `europepmc.org` / `pubmed.ncbi.nlm.nih.gov`.
+
+### 0.1 POEMS Syndrome
+
+```
+Middle-aged adult with progressive peripheral neuropathy, enlarged liver and spleen, skin hyperpigmentation and thickening, excessive hair growth, and a monoclonal plasma cell disorder with elevated VEGF.
+```
+
+- **Top-1 esperado:** POEMS syndrome (Polyneuropathy, Organomegaly, Endocrinopathy, Monoclonal protein, Skin changes).
+- **Diferenciales plausibles:** Chronic inflammatory demyelinating polyneuropathy (CIDP), multiple myeloma, amyloidosis, paraneoplastic neuropathy.
+- **Notas críticas:**
+  - Strongest web case observed: **9/10** final cards come from web (Europe PMC), all retrieved by kNN (`vector_score ≈ 0.97–0.98`) after embedding.
+  - POEMS is essentially absent from the local corpus, so without working web embedding the top would be irrelevant local conditions.
+
+### 0.2 Susac Syndrome
+
+```
+Young woman with the triad of encephalopathy with confusion, branch retinal artery occlusions causing visual loss, and sensorineural hearing loss.
+```
+
+- **Top-1 esperado:** Susac syndrome (retinocochleocerebral vasculopathy).
+- **Diferenciales plausibles:** Multiple sclerosis, ADEM, primary CNS angiitis, MELAS.
+- **Notas críticas:**
+  - Best **qualitative** web case: web chunks win even on the cross-encoder (positive `rerank_score ≈ 1.5–2.1`), not only on kNN — i.e. web is genuinely the most relevant, not merely surfaced. **7/10** top cards are web.
+
+### 0.3 Whipple Disease
+
+```
+Adult with chronic diarrhea and weight loss, migratory joint pain for years, abdominal pain, low-grade fever, and skin darkening; small bowel biopsy shows PAS-positive macrophages.
+```
+
+- **Top-1 esperado:** Whipple disease (*Tropheryma whipplei* infection).
+- **Diferenciales plausibles:** Celiac disease, inflammatory bowel disease, intestinal lymphoma, sprue.
+- **Notas críticas:**
+  - Mixed local/web case: the **#1** card is web (`rerank_score` above all local results), with local differentials (celiac, pouchitis) following. Validates that web competes on equal footing rather than being injected at fixed positions.
 
 ---
 

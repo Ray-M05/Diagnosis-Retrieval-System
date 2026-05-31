@@ -37,6 +37,9 @@ class EuropePmcClient:
     def __init__(self, retmax: int = 8, timeout: float = 20.0) -> None:
         self.retmax = retmax
         self.timeout = timeout
+        # Set to True when the most recent search() errored out (timeout / HTTP
+        # error / network failure) rather than genuinely returning no results.
+        self.last_request_failed = False
 
     async def search(self, query: str) -> list[ExternalApiDocument]:
         """
@@ -63,6 +66,7 @@ class EuropePmcClient:
         logger.info(
             "Europe PMC: querying '%s...' (pageSize=%d)", query[:80], self.retmax
         )
+        self.last_request_failed = False
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -70,15 +74,18 @@ class EuropePmcClient:
                 response.raise_for_status()
         except httpx.TimeoutException:
             logger.warning("Europe PMC: request timed out for query '%s...'", query[:60])
+            self.last_request_failed = True
             return []
         except httpx.HTTPStatusError as exc:
             logger.warning(
                 "Europe PMC: HTTP %d for query '%s...'",
                 exc.response.status_code, query[:60],
             )
+            self.last_request_failed = True
             return []
         except Exception as exc:  # noqa: BLE001
             logger.warning("Europe PMC: unexpected error — %s", exc)
+            self.last_request_failed = True
             return []
 
         return self._parse_json(response.json(), query)

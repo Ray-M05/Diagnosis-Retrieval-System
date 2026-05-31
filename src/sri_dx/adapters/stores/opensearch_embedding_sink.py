@@ -132,9 +132,15 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
         query_vector: "NDArray[Any]",
         k: int = 10,
         filters: Optional[Dict[str, Any]] = None,
-        min_score: float = 0.0
+        min_score: float = 0.0,
+        exclude_seed_group_prefixes: Optional[List[str]] = None,
     ) -> List[EmbeddingSearchResult]:
-        """kNN search by cosine similarity."""
+        """kNN search by cosine similarity.
+
+        ``exclude_seed_group_prefixes`` excludes any embedding whose ``seed_group``
+        starts with one of the given prefixes (e.g. ``["api_"]`` to drop web/API
+        vectors from a local-only search over the shared embeddings index).
+        """
         import numpy as np
 
         # Normalize vector for cosine similarity
@@ -155,29 +161,35 @@ class OpenSearchEmbeddingSink(EmbeddingStorePort):
                 }
             },
             "_source": [
-                "embedding_id", "chunk_id", "doc_id", 
+                "embedding_id", "chunk_id", "doc_id",
                 "chunk_text_preview", "section_heading",
                 "seed_group", "source_domain", "chunk_index",
                 "concept_ids"
             ]
         }
-        
-        # Apply filters if provided
+
+        # Apply filters / exclusions if provided
+        filter_clauses = []
+        must_not_clauses = []
         if filters:
-            filter_clauses = []
             for field, value in filters.items():
                 if isinstance(value, list):
                     filter_clauses.append({"terms": {field: value}})
                 else:
                     filter_clauses.append({"term": {field: value}})
-            
-            knn_query["query"] = {
-                "bool": {
-                    "must": [knn_query["query"]],
-                    "filter": filter_clauses
-                }
-            }
-        
+
+        for prefix in (exclude_seed_group_prefixes or []):
+            if prefix:
+                must_not_clauses.append({"prefix": {"seed_group": prefix}})
+
+        if filter_clauses or must_not_clauses:
+            bool_query: Dict[str, Any] = {"must": [knn_query["query"]]}
+            if filter_clauses:
+                bool_query["filter"] = filter_clauses
+            if must_not_clauses:
+                bool_query["must_not"] = must_not_clauses
+            knn_query["query"] = {"bool": bool_query}
+
         response = self.client.search(index=self.cfg.index_name, body=knn_query)
         
         results = []

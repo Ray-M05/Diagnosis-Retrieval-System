@@ -65,6 +65,9 @@ export interface WebEnrichmentSummary {
   api_retrieved: number;
   api_new_documents: number;
   duplicates_removed: number;
+  /** Sources that errored out (timeout / HTTP / rate-limit) instead of
+   *  returning zero results. Non-empty means the "no results" was unreliable. */
+  api_failed_sources: string[];
 }
 
 export interface SufficiencyInfo {

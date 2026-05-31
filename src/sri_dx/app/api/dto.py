@@ -98,6 +98,10 @@ class WebEnrichmentSummary(BaseModel):
     api_retrieved: int = 0
     api_new_documents: int = 0
     duplicates_removed: int = 0
+    # Sources whose request errored out (timeout / HTTP / network) instead of
+    # genuinely returning zero results — e.g. NCBI/EuropePMC rate-limiting after
+    # repeating the same query. Lets the UI warn instead of saying "no results".
+    api_failed_sources: list[str] = Field(default_factory=list)
 
 
 class SufficiencyInfo(BaseModel):

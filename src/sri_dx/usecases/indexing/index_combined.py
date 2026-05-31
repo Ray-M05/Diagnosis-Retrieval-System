@@ -37,14 +37,21 @@ def _print_progress(seen: int, total: int, chunks_seen: int, t0: float) -> None:
     pct = seen / total * 100 if total > 0 else 0
     bar_len = 30
     filled = int(bar_len * seen / total) if total > 0 else 0
-    bar = "█" * filled + "░" * (bar_len - filled)
-    sys.stdout.write(
+    bar = "#" * filled + "-" * (bar_len - filled)
+    line = (
         f"\r  [{bar}] {pct:5.1f}%  doc {seen}/{total}"
         f"  chunks={chunks_seen}"
         f"  {rate:.1f} doc/s"
         f"  ETA {eta/60:.1f}min"
     )
-    sys.stdout.flush()
+    # A non-UTF-8 console (e.g. Windows cp1252) must never crash indexing over a
+    # cosmetic progress bar — this runs inside the web-search request path, where
+    # a crash here leaves web docs/chunks unindexed (Indexing: docs=0 chunks=0).
+    try:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    except (UnicodeEncodeError, OSError):
+        pass
 
 
 @dataclass
@@ -62,6 +69,19 @@ class IndexCombinedUseCase:
     bad_docs_path: Path = Path("data/index/bad_docs.jsonl")
 
     def run(self, *, refresh: bool = False, with_concepts: bool = True) -> dict[str, Any]:
+        # This use case prints a progress UI with box-drawing/arrow characters.
+        # On a non-UTF-8 console (e.g. Windows cp1252) those raise UnicodeEncodeError
+        # mid-run, which — because this also runs inside the web-search request path —
+        # would abort indexing and leave web docs/chunks unindexed. Make stdout/stderr
+        # tolerant so a cosmetic glyph can never break indexing.
+        for _stream in (sys.stdout, sys.stderr):
+            reconfigure = getattr(_stream, "reconfigure", None)
+            if callable(reconfigure):
+                try:
+                    reconfigure(errors="replace")
+                except (ValueError, OSError):
+                    pass
+
         self.doc_sink.ensure_index()
         self.chunk_sink.ensure_index()
         self.doc_sink.set_refresh_interval("-1")

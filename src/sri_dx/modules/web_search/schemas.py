@@ -113,15 +113,26 @@ class SufficiencyDecision:
 
 @dataclass
 class ApiRetrievalStats:
-    """Per-source document counts returned by the APIs."""
+    """Per-source document counts returned by the APIs.
+
+    ``failed_sources`` lists the sources whose request errored out (timeout,
+    HTTP error, network failure) rather than genuinely returning zero results.
+    This lets the UI distinguish "the APIs found nothing" from "the APIs could
+    not be reached" (e.g. rate-limiting after a burst of identical queries).
+    """
 
     medlineplus: int = 0
     europe_pmc: int = 0
     pubmed: int = 0
+    failed_sources: list[str] = field(default_factory=list)
 
     @property
     def total(self) -> int:
         return self.medlineplus + self.europe_pmc + self.pubmed
+
+    @property
+    def had_failures(self) -> bool:
+        return bool(self.failed_sources)
 
 
 @dataclass

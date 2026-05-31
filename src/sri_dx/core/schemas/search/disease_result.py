@@ -33,6 +33,10 @@ class DiseaseResult:
     evidence_count: int
     evidence: List[DiseaseEvidence] = field(default_factory=list)
     rank: int = 0  # 1-based position in the final ranking
+    # True when the display name came from a real NER PROBLEM entity. False when
+    # it was derived from the title/URL fallback (orphan chunk). The API uses
+    # this to prefer the document title for the card header in the fallback case.
+    from_ner: bool = True
 
     def __str__(self) -> str:
         lines = [

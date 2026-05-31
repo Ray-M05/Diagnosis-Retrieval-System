@@ -30,7 +30,7 @@ services:
     build: .
     container_name: sri-dx-api
     ports:
-      - "8080:8000"
+      - "8000:8000"
     env_file:
       - .env
     volumes:

@@ -59,7 +59,8 @@
       "Bash(curl -s \"http://localhost:9200/clinical_chunks_v1/_search\" -H \"Content-Type: application/json\" -d '{ \"size\": 0, \"aggs\": { \"headings\": { \"terms\": {\"field\": \"section_heading.keyword\", \"size\": 40, \"order\": {\"_count\": \"desc\"}} } } }')",
       "Bash(.venv-cuda/Scripts/python.exe -m streamlit run src/sri_dx/app/ui/ui_streamlit.py --server.headless true)",
       "Bash(.venv-cuda/Scripts/python.exe -c \"import requests; r=requests.get\\('http://localhost:9200'\\); print\\(r.status_code, r.json\\(\\).get\\('version',{}\\).get\\('number','?'\\)\\)\")",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/usecases/web_search/test_search_web_and_enrich.py -q)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Melissa Maureen\\Documents\\univ\\SRI\\Diagnosis-Retrieval-System\\data\\index"

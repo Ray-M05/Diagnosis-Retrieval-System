@@ -131,8 +131,8 @@ class DiseaseAggregator:
         Returns:
             List of DiseaseResult ordered by best position in the ranking.
         """
-        # disease_name_normalized → list of (evidence, display_name, position)
-        disease_map: Dict[str, List[Tuple[DiseaseEvidence, str, int]]] = defaultdict(list)
+        # disease_name_normalized → list of (evidence, display_name, position, from_ner)
+        disease_map: Dict[str, List[Tuple[DiseaseEvidence, str, int, bool]]] = defaultdict(list)
 
         for position, result in enumerate(retrieval_results):
             meta = result.metadata or {}
@@ -149,19 +149,24 @@ class DiseaseAggregator:
             if best is None and self.config.title_fallback:
                 best = self._best_problem(meta.get("ner_entities_title", []))
 
+            from_ner = best is not None
             if best is not None:
                 ner_score, disease_text, normalized = best
             elif self.config.title_fallback:
-                # Fallback 2: orphan bucket so the chunk still produces a card.
-                # Prefer the document title, then a URL-derived name, and only
-                # use the section heading if it is not a generic boilerplate
-                # heading ("Overview", "Summary", …) which is never a disease.
+                # Fallback 2: orphan chunk (no PROBLEM entity). Derive the disease
+                # from the document title/URL and group by its NORMALISED form so
+                # that (a) several headingless chunks of the same condition merge
+                # into one card, and (b) they merge with NER-detected chunks of
+                # the same disease (e.g. doc-title "Acromegaly - Symptoms and
+                # causes" → "acromegaly" → same bucket as the NER "acromegaly").
                 display = self._orphan_display(
                     title=title,
                     url=str(meta.get("url") or ""),
                     section_heading=section_heading,
                 )
-                normalized = self._normalize(display, self._normalizer) if display else ""
+                if not display:
+                    continue
+                normalized = self._normalize(display, self._normalizer)
                 if not normalized:
                     continue
                 ner_score = 0.0
@@ -181,7 +186,7 @@ class DiseaseAggregator:
                 title=title,
                 section_heading=section_heading,
             )
-            disease_map[normalized].append((evidence, disease_text, position))
+            disease_map[normalized].append((evidence, disease_text, position, from_ner))
 
         # Build one DiseaseResult per disease
         results: List[DiseaseResult] = []
@@ -190,15 +195,19 @@ class DiseaseAggregator:
                 continue
 
             # Best (earliest) position in the ranking
-            best_position = min(pos for _, _, pos in entries)
-            evidence_list = [ev for ev, _, _ in entries]
+            best_position = min(pos for _, _, pos, _ in entries)
+            evidence_list = [ev for ev, _, _, _ in entries]
 
             # Display name: use the one from the chunk with the best position
             best_display = normalized_name
-            for ev, display, pos in entries:
+            for ev, display, pos, _ in entries:
                 if pos == best_position:
                     best_display = display
                     break
+
+            # The disease is NER-backed if ANY of its chunks matched a real
+            # PROBLEM entity (vs. all coming from the title/URL fallback).
+            disease_from_ner = any(fn for _, _, _, fn in entries)
 
             results.append(
                 DiseaseResult(
@@ -207,6 +216,7 @@ class DiseaseAggregator:
                     aggregated_score=float(best_position),
                     evidence_count=len(evidence_list),
                     evidence=evidence_list,
+                    from_ner=disease_from_ner,
                 )
             )
 
@@ -277,6 +287,16 @@ class DiseaseAggregator:
     def _normalize(text: str, normalizer: Optional[DiseaseNormalizerPort] = None) -> str:
         name = text.strip().lower()
         name = re.sub(r"^\d+\s+", "", name)
+        # Strip doc-title boilerplate suffixes so a document title like
+        # "Acromegaly - Symptoms and causes" or "Type 1 Diabetes Mellitus -
+        # Endocrinology - MSD Manual ..." normalises to the disease itself and
+        # merges with the NER-detected bucket of the same condition.
+        name = re.split(
+            r"\s*[-–|]\s*(symptoms?\b|signs?\b|causes?\b|diagnosis\b|treatment\b|"
+            r"overview\b|endocrinology\b|pulmonology\b|cardiology\b|neurology\b|"
+            r"msd manual\b|mayo clinic\b)",
+            name,
+        )[0].strip()
         name = re.sub(r"\s+(symptoms?|signs?|disease|disorder|syndrome)\s*$", "", name)
         name = name.strip()
         if name in _ACRONYM_MAP:

@@ -127,6 +127,17 @@ class TestApiRetrievalStats:
         stats = ApiRetrievalStats()
         assert stats.total == 0
 
+    def test_no_failures_by_default(self):
+        stats = ApiRetrievalStats(medlineplus=1)
+        assert stats.failed_sources == []
+        assert stats.had_failures is False
+
+    def test_had_failures_when_source_errored(self):
+        # total can be 0 while a source errored out — these are distinct cases.
+        stats = ApiRetrievalStats(failed_sources=["pubmed", "europe_pmc"])
+        assert stats.total == 0
+        assert stats.had_failures is True
+
 
 class TestWebSearchRunReport:
     def _decision(self, sufficient: bool) -> SufficiencyDecision:

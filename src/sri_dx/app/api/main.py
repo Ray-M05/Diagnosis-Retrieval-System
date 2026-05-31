@@ -171,7 +171,7 @@ def _compute_corpus_size() -> int:
         return 1
 
 
-def _build_pipeline(feedback_store=None):
+def _build_pipeline(feedback_store=None, *, web: bool = False):
     from sri_dx.adapters.stores.opensearch_search_backend import (
         OpenSearchSearchBackend,
         OpenSearchSearchConfig,
@@ -185,9 +185,15 @@ def _build_pipeline(feedback_store=None):
     )
     os_host, os_port, use_ssl = _opensearch_settings()
     names = _index_names()
-    # Default retrieval targets the LOCAL corpus; web is consulted separately
-    # only when the sufficiency indicator triggers (see the web-enrich path).
-    chunks_index = names.chunks_local_alias
+    # Default retrieval targets the LOCAL corpus. When web=True (the web-enrich
+    # re-run), the lexical backend targets BOTH the local and web chunk indices
+    # (OpenSearch accepts a comma-separated list), so a single hybrid+rerank pass
+    # ranks local and web chunks together. The embeddings index is shared, so the
+    # kNN side already returns both once the web chunks are embedded.
+    if web:
+        chunks_index = f"{names.chunks_local_alias},{names.chunks_web_alias}"
+    else:
+        chunks_index = names.chunks_local_alias
     embeddings_index = names.embeddings_index
 
     lexical = OpenSearchSearchBackend(OpenSearchSearchConfig(
@@ -206,7 +212,12 @@ def _build_pipeline(feedback_store=None):
     hybrid = SearchHybridUseCase(
         lexical_backend=lexical,
         embedding_store=embedding,
-        config=HybridSearchConfig(fusion_method="rrf", lexical_k=100, semantic_k=100, use_reranking=False),
+        config=HybridSearchConfig(
+            fusion_method="rrf", lexical_k=100, semantic_k=100, use_reranking=False,
+            # Local-only search (web toggle off) must not surface web vectors via
+            # kNN over the shared embeddings index; the combined pipeline keeps them.
+            exclude_web_embeddings=not web,
+        ),
     )
     enable_prf = os.environ.get("SRI_ENABLE_PRF", "false").lower() in {"1", "true", "yes", "on"}
     return TwoStageRetrievalPipeline(
@@ -413,6 +424,7 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
     from sri_dx.modules.web_search.delta_writer import JsonlDeltaWriter
     from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
     from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
+    from sri_dx.usecases.indexing.schemas.embed_chunks_config import EmbedChunksConfig
     from sri_dx.core.config import load_config
 
     cfg = load_config()
@@ -429,6 +441,26 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
     chunks_index = names.chunks_web_index
     chunks_alias = names.chunks_web_alias
 
+    # Re-run retrieval over local+web together: a combined pipeline whose lexical
+    # backend hits both chunk indices. kNN already spans both (shared embeddings
+    # index) once the web chunks are embedded in Stage 6b.
+    combined_pipeline = _build_pipeline(_feedback_store, web=True)
+
+    # Embed web chunks (read from the WEB chunks index) into the SHARED vector
+    # index, mirroring the local Phase-4 wiring in the orchestrator. Device follows
+    # the environment so it matches the rest of the system (GPU when available).
+    embed_device = os.environ.get("SRI_EMBED_DEVICE", "auto")
+    embed_config = EmbedChunksConfig(
+        chunks_host=os_host,
+        chunks_port=os_port,
+        chunks_index=names.chunks_web_index,
+        embeddings_host=os_host,
+        embeddings_port=os_port,
+        embeddings_index=names.embeddings_index,
+        embeddings_alias=names.embeddings_alias,
+        device=embed_device,
+    )
+
     api_service = MedicalApiSearchService(
         medlineplus=MedlinePlusClient(
             retmax=ws_cfg.retmax_medlineplus,
@@ -444,7 +476,8 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
         ),
     )
     use_case = SearchWebAndEnrichUseCase(
-        pipeline=_pipeline,
+        pipeline=combined_pipeline,
+        local_pipeline=_pipeline,
         sufficiency_evaluator=LocalSufficiencyEvaluator.from_config(ws_cfg.sufficiency),
         api_service=api_service,
         delta_writer=JsonlDeltaWriter(ws_cfg.delta_dir),
@@ -467,6 +500,7 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
         manifest=SqliteManifestStore(cfg.indexing.manifest_path),
         report_dir=ws_cfg.report_dir,
         chunk_cfg=ChunkingConfig(max_chars=1200, overlap_chars=200, min_chars=100),
+        embed_config=embed_config,
     )
     report = use_case.run(query=query)
     return (
@@ -477,6 +511,7 @@ def _run_web_enrichment(query: str) -> tuple[WebEnrichmentSummary, list[DiseaseD
             api_retrieved=report.api_retrieval.total,
             api_new_documents=report.deduplication.new_documents,
             duplicates_removed=report.deduplication.duplicates_removed,
+            api_failed_sources=list(report.api_retrieval.failed_sources),
         ),
         _web_report_results_to_dtos(report.results),
     )
@@ -491,8 +526,14 @@ def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
         chunk_id = str(result.get("chunk_id") or doc_id)
         url = str(result.get("url") or "")
         source_domain = str(result.get("source_domain") or "")
-        title = _clean_display_title(
-            str(result.get("title") or _display_title_from_url(url, source_domain, f"Resultado web #{rank}"))
+        # Title fallback chain — never expose raw URL slugs (e.g. "syc-20351222")
+        # or chunk ids. Use the real doc title, then a cleaned URL-derived name
+        # (which skips noise slugs), then the source domain.
+        title = (
+            _clean_display_title(str(result.get("title") or ""))
+            or _title_from_url(url)
+            or source_domain
+            or f"Resultado web #{rank}"
         )
         rerank_score = float(result.get("rerank_score") or 0.0)
         dtos.append(DiseaseDTO(
@@ -510,18 +551,6 @@ def _web_report_results_to_dtos(results: list[dict]) -> list[DiseaseDTO]:
             doc_title=title,
         ))
     return dtos
-
-
-def _display_title_from_url(url: str, source_domain: str, fallback: str) -> str:
-    if source_domain:
-        parsed = urlparse(url) if url else None
-        path = parsed.path.strip("/") if parsed else ""
-        if path:
-            slug = path.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").strip()
-            if slug:
-                return f"{slug} ({source_domain})"
-        return source_domain
-    return fallback
 
 
 def _clean_display_title(title: str) -> str:
@@ -595,7 +624,9 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
             else f"{d.disease_name_display}:{d.rank}"
         )
         meta = doc_meta.get(top_ev.doc_id, {}) if top_ev else {}
-        url = meta.get("url") or (top_ev.url if top_ev else "")
+        # Normalise to a string: top_ev.url can be None (e.g. web abstracts with
+        # no canonical URL), and the `"://" in url` checks below would raise.
+        url = meta.get("url") or (top_ev.url if top_ev else "") or ""
         # Header fallback chain so the card always shows a heading below the
         # aggregation: doc title (mget) → chunk title → chunk section heading →
         # URL-derived title → source domain.
@@ -606,9 +637,16 @@ def _diseases_to_dtos(diseases: list) -> list[DiseaseDTO]:
             or (_title_from_url(url) if url else None)
             or (url.split("/")[2] if "://" in url else None)
         )
+        # Card header: prefer the NER disease name. But when the disease was NOT
+        # NER-backed (fallback from a generic heading/slug like "Overview" or
+        # "Symptoms"), use the real document title instead so the header is a
+        # meaningful condition name rather than a boilerplate heading.
+        display_name = d.disease_name_display
+        if not getattr(d, "from_ner", True) and title:
+            display_name = title
         dtos.append(DiseaseDTO(
             id=disease_id,
-            name=d.disease_name_display,
+            name=display_name,
             description=top_ev.content_preview if top_ev else "",
             symptoms=[],
             source=url.split("/")[2] if "://" in url else "",
@@ -665,9 +703,10 @@ def _run_hybrid_chunks(query: str, k: int) -> list[HybridChunkDTO]:
     return dtos
 
 
-def _run_positioning(query: str, k: int) -> list:
+def _run_positioning(query: str, k: int, pipeline=None) -> list:
+    p = pipeline if pipeline is not None else _pipeline
     try:
-        return _pipeline.search_positioned(
+        return p.search_positioned(
             query=query,
             hybrid_candidates=100,
             positioned_results=k,
@@ -790,7 +829,14 @@ def _execute_pipeline_stages(
             logger.exception("hybrid retrieval failed")
             raise HTTPException(500, detail=str(exc)) from exc
 
-    positioned = _run_positioning(query, k) if stages.positioning else None
+    # Positioning must see web evidence when web enrichment ran, so it uses the
+    # combined local+web pipeline. The frontend shows the positioned ranking in
+    # preference to `hybrid`, so without this web cards never reach the UI.
+    positioning_pipeline = _build_pipeline(web=True) if stages.web_enrichment else None
+    positioned = (
+        _run_positioning(query, k, pipeline=positioning_pipeline)
+        if stages.positioning else None
+    )
 
     hybrid_chunks: list[HybridChunkDTO] | None = None
     if stages.raw_hybrid:

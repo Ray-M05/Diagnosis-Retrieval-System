@@ -113,6 +113,7 @@ def _build_use_case(tmp_path: Path):
     doc_sink = MagicMock()
     chunk_sink = MagicMock()
     manifest = MagicMock()
+    embed_config = MagicMock()
 
     uc = SearchWebAndEnrichUseCase(
         pipeline=pipeline,
@@ -123,6 +124,7 @@ def _build_use_case(tmp_path: Path):
         chunk_sink=chunk_sink,
         manifest=manifest,
         report_dir=tmp_path / "reports",
+        embed_config=embed_config,
     )
     return uc, pipeline, sufficiency_evaluator, api_service
 
@@ -175,10 +177,12 @@ class TestSearchWebAndEnrichUseCase:
             ApiRetrievalStats(medlineplus=0, europe_pmc=0, pubmed=2),
         )
 
-        # Mock IndexCombinedUseCase so we don't need OpenSearch
+        # Mock IndexCombinedUseCase + EmbedChunksUseCase so we don't need OpenSearch
         with patch(
             "sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"
-        ) as mock_indexer_cls:
+        ) as mock_indexer_cls, patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.EmbedChunksUseCase"
+        ):
             mock_indexer = MagicMock()
             mock_indexer.run.return_value = {"docs_indexed_ok": 2, "chunks_indexed_ok": 6}
             mock_indexer_cls.return_value = mock_indexer
@@ -203,7 +207,11 @@ class TestSearchWebAndEnrichUseCase:
         )
         api_service.search_sync.return_value = ([], ApiRetrievalStats())
 
-        with patch("sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"):
+        with patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"
+        ), patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.EmbedChunksUseCase"
+        ):
             report = uc.run("fever and rash")
 
         assert report.web_search_triggered is True
@@ -223,7 +231,12 @@ class TestSearchWebAndEnrichUseCase:
 
         with patch(
             "sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"
-        ) as mock_indexer_cls:
+        ) as mock_indexer_cls, patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.EmbedChunksUseCase"
+        ):
+            mock_indexer_cls.return_value.run.return_value = {
+                "docs_indexed_ok": 0, "chunks_indexed_ok": 0,
+            }
             report = uc.run("chest pain")
 
         assert report.deduplication.new_documents <= 1
@@ -245,3 +258,62 @@ class TestSearchWebAndEnrichUseCase:
             data = json.load(fh)
         assert data["query"] == "chest pain"
         assert data["web_search_triggered"] is False
+
+
+class TestWebChunkEmbedding:
+    """Stage 6b: after web chunks are indexed, they must be embedded into the
+    shared vector index so they compete by kNN in the normal hybrid path.
+
+    The legacy lexical merge (`_merge_by_rerank_score`) and the separate web
+    rerank pass are gone: web results now flow through `pipeline.search()` itself
+    (a combined local+web pipeline), so there is nothing to merge."""
+
+    def test_embeds_when_chunks_indexed(self, tmp_path: Path):
+        uc, pipeline, evaluator, api_service = _build_use_case(tmp_path)
+
+        pipeline.search.side_effect = [
+            [_retrieval_result("d1", 0.3, "dom1.com")],
+            [_retrieval_result("d2", 0.85, "medlineplus.gov")],
+        ]
+        evaluator.evaluate.return_value = _insufficient_decision()
+        api_service.search_sync.return_value = (
+            [_ext_doc("111")], ApiRetrievalStats(pubmed=1),
+        )
+
+        with patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"
+        ) as mock_indexer_cls, patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.EmbedChunksUseCase"
+        ) as mock_embed_cls:
+            mock_indexer_cls.return_value.run.return_value = {
+                "docs_indexed_ok": 1, "chunks_indexed_ok": 3,
+            }
+            uc.run("chest pain unknown disease")
+
+        # Stage 6b ran: the embedder was built with the injected config and run().
+        mock_embed_cls.assert_called_once_with(uc.embed_config)
+        mock_embed_cls.return_value.run.assert_called_once()
+
+    def test_no_embedding_when_zero_chunks(self, tmp_path: Path):
+        uc, pipeline, evaluator, api_service = _build_use_case(tmp_path)
+
+        pipeline.search.side_effect = [
+            [_retrieval_result("d1", 0.3, "dom1.com")],
+            [_retrieval_result("d1", 0.3, "dom1.com")],
+        ]
+        evaluator.evaluate.return_value = _insufficient_decision()
+        api_service.search_sync.return_value = (
+            [_ext_doc("111")], ApiRetrievalStats(pubmed=1),
+        )
+
+        with patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.IndexCombinedUseCase"
+        ) as mock_indexer_cls, patch(
+            "sri_dx.usecases.web_search.search_web_and_enrich.EmbedChunksUseCase"
+        ) as mock_embed_cls:
+            mock_indexer_cls.return_value.run.return_value = {
+                "docs_indexed_ok": 0, "chunks_indexed_ok": 0,
+            }
+            uc.run("chest pain unknown disease")
+
+        mock_embed_cls.assert_not_called()

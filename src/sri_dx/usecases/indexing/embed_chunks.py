@@ -163,13 +163,21 @@ class EmbedChunksUseCase:
             pct = done / total * 100 if total > 0 else 0
             bar_len = 30
             filled = int(bar_len * done / total) if total > 0 else 0
-            bar = "█" * filled + "░" * (bar_len - filled)
-            sys.stdout.write(
+            bar = "#" * filled + "-" * (bar_len - filled)
+            line = (
                 f"\r  [{bar}] {pct:5.1f}%  {done}/{total} chunks"
                 f"  {rate:.0f} ch/s"
                 f"  ETA {eta/60:.1f}min"
             )
-            sys.stdout.flush()
+            # A non-UTF-8 console (e.g. Windows cp1252) must never crash the embed
+            # run over a cosmetic progress bar — this use case also runs inside the
+            # web-search request path, where a crash here would leave web chunks
+            # without vectors.
+            try:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            except (UnicodeEncodeError, OSError):
+                pass
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             pending_store: Optional[Future] = None
@@ -220,6 +228,17 @@ class EmbedChunksUseCase:
 
         if not dry_run:
             self.embedding_sink.set_refresh_interval("1s")
+            # Force an explicit refresh so the just-written vectors are immediately
+            # searchable. Without this, refresh_interval="1s" leaves a ~1s window in
+            # which a kNN query (e.g. the web-enrich Stage 7 re-retrieval that runs
+            # right after embedding) does NOT see the new web embeddings — so web
+            # chunks silently fail to appear in the results on the first run.
+            try:
+                self.embedding_sink.client.indices.refresh(
+                    index=self.embedding_sink.cfg.index_name
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not refresh embeddings index: %s", exc)
 
         result.processing_time_seconds = time.time() - start_time
         elapsed = result.processing_time_seconds

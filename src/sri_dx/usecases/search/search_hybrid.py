@@ -194,12 +194,22 @@ class SearchHybridUseCase:
         query_embedding = self.bert_adapter.encode([query])
         query_vector = query_embedding[0].numpy()
 
+        # The embeddings index is shared local+web; when configured, exclude
+        # web/API vectors (seed_group prefix) so a local-only search never
+        # surfaces web content via kNN.
+        exclude_prefixes = (
+            [self.config.web_seed_group_prefix]
+            if self.config.exclude_web_embeddings
+            else None
+        )
+
         # Search for similar chunks
         chunk_results = self.embedding_store.search_similar(
             query_vector=query_vector,
             k=self.config.semantic_k,
             filters=filters,
-            min_score=self.config.min_semantic_score
+            min_score=self.config.min_semantic_score,
+            exclude_seed_group_prefixes=exclude_prefixes,
         )
         
         # The embedding index does not store url/title — enrich from chunks

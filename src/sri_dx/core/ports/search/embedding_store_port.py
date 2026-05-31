@@ -49,7 +49,8 @@ class EmbeddingStorePort(ABC):
         query_vector: "NDArray[Any]",
         k: int = 10,
         filters: Optional[Dict[str, Any]] = None,
-        min_score: float = 0.0
+        min_score: float = 0.0,
+        exclude_seed_group_prefixes: Optional[List[str]] = None,
     ) -> List[EmbeddingSearchResult]:
         """
         Searches for embeddings similar to the query vector.
@@ -59,6 +60,9 @@ class EmbeddingStorePort(ABC):
             k: Number of results
             filters: Additional filters (seed_group, source_domain, etc.)
             min_score: Minimum score to include in results
+            exclude_seed_group_prefixes: Drop embeddings whose ``seed_group``
+                starts with any of these prefixes (e.g. ``["api_"]`` to exclude
+                web/API vectors from a local-only search over the shared index)
 
         Returns:
             List of results ordered by descending similarity

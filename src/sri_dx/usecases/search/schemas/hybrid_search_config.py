@@ -21,6 +21,14 @@ class HybridSearchConfig(BaseModel):
     min_semantic_score: float = 0.3
     normalize_scores: bool = True
 
+    # When True, the kNN side excludes embeddings whose seed_group marks a
+    # web/API origin (prefix ``api_``). The embeddings index is SHARED between the
+    # local and web corpora, so without this a local-only search (web toggle off)
+    # could still surface web vectors via kNN. Set True for the local pipeline and
+    # False for the combined local+web pipeline.
+    exclude_web_embeddings: bool = False
+    web_seed_group_prefix: str = "api_"
+
     # Reranking configuration
     use_reranking: bool = False
     rerank_top_k: int = 10

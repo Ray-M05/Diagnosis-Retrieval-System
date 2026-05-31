@@ -82,6 +82,40 @@ def test_orphan_generic_heading_without_useful_url_is_dropped():
     assert agg.aggregate(results) == []
 
 
+def test_orphan_chunks_of_same_disease_merge_into_one_card():
+    """Headingless chunks whose doc title normalises to the same disease should
+    collapse into a single card, and merge with NER chunks of that disease."""
+    agg = DiseaseAggregator(DiseaseAggregatorConfig())
+    results = [
+        # NER detects acromegaly in the text
+        _chunk("d1", ner=[_problem("acromegaly")], url="http://x/acromegaly"),
+        # orphan chunk, doc title normalises to "acromegaly"
+        _chunk("d2", ner=[], ner_title=[], title="Acromegaly - Symptoms and causes",
+               heading="Overview", url="http://x/acromegaly2"),
+        # another orphan, same disease via URL
+        _chunk("d3", ner=[], ner_title=[], title="", heading="Symptoms",
+               url="https://www.mayoclinic.org/diseases-conditions/acromegaly/symptoms-causes/syc-1"),
+    ]
+    out = agg.aggregate(results)
+    acro = [d for d in out if d.disease_name == "acromegaly"]
+    assert len(acro) == 1
+    assert acro[0].evidence_count == 3  # all three merged
+
+
+def test_from_ner_flag_true_for_ner_backed_disease():
+    agg = DiseaseAggregator(DiseaseAggregatorConfig())
+    out = agg.aggregate([_chunk("d1", ner=[_problem("pneumonia")])])
+    assert out[0].from_ner is True
+
+
+def test_from_ner_flag_false_for_title_fallback():
+    agg = DiseaseAggregator(DiseaseAggregatorConfig())
+    out = agg.aggregate([
+        _chunk("d1", ner=[], ner_title=[], title="High blood pressure", heading="Overview"),
+    ])
+    assert out[0].from_ner is False
+
+
 def test_legacy_drops_chunks_without_problem_when_fallback_disabled():
     agg = DiseaseAggregator(DiseaseAggregatorConfig(title_fallback=False))
     results = [

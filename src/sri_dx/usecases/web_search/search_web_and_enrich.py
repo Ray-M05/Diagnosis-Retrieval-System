@@ -33,8 +33,6 @@ from html import unescape
 from pathlib import Path
 from typing import Any
 
-from opensearchpy import NotFoundError
-
 from sri_dx.adapters.document_sources.jsonl_source import JsonlDocumentSource
 from sri_dx.adapters.medical_apis.medical_api_search_service import (
     MedicalApiSearchService,
@@ -55,6 +53,8 @@ from sri_dx.modules.web_search.schemas import (
     WebSearchRunReport,
 )
 from sri_dx.modules.web_search.sufficiency import LocalSufficiencyEvaluator
+from sri_dx.usecases.indexing.embed_chunks import EmbedChunksUseCase
+from sri_dx.usecases.indexing.schemas.embed_chunks_config import EmbedChunksConfig
 from sri_dx.usecases.indexing.index_combined import IndexCombinedUseCase
 from sri_dx.usecases.search.two_stage_retrieval_pipeline import (
     RetrievalResult,
@@ -97,28 +97,81 @@ def _retrieval_results_to_chunks(
     return chunks
 
 
-def _extract_symptoms(query: str) -> list[str]:
-    """
-    Extract symptom/concept terms from the query using the existing
-    :class:`ConceptExtractor`.
+# Entity domains worth sending to the medical APIs. PROBLEM/SYMPTOM/DISEASE name
+# the clinical picture; ANATOMY/TEST add discriminating context (e.g. "bone
+# marrow", "blood counts") that often separates rare from common diagnoses.
+_NER_QUERY_DOMAINS = {"PROBLEM", "SYMPTOM", "DISEASE", "ANATOMY", "TEST", "TREATMENT"}
+_NER_MIN_SCORE = 0.45
 
-    Falls back to splitting by common delimiters if the extractor is
-    unavailable.
+
+def _extract_symptoms(query: str) -> list[str]:
+    """Extract clinical terms from *query* to feed the medical-API search.
+
+    Prefers the biomedical NER model, which recognises real clinical vocabulary
+    (chondritis, cytopenias, vacuoles, macrocytic anemia…) that the tiny closed
+    :class:`ConceptExtractor` lexicon (7 concepts) silently drops. Dropping those
+    discriminating terms is exactly what made web search return generic noise
+    instead of the rare condition. The lexicon and a delimiter split remain as
+    fallbacks so the function still works if the model is unavailable.
+
+    Returns terms in their order of appearance in the query, deduplicated.
     """
+    ner_terms = _extract_symptoms_ner(query)
+    if ner_terms:
+        logger.info("Symptoms (NER): %s", ner_terms)
+        return ner_terms
+
     try:
         from sri_dx.modules.indexing.concepts.extractor import ConceptExtractor
-        extractor = ConceptExtractor()
-        concepts = extractor.extract(query, language="en")
+        concepts = ConceptExtractor().extract(query, language="en")
         if concepts:
-            logger.debug("Symptoms extracted: %s", concepts)
+            logger.info("Symptoms (lexicon fallback): %s", concepts)
             return list(concepts)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("ConceptExtractor unavailable (%s), using fallback", exc)
+        logger.debug("ConceptExtractor unavailable (%s), using split fallback", exc)
 
-    # Fallback: split on commas / 'and'
-    import re
+    # Last resort: split on commas / 'and'
     parts = re.split(r",\s*|\s+and\s+", query, flags=re.IGNORECASE)
     return [p.strip() for p in parts if p.strip()]
+
+
+def _extract_symptoms_ner(query: str) -> list[str]:
+    """Run biomedical NER and return relevant clinical terms (deduped, in order)."""
+    try:
+        from sri_dx.adapters.embeddings.biomedical_ner_adapter import (
+            BiomedicalNERAdapter,
+        )
+    except ImportError:
+        logger.debug("BiomedicalNERAdapter unavailable; skipping NER extraction")
+        return []
+
+    try:
+        logger.info("Symptom extraction: using biomedical NER")
+        entities = BiomedicalNERAdapter.get_instance().predict_batch([query])[0]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("NER extraction failed (%s); falling back to lexicon", exc)
+        return []
+
+    seen: set[str] = set()
+    terms: list[str] = []
+    for ent in entities:
+        if ent.get("domain_label") not in _NER_QUERY_DOMAINS:
+            continue
+        if float(ent.get("score") or 0.0) < _NER_MIN_SCORE:
+            continue
+        term = re.sub(r"\s+", " ", str(ent.get("word") or "")).strip()
+        # Drop subword fragments and trivially short tokens.
+        if len(term) < 3 or term.startswith("##"):
+            continue
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(term)
+    logger.info(
+        "NER extraction: %d raw entities -> %d query terms kept", len(entities), len(terms)
+    )
+    return terms
 
 
 def _results_to_response(
@@ -161,31 +214,6 @@ def _clean_display_title(title: str) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
-def _interleave_api_results(base_results: list[dict], api_results: list[dict], max_api: int = 3) -> list[dict]:
-    """Mix a few API hits into the web ranking so fresh evidence is visible."""
-    if not api_results:
-        return _renumber_results(base_results)
-
-    seen_chunks = {str(r.get("chunk_id") or "") for r in base_results}
-    unique_api = [
-        result for result in api_results
-        if str(result.get("chunk_id") or "") not in seen_chunks
-    ][:max_api]
-    if not unique_api:
-        return _renumber_results(base_results)
-
-    mixed: list[dict] = []
-    api_iter = iter(unique_api)
-    for i, result in enumerate(base_results, start=1):
-        mixed.append(result)
-        if i in {2, 5, 8}:
-            next_api = next(api_iter, None)
-            if next_api is not None:
-                mixed.append(next_api)
-    mixed.extend(api_iter)
-    return _renumber_results(mixed)
-
-
 # Use case
 
 @dataclass
@@ -213,6 +241,12 @@ class SearchWebAndEnrichUseCase:
         Directory where JSON run reports are saved.
     chunk_cfg:
         Chunking configuration for ``IndexCombinedUseCase``.
+    embed_config:
+        :class:`EmbedChunksConfig` pointing at the WEB chunks index (source) and
+        the SHARED embeddings index (sink). After web chunks are indexed they are
+        embedded into the shared vector index so web evidence competes by kNN in
+        the normal hybrid retrieval, exactly like local chunks. When ``None``,
+        the embedding step is skipped (web stays BM25-only — legacy behaviour).
     """
 
     pipeline: TwoStageRetrievalPipeline
@@ -224,8 +258,22 @@ class SearchWebAndEnrichUseCase:
     manifest: SqliteManifestStore
     report_dir: Path = Path("data/web_search/reports")
     chunk_cfg: ChunkingConfig = field(default_factory=ChunkingConfig)
+    embed_config: EmbedChunksConfig | None = None
+    local_pipeline: TwoStageRetrievalPipeline | None = None
 
     # ------------------------------------------------------------------
+
+    @property
+    def _sufficiency_pipeline(self) -> TwoStageRetrievalPipeline:
+        """Pipeline used to measure local sufficiency (Stage 1).
+
+        Defaults to ``pipeline`` for backward compatibility, but callers should
+        pass a LOCAL-only ``local_pipeline`` so sufficiency reflects the local
+        corpus alone. Otherwise a combined local+web ``pipeline`` would let web
+        content from *previous* queries make the local picture look sufficient
+        and suppress a fresh web search.
+        """
+        return self.local_pipeline or self.pipeline
 
     def run(self, query: str) -> WebSearchRunReport:
         """
@@ -242,14 +290,15 @@ class SearchWebAndEnrichUseCase:
         logger.info("=== SearchWebAndEnrichUseCase: '%s...' ===", query[:80])
         q_hash = _query_hash(query)
 
-        # Stage 1 — Local retrieval
+        # Stage 1 — Local retrieval (sufficiency is measured on the LOCAL corpus)
         logger.info("Stage 1: running local two-stage retrieval")
-        configured_k = getattr(getattr(self.pipeline, "config", None), "final_results", 10)
+        local_pipeline = self._sufficiency_pipeline
+        configured_k = getattr(getattr(local_pipeline, "config", None), "final_results", 10)
         if not isinstance(configured_k, int):
             configured_k = 10
         sufficiency_k = max(configured_k, 20)
         try:
-            local_raw = self.pipeline.search(query, final_results=sufficiency_k)
+            local_raw = local_pipeline.search(query, final_results=sufficiency_k)
         except Exception as exc:
             logger.error("Local retrieval failed: %s", exc)
             local_raw = []
@@ -330,12 +379,19 @@ class SearchWebAndEnrichUseCase:
 
         if not new_docs:
             logger.info("No new documents after dedup — re-running retrieval without indexing")
+            # All API docs were duplicates, but web chunks from previous runs may
+            # still lack embeddings (e.g. a web corpus ingested before this change).
+            # Embedding is idempotent (skip_existing by hash), so run it here too so
+            # those chunks gain vectors and can finally be retrieved by kNN.
+            self._embed_web_chunks()
+            # The combined (local+web) pipeline already retrieves the web chunks
+            # indexed by previous runs of this query via the normal hybrid path,
+            # so there is no separate lexical web pass to merge anymore.
             final_raw = self.pipeline.search(query)
             final_results = _results_to_response(
                 final_raw,
                 self._load_docs_by_doc_id(final_raw),
             )
-            api_results = self._search_api_chunks_for_query(query=query, query_hash=q_hash)
             report = WebSearchRunReport(
                 query=query,
                 query_hash=q_hash,
@@ -343,7 +399,7 @@ class SearchWebAndEnrichUseCase:
                 sufficiency=decision,
                 api_retrieval=api_stats,
                 deduplication=dedup_stats,
-                results=_interleave_api_results(final_results, api_results),
+                results=_renumber_results(final_results),
             )
             self._save_report(report)
             return report
@@ -369,17 +425,34 @@ class SearchWebAndEnrichUseCase:
             logger.error("Indexing failed: %s", exc)
             index_report = {}
 
+        def _as_int(value: Any) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+
         idx_stats = IndexingStats(
             delta_path=str(delta_path),
-            docs_indexed=index_report.get("docs_indexed_ok", 0),
-            chunks_indexed=index_report.get("chunks_indexed_ok", 0),
+            docs_indexed=_as_int(index_report.get("docs_indexed_ok", 0)),
+            chunks_indexed=_as_int(index_report.get("chunks_indexed_ok", 0)),
         )
         logger.info(
             "Indexing: docs=%d  chunks=%d",
             idx_stats.docs_indexed, idx_stats.chunks_indexed,
         )
 
-        # Stage 7 — Re-run retrieval on enriched index
+        # Stage 6b — Embed the freshly-indexed web chunks into the SHARED vector
+        # index. Without this, web chunks live in the web chunks index but have no
+        # vectors, so they can never be retrieved by kNN — they would only ever
+        # compete on BM25. Embedding them here lets web evidence go through the
+        # exact same hybrid (BM25 + kNN) + rerank path as local chunks.
+        if idx_stats.chunks_indexed > 0:
+            self._embed_web_chunks()
+
+        # Stage 7 — Re-run retrieval on the enriched index. The pipeline is the
+        # COMBINED local+web pipeline (see main._build_pipeline(web=True)), so this
+        # single hybrid+rerank pass returns local and web chunks ranked together by
+        # the same cross-encoder. No separate lexical web pass, no artificial merge.
         logger.info("Stage 7: re-running retrieval on enriched index")
         try:
             final_raw = self.pipeline.search(query)
@@ -390,7 +463,6 @@ class SearchWebAndEnrichUseCase:
             final_raw,
             self._load_docs_by_doc_id(final_raw),
         )
-        api_results = self._search_api_chunks_for_query(query=query, query_hash=q_hash)
 
         # Build and save report
         report = WebSearchRunReport(
@@ -401,7 +473,7 @@ class SearchWebAndEnrichUseCase:
             api_retrieval=api_stats,
             deduplication=dedup_stats,
             indexing=idx_stats,
-            results=_interleave_api_results(final_results, api_results),
+            results=_renumber_results(final_results),
         )
         self._save_report(report)
         logger.info(
@@ -507,60 +579,34 @@ class SearchWebAndEnrichUseCase:
         )
         return existing_hashes, existing_keys
 
-    def _search_api_chunks_for_query(self, *, query: str, query_hash: str, size: int = 6) -> list[dict]:
-        """Search API-ingested chunks for this web query."""
-        body = {
-            "size": size,
-            "query": {
-                "bool": {
-                    "must": [
-                        {
-                            "multi_match": {
-                                "query": query,
-                                "fields": ["section_heading^3", "chunk_text^1"],
-                                "type": "best_fields",
-                                "operator": "or",
-                            }
-                        }
-                    ],
-                    "filter": [{"term": {"seed_id": query_hash}}],
-                }
-            },
-        }
+    def _embed_web_chunks(self) -> None:
+        """Embed freshly-indexed web chunks into the SHARED vector index.
 
-        try:
-            response = self.chunk_sink.client.search(
-                index=self.chunk_sink.cfg.index_name,
-                body=body,
+        Reuses :class:`EmbedChunksUseCase`, which reads chunks from the WEB chunks
+        index and writes vectors to the shared embeddings index. ``skip_existing``
+        (hash-based) means only chunks without an up-to-date embedding are encoded,
+        so re-running the same query is cheap. The encode runs synchronously inside
+        the request; the first search for a new case is therefore slower, later ones
+        reuse the vectors.
+        """
+        if self.embed_config is None:
+            logger.info(
+                "Stage 6b: embed_config not provided — skipping web embedding "
+                "(web chunks will only compete on BM25)"
             )
-        except NotFoundError:
-            return []
+            return
+        try:
+            logger.info("Stage 6b: embedding web chunks into the shared vector index")
+            result = EmbedChunksUseCase(self.embed_config).run()
+            logger.info(
+                "Stage 6b complete: generated=%d stored=%d skipped=%d errors=%d",
+                result.embeddings_generated,
+                result.embeddings_stored,
+                result.skipped_already_embedded,
+                len(result.errors),
+            )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Could not search API chunks for web query: %s", exc)
-            return []
-
-        hits = response.get("hits", {}).get("hits", [])
-        doc_ids = [str((hit.get("_source") or {}).get("doc_id") or "") for hit in hits]
-        docs_by_id = self._load_doc_records_by_id(doc_ids)
-
-        results: list[dict] = []
-        for hit in hits:
-            source = hit.get("_source") or {}
-            doc_id = str(source.get("doc_id") or hit.get("_id") or "")
-            doc_meta = docs_by_id.get(doc_id, {})
-            results.append({
-                "rank": 0,
-                "doc_id": doc_id,
-                "chunk_id": str(source.get("chunk_id") or hit.get("_id") or doc_id),
-                "title": _clean_display_title(doc_meta.get("title") or str(source.get("section_heading") or doc_id)),
-                "url": doc_meta.get("url") or str(source.get("url") or ""),
-                "source_domain": doc_meta.get("source_domain") or str(source.get("source_domain") or ""),
-                "rerank_score": 0.0,
-                "hybrid_score": float(hit.get("_score") or 0.0),
-                "chunk_text": str(source.get("chunk_text") or "")[:400],
-                "seed_group": str(source.get("seed_group") or doc_meta.get("seed_group") or ""),
-            })
-        return results
+            logger.error("Web chunk embedding failed: %s", exc)
 
     def _load_doc_records_by_id(self, doc_ids: list[str]) -> dict[str, dict[str, str]]:
         ids = list(dict.fromkeys(doc_id for doc_id in doc_ids if doc_id))
