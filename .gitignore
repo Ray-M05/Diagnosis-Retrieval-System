@@ -29,6 +29,8 @@ coverage.xml
 # Editor / IDE
 .vscode/
 .claude/
+.codex/
+.agents/
 .idea/
 *.swp
 *.swo

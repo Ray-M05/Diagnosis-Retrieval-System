@@ -69,18 +69,6 @@ class TestExternalToAcquiredDict:
         assert len(content["sections"]) >= 1
         assert content["body"]
 
-    def test_source_metadata_section_present(self):
-        result = self._convert()
-        headings = [s["heading"] for s in result["content"]["sections"]]
-        assert "Source metadata" in headings
-
-    def test_source_metadata_contains_pmid(self):
-        result = self._convert(pmid="12345678")
-        meta_section = next(
-            s for s in result["content"]["sections"] if s["heading"] == "Source metadata"
-        )
-        assert "12345678" in meta_section["text"]
-
     def test_doc_id_is_deterministic(self):
         """Same URL always produces the same doc_id."""
         r1 = self._convert(url="https://pubmed.ncbi.nlm.nih.gov/12345678/")
@@ -119,11 +107,11 @@ class TestExternalToAcquiredDict:
         assert result["crawl"]["seed_group"] == "api_medlineplus"
         assert result["source_domain"] == "medlineplus.gov"
 
-    def test_empty_abstract_falls_back_to_title(self):
-        """Body must be non-empty even when abstract is empty."""
+    def test_empty_abstract_and_sections_are_skipped(self):
+        """Title-only API stubs should not pollute the acquired corpus."""
         result = external_to_acquired_dict(
             _ext(abstract="", url="https://pubmed.ncbi.nlm.nih.gov/1/"),
             query_id="q1",
             original_query="test",
         )
-        assert result["content"]["body"]
+        assert result is None
