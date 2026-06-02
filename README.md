@@ -55,6 +55,14 @@ El archivo `.env` queda solo para tu maquina y no debe subirse al repo. Edita
 ese archivo local para completar claves privadas como `GROQ_API_KEY`,
 `UMLS_API_KEY` u otros valores propios del entorno.
 
+Para habilitar RAG con Groq, abre `.env` y completa la variable con tu clave
+real:
+
+```bash
+GROQ_API_KEY=<tu_api_key_de_groq>
+```
+
+
 Levanta OpenSearch y la API:
 
 ```bash
