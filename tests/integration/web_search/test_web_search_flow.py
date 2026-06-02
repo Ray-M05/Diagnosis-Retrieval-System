@@ -15,6 +15,7 @@ verifies the full pipeline: delta write → IndexCombinedUseCase → hybrid sear
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +23,14 @@ import pytest
 
 from sri_dx.core.schemas.acquisition.acquired_document import Section
 from sri_dx.modules.web_search.schemas import ApiRetrievalStats, ExternalApiDocument
+
+
+def _opensearch_available(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            return True
+    except OSError:
+        return False
 
 
 @pytest.mark.integration
@@ -52,6 +61,10 @@ class TestWebSearchEndToEnd:
         from sri_dx.usecases.web_search.search_web_and_enrich import SearchWebAndEnrichUseCase
 
         cfg = load_config()
+        if not _opensearch_available(cfg.opensearch.host, cfg.opensearch.port):
+            pytest.skip(
+                f"OpenSearch is not available at {cfg.opensearch.host}:{cfg.opensearch.port}"
+            )
 
         # ---- sinks & manifest ----
         doc_sink = OpenSearchIndexSink(cfg=cfg.opensearch)

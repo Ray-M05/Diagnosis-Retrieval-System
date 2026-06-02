@@ -1,58 +1,124 @@
 # SRI-DX
 
-Sistema de Recuperacion de Informacion clinica para apoyo al analisis diferencial.
+Sistema de Recuperacion de Informacion clinica para apoyo al analisis
+diferencial.
 
-Este proyecto usa **OpenSearch** como motor de busqueda e indexacion.
+El proyecto esta compuesto por:
 
-El README esta enfocado solo en:
-
-- montar el proyecto localmente;
-- preparar indices;
-- ejecutar el orquestador;
-- probar busquedas desde CLI.
+- **OpenSearch** para indices lexicos, chunks y embeddings.
+- **FastAPI** como backend HTTP para busqueda, RAG, feedback y evaluacion.
+- **React + Vite** como frontend, dentro de `frontend/`.
 
 ## Requisitos
 
 - Docker y Docker Compose.
 - Python 3.11+ si vas a ejecutar comandos fuera de Docker.
-- `uv` recomendado para entorno local.
+- `uv` recomendado para el entorno Python local.
+- Node.js 18+ y npm para correr el frontend local.
 
-La primera ejecucion puede descargar modelos de HuggingFace para embeddings, NER y reranking. Esa parte puede tardar.
+La primera ejecucion puede descargar modelos de HuggingFace para embeddings,
+NER y reranking. Esa parte puede tardar.
 
-## Servicios del proyecto
+## Servicios y puertos
 
-El `docker-compose.yml` levanta:
+El `docker-compose.yml` actual levanta estos servicios:
 
 ```text
-opensearch     -> http://localhost:9200
-sri-dx         -> Streamlit en http://localhost:8501
-sri-dx-api     -> FastAPI en http://localhost:8000
+opensearch   -> http://localhost:9200
+sri-dx-api   -> FastAPI en http://localhost:8000
 ```
 
-## Montaje rapido con Docker
+El frontend **no se levanta con Docker Compose**. Se corre localmente con Vite:
 
-Desde la raiz del repo:
+```text
+frontend     -> React/Vite en http://localhost:5173
+```
+
+La UI llama al backend en `http://localhost:8000` por defecto. Si necesitas otro
+backend, define `VITE_API_BASE` en `frontend/.env.development`.
+
+## Inicio rapido: backend + frontend
+
+Desde la raiz del repo, crea `.env` a partir de la plantilla versionada:
+
+```bash
+cp .env.example .env
+```
+
+En PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+El archivo `.env` queda solo para tu maquina y no debe subirse al repo. Edita
+ese archivo local para completar claves privadas como `GROQ_API_KEY`,
+`UMLS_API_KEY` u otros valores propios del entorno.
+
+Para habilitar RAG con Groq, abre `.env` y completa la variable con tu clave
+real:
+
+```bash
+GROQ_API_KEY=<tu_api_key_de_groq>
+```
+
+
+Levanta OpenSearch y la API:
 
 ```bash
 docker compose up -d --build
 ```
 
-Verifica OpenSearch:
+Verifica que OpenSearch y FastAPI esten arriba:
 
 ```bash
 curl http://localhost:9200/_cluster/health
+curl http://localhost:8000/health
 ```
 
-Ver indices:
+En otra terminal, levanta el frontend:
 
 ```bash
-curl http://localhost:9200/_cat/indices?v
+cd frontend
+npm install
+npm run dev
+```
+
+Abre:
+
+```text
+http://localhost:5173
+```
+
+Notas:
+
+- `npm install` solo hace falta la primera vez o cuando cambie
+  `frontend/package-lock.json`.
+- Vite usa el puerto `5173` por defecto. Si esta ocupado, Vite puede ofrecer otro
+  puerto en la terminal.
+- Las funcionalidades de busqueda necesitan OpenSearch indexado.
+- Las funcionalidades RAG con generacion necesitan `GROQ_API_KEY` en `.env`; si
+  no esta configurado, `/health` puede aparecer como `degraded`, pero la busqueda
+  puede seguir funcionando si OpenSearch esta listo.
+
+## Ejecutar solo backend con Docker
+
+Levantar todos los servicios definidos en Compose:
+
+```bash
+docker compose up -d --build
 ```
 
 Ver logs:
 
 ```bash
 docker compose logs -f
+```
+
+Ver logs solo de la API:
+
+```bash
+docker compose logs -f sri-dx-api
 ```
 
 Detener servicios:
@@ -67,36 +133,55 @@ Detener y borrar volumenes de OpenSearch:
 docker compose down -v
 ```
 
-## Ruta automatizada recomendada para reindexar y probar
+## Ejecutar la API localmente, sin Docker
 
-Esta es la via recomendada para probar el proyecto con los datos existentes en:
+Si prefieres correr FastAPI fuera del contenedor, deja OpenSearch en Docker:
+
+```bash
+docker compose up -d opensearch
+```
+
+Instala dependencias del backend, incluyendo extras de API y RAG:
+
+```bash
+uv sync --extra api --extra rag
+```
+
+Arranca la API local:
+
+```bash
+uv run python -m sri_dx.app.api.run
+```
+
+La API queda en:
+
+```text
+http://localhost:8000
+```
+
+Tambien puedes usar Uvicorn directamente:
+
+```bash
+uv run python -m uvicorn sri_dx.app.api.main:app \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --reload
+```
+
+## Preparar indices con datos locales
+
+La ruta recomendada usa los JSONL existentes:
 
 ```text
 data/processed/docs_html.jsonl
 data/processed/docs_pdf.jsonl
 ```
 
-La ruta hace:
-
-```text
-1. Levantar contenedores
-2. Borrar manifest local
-3. Ejecutar orquestador
-4. Probar consultas por CLI
-```
-
-### 1. Levantar OpenSearch
-
-Si solo vas a preparar indices y probar por CLI local:
+Si solo vas a preparar indices y probar por CLI local, puedes levantar solo
+OpenSearch:
 
 ```bash
 docker compose up -d opensearch
-```
-
-Si quieres dejar tambien Streamlit y API arriba:
-
-```bash
-docker compose up -d --build
 ```
 
 Espera a que OpenSearch este saludable:
@@ -105,9 +190,10 @@ Espera a que OpenSearch este saludable:
 curl http://localhost:9200/_cluster/health
 ```
 
-### 2. Borrar manifest para forzar reindexado
+### Forzar reindexado
 
-El manifest incremental evita reindexar documentos que no cambiaron. Para forzar un reindexado, borralo:
+El manifest incremental evita reindexar documentos que no cambiaron. Para forzar
+un reindexado, borralo:
 
 ```bash
 mkdir -p data/index
@@ -124,13 +210,7 @@ docker compose down -v
 docker compose up -d opensearch
 ```
 
-Despues de esto, vuelve a esperar salud del cluster:
-
-```bash
-curl http://localhost:9200/_cluster/health
-```
-
-### 3. Ejecutar el orquestador
+### Ejecutar el orquestador local
 
 El orquestador real esta en:
 
@@ -145,7 +225,8 @@ Fases 2+3: indexacion de documentos y chunks
 Fase 4: generacion de embeddings
 ```
 
-Como el repo ya tiene JSONL en `data/processed/`, normalmente se salta adquisicion:
+Como el repo ya tiene JSONL en `data/processed/`, normalmente se salta
+adquisicion:
 
 ```bash
 uv run python src/sri_dx/app/cli/orchestrator.py \
@@ -199,14 +280,15 @@ Compruebalo:
 curl http://localhost:9200/_cat/indices?v
 ```
 
-## Ejecutar el orquestador dentro del contenedor
+### Ejecutar el orquestador dentro del contenedor
 
-Tambien puedes correr el orquestador dentro del contenedor `sri-dx`.
+Si la API esta levantada con Compose, puedes ejecutar comandos dentro del
+contenedor `sri-dx-api`.
 
-En ese caso el host de OpenSearch es el nombre del servicio Docker:
+Dentro de Docker usa `--host opensearch`:
 
 ```bash
-docker compose exec sri-dx /app/.venv/bin/python \
+docker compose exec sri-dx-api /app/.venv/bin/python \
   src/sri_dx/app/cli/orchestrator.py \
   --skip-acquisition \
   --host opensearch \
@@ -302,12 +384,13 @@ scores por componente
 
 ## Probar CLI dentro del contenedor
 
-Si estas ejecutando todo en Docker, puedes lanzar el CLI dentro de `sri-dx`.
+Si estas ejecutando la API con Docker, puedes lanzar el CLI dentro de
+`sri-dx-api`.
 
-Importante: dentro de Docker usa `--host opensearch`.
+Dentro de Docker usa `--host opensearch`:
 
 ```bash
-docker compose exec sri-dx /app/.venv/bin/python \
+docker compose exec sri-dx-api /app/.venv/bin/python \
   src/sri_dx/app/cli/search_cli.py \
   --host opensearch \
   --type hybrid \
@@ -316,6 +399,28 @@ docker compose exec sri-dx /app/.venv/bin/python \
   --positioned \
   --positioned-results 5 \
   --show-component-scores
+```
+
+## Endpoints utiles de la API
+
+```text
+GET  /health
+GET  /docs
+POST /pipeline
+POST /search/diseases
+POST /rag/parse-chart
+POST /rag/clinical
+POST /feedback/relevance
+POST /feedback/search/refine
+POST /evaluation/run
+GET  /evaluation/seed-qrels
+GET  /evaluation/runs
+```
+
+La documentacion interactiva queda en:
+
+```text
+http://localhost:8000/docs
 ```
 
 ## Consultas sugeridas
@@ -357,7 +462,30 @@ Suite enfocada usada para validar posicionamiento y use cases existentes:
   tests/unit/usecases
 ```
 
+Build del frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
 ## Problemas comunes
+
+### El frontend abre, pero no responde la busqueda
+
+Verifica que la API este arriba:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Si usas un backend en otro puerto, configura `frontend/.env.development`:
+
+```text
+VITE_API_BASE=http://localhost:8000
+```
+
+Reinicia `npm run dev` despues de cambiar variables `VITE_*`.
 
 ### OpenSearch no esta listo
 
@@ -372,6 +500,14 @@ Verifica salud:
 ```bash
 curl http://localhost:9200/_cluster/health
 ```
+
+### La API no encuentra OpenSearch
+
+- Si la API corre en Docker, debe usar el host `opensearch`.
+- Si la API corre localmente en tu maquina, debe usar `localhost`.
+
+El codigo normaliza `OPENSEARCH_HOST=http://opensearch:9200` a `localhost`
+cuando detecta que no esta dentro de Docker.
 
 ### El indexador salta documentos
 
@@ -394,6 +530,28 @@ rm -f data/index/manifest.sqlite \
       data/index/manifest.sqlite-wal
 docker compose up -d --build
 ```
+
+### Puerto ocupado
+
+Puertos usados por defecto:
+
+```text
+5173 -> frontend Vite
+8000 -> FastAPI
+9200 -> OpenSearch
+9600 -> OpenSearch performance analyzer
+```
+
+Cierra el proceso que este usando el puerto o cambia el puerto del servicio
+correspondiente. Para Vite puedes usar:
+
+```bash
+cd frontend
+npm run dev -- --port 3000
+```
+
+Si cambias el puerto del frontend, agrega ese origen en `SRI_CORS_ORIGINS` para
+la API.
 
 ### Memoria insuficiente
 

@@ -2,7 +2,7 @@ user_agent: "sri-dx-acquisition/0.1"
 timeout_s: 20
 per_domain_delay_s: 5
 max_depth: 2
-max_docs: 300
+max_docs: 10
 max_workers: 15
 verify_ssl: false
 
@@ -10,56 +10,56 @@ whitelist_domains:
   - msdmanuals.com
   - mayoclinic.org
   - www.nhs.uk
-  #   - www.cdc.gov
+  - www.cdc.gov
 
 seeds:
-  # - seed_id: seed_0012
-  #   seed_group: msd_topics_en
-  #   url: https://www.msdmanuals.com/professional/health-topics
+  - seed_id: seed_0012
+    seed_group: msd_topics_en
+    url: https://www.msdmanuals.com/professional/health-topics
 
-  # - seed_id: seed_0013
-  #   seed_group: nhs_conditions_az_en
-  #   url: https://www.nhs.uk/conditions/
+  - seed_id: seed_0013
+    seed_group: nhs_conditions_az_en
+    url: https://www.nhs.uk/conditions/
 
-  # - seed_id: seed_0014
-  #   seed_group: mayo_conditions_az_en
-  #   url: https://www.mayoclinic.org/diseases-conditions
+  - seed_id: seed_0014
+    seed_group: mayo_conditions_az_en
+    url: https://www.mayoclinic.org/diseases-conditions
 
-  - seed_id: seed_001
-    seed_group: msd_guides_en
-    url: https://www.msdmanuals.com/professional/endocrine-and-metabolic-disorders/diabetes-mellitus-and-disorders-of-carbohydrate-metabolism/diabetes-mellitus-dm
+  # - seed_id: seed_001
+  #   seed_group: msd_guides_en
+  #   url: https://www.msdmanuals.com/professional/endocrine-and-metabolic-disorders/diabetes-mellitus-and-disorders-of-carbohydrate-metabolism/diabetes-mellitus-dm
 
-  - seed_id: seed_002
-    seed_group: msd_guides_en
-    url: https://www.msdmanuals.com/professional/pulmonary-disorders/asthma-and-related-disorders/asthma
+  # - seed_id: seed_002
+  #   seed_group: msd_guides_en
+  #   url: https://www.msdmanuals.com/professional/pulmonary-disorders/asthma-and-related-disorders/asthma
 
-  - seed_id: seed_003
-    seed_group: msd_guides_en
-    url: https://www.msdmanuals.com/professional/cardiovascular-disorders/heart-failure/overview-of-heart-failure
+  # - seed_id: seed_003
+  #   seed_group: msd_guides_en
+  #   url: https://www.msdmanuals.com/professional/cardiovascular-disorders/heart-failure/overview-of-heart-failure
 
-  - seed_id: seed_004
-    seed_group: msd_guides_en
-    url: https://www.msdmanuals.com/professional/pulmonary-disorders/pneumonia/overview-of-pneumonia
+  # - seed_id: seed_004
+  #   seed_group: msd_guides_en
+  #   url: https://www.msdmanuals.com/professional/pulmonary-disorders/pneumonia/overview-of-pneumonia
 
-  - seed_id: seed_005
-    seed_group: msd_guides_en
-    url: https://www.msdmanuals.com/professional/neurologic-disorders/meningitis/overview-of-meningitis
+  # - seed_id: seed_005
+  #   seed_group: msd_guides_en
+  #   url: https://www.msdmanuals.com/professional/neurologic-disorders/meningitis/overview-of-meningitis
 
-  - seed_id: seed_006
-    seed_group: nhs_conditions_en
-    url: https://www.nhs.uk/conditions/asthma/
+  # - seed_id: seed_006
+  #   seed_group: nhs_conditions_en
+  #   url: https://www.nhs.uk/conditions/asthma/
 
-  - seed_id: seed_007
-    seed_group: nhs_conditions_en
-    url: https://www.nhs.uk/conditions/pneumonia/
+  # - seed_id: seed_007
+  #   seed_group: nhs_conditions_en
+  #   url: https://www.nhs.uk/conditions/pneumonia/
 
-  - seed_id: seed_008
-    seed_group: nhs_conditions_en
-    url: https://www.nhs.uk/conditions/multiple-sclerosis/
+  # - seed_id: seed_008
+  #   seed_group: nhs_conditions_en
+  #   url: https://www.nhs.uk/conditions/multiple-sclerosis/
 
-  - seed_id: seed_009
-    seed_group: nhs_conditions_en
-    url: https://www.nhs.uk/conditions/epilepsy/
+  # - seed_id: seed_009
+  #   seed_group: nhs_conditions_en
+  #   url: https://www.nhs.uk/conditions/epilepsy/
 
 #   - seed_id: seed_010
 #     seed_group: cdc_symptoms_dx_tx
@@ -83,7 +83,6 @@ persist:
     - "/about"
     - "/contact"
     - "/terms"
-  #  - "/index"
     - "/all_"
     - "/tests-and-treatments"
     - "/symptoms"

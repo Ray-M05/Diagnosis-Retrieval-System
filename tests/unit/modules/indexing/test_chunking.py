@@ -1,21 +1,24 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from sri_dx.core.schemas.acquisition.acquired_document import AcquiredDocument, Content, Section, CrawlMeta
 from sri_dx.modules.indexing.chunking import chunk_acquired_document, ChunkingConfig
 
 
 @pytest.fixture
 def mock_semantic_chunker():
-    with patch("sri_dx.modules.indexing.chunking.SemanticChunker") as MockClass:
-        mock_instance = MockClass.return_value
-        # Mock split_text to return deterministic chunks for S1
-        mock_instance.split_text.return_value = [
-            (0, 20, "Contenido de la sección 1"),
-            (21, 39, "que es largo.")
-        ]
-        yield mock_instance
+    mock_instance = MagicMock()
+    mock_instance.split_text.return_value = [
+        (0, 49, "Contenido de la seccion 1 con sintomas respiratorios"),
+        (50, 98, "y dolor toracico persistente que requiere dividirse."),
+    ]
+    return mock_instance
 
 def test_chunk_acquired_document(mock_semantic_chunker):
+    s1_text = (
+        "Contenido de la seccion 1 con sintomas respiratorios "
+        "y dolor toracico persistente que requiere dividirse."
+    )
+    s2_text = "Seccion breve clinicamente util con detalles suficientes para indexar."
     doc = AcquiredDocument(
         doc_id="doc1",
         url="http://test.com",
@@ -26,15 +29,15 @@ def test_chunk_acquired_document(mock_semantic_chunker):
             mime_type="text/html",
             title="Test",
             sections=[
-                Section(heading="S1", text="Contenido de la sección 1 que es largo."), # 39 chars
-                Section(heading="S2", text="Corto."), # 6 chars
+                Section(heading="S1", text=s1_text),
+                Section(heading="S2", text=s2_text),
             ],
             body="..."
         ),
         content_hash="hash1"
     )
     
-    cfg = ChunkingConfig(max_chars=20, overlap_chars=5, min_chars=2)
+    cfg = ChunkingConfig(max_chars=80, overlap_chars=5, min_chars=2)
     # Passed explicitly to avoid missing import try-catch issues in test env
     chunks = list(chunk_acquired_document(doc, cfg=cfg, semantic_chunker=mock_semantic_chunker))
     
@@ -47,19 +50,19 @@ def test_chunk_acquired_document(mock_semantic_chunker):
     assert chunk0.section_index == 0
     assert chunk0.chunk_index == 0
     assert chunk0.chunk_id == "doc1:0:0"
-    assert chunk0.chunk_text == "Contenido de la sección 1"
+    assert chunk0.chunk_text == "Contenido de la seccion 1 con sintomas respiratorios"
     
     # Chunk 2 de S1
     chunk1 = chunks[1]
     assert chunk1.section_heading == "S1"
     assert chunk1.chunk_index == 1
-    assert chunk1.chunk_text == "que es largo."
+    assert chunk1.chunk_text == "y dolor toracico persistente que requiere dividirse."
     
     # Verificar que S2 se incluyó intacto
     last_chunk = chunks[-1]
     assert last_chunk.section_heading == "S2"
     assert last_chunk.chunk_index == 0
-    assert last_chunk.chunk_text == "Corto."
+    assert last_chunk.chunk_text == s2_text
     
     # Confirmar que el mock fue llamado por exceder los 20 max_chars
-    mock_semantic_chunker.split_text.assert_called_once_with("Contenido de la sección 1 que es largo.")
+    mock_semantic_chunker.split_text.assert_called_once_with(s1_text)
