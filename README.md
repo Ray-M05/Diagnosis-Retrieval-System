@@ -39,11 +39,21 @@ backend, define `VITE_API_BASE` en `frontend/.env.development`.
 
 ## Inicio rapido: backend + frontend
 
-Desde la raiz del repo, crea `.env` si aun no existe:
+Desde la raiz del repo, crea `.env` a partir de la plantilla versionada:
 
 ```bash
 cp .env.example .env
 ```
+
+En PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+El archivo `.env` queda solo para tu maquina y no debe subirse al repo. Edita
+ese archivo local para completar claves privadas como `GROQ_API_KEY`,
+`UMLS_API_KEY` u otros valores propios del entorno.
 
 Levanta OpenSearch y la API:
 
